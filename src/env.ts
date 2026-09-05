@@ -26,7 +26,12 @@ const serverEnvSchema = z.object({
   KOALA_API_BASE_URL: z
     .string()
     .min(1, "zorunlu")
-    .refine((value) => URL.canParse(value), "geçerli bir mutlak URL olmalı")
+    // `abort` so the protocol check below never runs `new URL` on a string
+    // that already failed to parse.
+    .refine((value) => URL.canParse(value), {
+      error: "geçerli bir mutlak URL olmalı",
+      abort: true,
+    })
     .refine(
       (value) => ["http:", "https:"].includes(new URL(value).protocol),
       "http ya da https olmalı",

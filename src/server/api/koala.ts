@@ -96,8 +96,8 @@ export function buildKoalaUrl(path: string, query?: Record<string, KoalaQueryVal
  * a request through when they are missing, and `/admin/**` is moving to its own
  * filter chain (koala-backend#14) — so sending them would buy nothing and would
  * quietly enrol the panel in a version gate meant for a different client.
- * `src/server/api/__tests__/headers.test.ts` fails the build if any source file
- * reintroduces them.
+ * `forbidden-headers.test.ts` greps `src/` on every CI run, so reintroducing
+ * either header fails the build rather than a code review.
  */
 export function buildKoalaHeaders(options: {
   accessToken?: string | null;
