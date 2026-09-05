@@ -43,4 +43,4 @@ yarn-error.log*
 next-env.d.ts
 
 # artifacts of scripts/verify-server-only-guard.mjs (should never be committed)
-/src/app/__server-only-guard__/
+/src/app/server-only-guard-probe/

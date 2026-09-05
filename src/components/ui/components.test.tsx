@@ -63,9 +63,7 @@ describe("FormField", () => {
 
 describe("EmptyState", () => {
   it("says nothing is here, without implying a failure", () => {
-    render(
-      <EmptyState title="Hiç iş kategorisi yok." description="Kategori seed'i kaldırıldı." />,
-    );
+    render(<EmptyState title="Hiç iş kategorisi yok." description="Kategori seed'i kaldırıldı." />);
 
     expect(screen.getByText("Hiç iş kategorisi yok.")).toBeInTheDocument();
     // An empty result is not an error; nothing here should be announced as one.

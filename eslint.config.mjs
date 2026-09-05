@@ -26,7 +26,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Local additions:
     "coverage/**",
-    "src/app/__server-only-guard__/**",
+    "src/app/server-only-guard-probe/**",
   ]),
 ]);
 

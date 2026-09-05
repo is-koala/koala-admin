@@ -5,7 +5,7 @@ out/
 build/
 pnpm-lock.yaml
 next-env.d.ts
-src/app/__server-only-guard__/
+src/app/server-only-guard-probe/
 
 # Hand-authored prose owned by other slices; reflowing tables and emphasis in it
 # produces diff noise with no reader benefit.
