@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const guardDir = path.join(projectRoot, "src", "app", "server-only-guard-probe");
+const buildDir = path.join(projectRoot, ".next");
 
 const CLIENT_COMPONENT = `"use client";
 
@@ -61,6 +62,12 @@ function plant() {
 
 function clean() {
   rmSync(guardDir, { recursive: true, force: true });
+
+  // The failed build leaves `.next/types/validator.ts` referencing the probe
+  // page that no longer exists, which makes the next `pnpm typecheck` fail for
+  // a reason that has nothing to do with the code. The build output is broken
+  // anyway — the build failed on purpose — so drop it.
+  rmSync(buildDir, { recursive: true, force: true });
 }
 
 function main() {
@@ -81,7 +88,7 @@ function main() {
     });
   } finally {
     clean();
-    console.log("\n→ Removed the planted files");
+    console.log("\n→ Removed the planted files and the broken .next output");
   }
 
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;

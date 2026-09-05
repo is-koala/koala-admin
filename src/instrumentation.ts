@@ -1,23 +1,20 @@
 /**
  * Runs once when the Next.js server boots, before it serves any request.
  *
- * Importing `@/env` here is the whole point: environment validation happens at
- * startup, so a missing `KOALA_API_BASE_URL` is reported immediately instead of
- * surfacing as a confusing `fetch failed` on the first page view.
+ * Environment validation happens here, at startup, so a missing
+ * `KOALA_API_BASE_URL` is reported immediately instead of surfacing as a
+ * confusing `fetch failed` on the first page view.
+ *
+ * The work itself lives in `src/server/boot.ts` and is imported dynamically:
+ * this file is bundled for the Edge runtime as well, and a static
+ * `process.exit` reference makes the Edge build complain even inside a branch
+ * that can never run there.
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") {
     return;
   }
 
-  try {
-    await import("@/env");
-  } catch (error) {
-    // Next keeps the process alive when the instrumentation hook throws and
-    // answers every request with a 500. A container that serves 500s still
-    // looks alive to a load balancer, so exit instead: a crash loop with this
-    // message in the log is unambiguous, a half-booted server is not.
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
+  const { validateEnvironmentOrExit } = await import("./server/boot");
+  await validateEnvironmentOrExit();
 }
