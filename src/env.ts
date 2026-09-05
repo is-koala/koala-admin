@@ -24,8 +24,11 @@ const serverEnvSchema = z.object({
    * Production: https://api.iskoala.com
    */
   KOALA_API_BASE_URL: z
-    .string()
-    .min(1, "zorunlu")
+    // Custom `error` so an unset variable reads as "zorunlu" rather than zod's
+    // "expected string, received undefined" — the person hitting this is
+    // usually setting the project up for the first time.
+    .string({ error: "zorunlu (.env.local içinde tanımlayın)" })
+    .min(1, "boş olamaz")
     // `abort` so the protocol check below never runs `new URL` on a string
     // that already failed to parse.
     .refine((value) => URL.canParse(value), {
