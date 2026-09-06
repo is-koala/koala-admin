@@ -6,7 +6,7 @@ export interface KoalaApiErrorInit {
   errorCategory: ErrorCategory;
   message: string;
   details?: readonly KoalaFieldError[] | null;
-  correlationId?: string | null;
+  requestId?: string | null;
   resource?: string | null;
   resourceId?: string | null;
   path?: string | null;
@@ -30,8 +30,8 @@ export class KoalaApiError extends Error {
   readonly errorCode: string;
   readonly errorCategory: ErrorCategory;
   readonly details: readonly KoalaFieldError[];
-  /** Correlation id echoed by the backend. Log it, always. */
-  readonly correlationId: string | null;
+  /** Request id echoed by the backend. Log it, always. */
+  readonly requestId: string | null;
   readonly resource: string | null;
   readonly resourceId: string | null;
   readonly path: string | null;
@@ -43,7 +43,7 @@ export class KoalaApiError extends Error {
     this.errorCode = init.errorCode;
     this.errorCategory = init.errorCategory;
     this.details = init.details ?? [];
-    this.correlationId = init.correlationId ?? null;
+    this.requestId = init.requestId ?? null;
     this.resource = init.resource ?? null;
     this.resourceId = init.resourceId ?? null;
     this.path = init.path ?? null;

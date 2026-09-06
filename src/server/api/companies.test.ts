@@ -77,7 +77,7 @@ function watchQueue(content: unknown[] = [COMPANY]) {
         message: "Şirketler listelendi.",
         httpStatus: "200 OK",
         path: "/admin/companies",
-        correlationId: "cid-companies",
+        requestId: "rid-companies",
         timeStamp: "2026-09-06T09:40:00.000000000Z",
         data: {
           content,
@@ -197,7 +197,7 @@ describe("approving a company", () => {
           message: "Şirket onaylandı.",
           httpStatus: "200 OK",
           path: "/admin/companies/9c000000-0000-4000-8000-000000000001/approve",
-          correlationId: "cid-approve",
+          requestId: "rid-approve",
           timeStamp: "2026-09-06T09:41:00.000000000Z",
           data: { ...COMPANY, approved: true },
         });

@@ -2,11 +2,11 @@ import { KoalaApiError } from "./errors";
 
 /**
  * Every failed Koala call gets exactly one log line, and every line carries the
- * `correlationId` from the response envelope.
+ * `requestId` from the response envelope.
  *
  * That id is the only thing that ties a panel error to the backend log line
  * that produced it; without it a support request is "the page was broken around
- * lunchtime". `correlationId=-` means the backend never got far enough to mint
+ * lunchtime". `requestId=-` means the backend never got far enough to mint
  * one (DNS failure, connection refused, timeout).
  */
 export function logKoalaFailure(error: KoalaApiError): void {
@@ -16,7 +16,7 @@ export function logKoalaFailure(error: KoalaApiError): void {
     ["status", error.status],
     ["category", error.errorCategory],
     ["code", error.errorCode],
-    ["correlationId", error.correlationId ?? "-"],
+    ["requestId", error.requestId ?? "-"],
   ];
 
   if (error.resource !== null) {

@@ -44,7 +44,7 @@ function pageEnvelope(content: unknown[]) {
     message: "Uyuşmazlıklar listelendi.",
     httpStatus: "200 OK",
     path: DISPUTES_PATH,
-    correlationId: "cid-disputes",
+    requestId: "rid-disputes",
     timeStamp: "2026-09-06T09:00:00.000000000Z",
     data: {
       content,
@@ -111,7 +111,7 @@ describe("the resolve endpoint", () => {
           message: "Uyuşmazlık çözüldü.",
           httpStatus: "200 OK",
           path: disputeResolvePath(DISPUTE_ID),
-          correlationId: "cid-resolve",
+          requestId: "rid-resolve",
           timeStamp: "2026-09-06T09:05:00.000000000Z",
           data: {
             ...DISPUTE,

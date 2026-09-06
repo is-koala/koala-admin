@@ -133,7 +133,7 @@ export function auditPageBody(options: AuditPageOptions = {}) {
     message: "Liste getirildi.",
     httpStatus: "200 OK",
     path: "/admin/audit-log",
-    correlationId: "cid-audit-log",
+    requestId: "rid-audit-log",
     timeStamp: "2026-09-06T09:20:00.000000000Z",
     data: {
       content: [...content],

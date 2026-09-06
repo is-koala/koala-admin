@@ -22,7 +22,7 @@ import { isPermission, type Permission } from "./permissions";
  *   "message": "Personel kimliği çözüldü.",
  *   "httpStatus": "200 OK",
  *   "path": "/admin/me",
- *   "correlationId": "…",
+ *   "requestId": "…",
  *   "timeStamp": "…",
  *   "data": {
  *     "staffId": "…", "displayName": "Trust Lideri", "email": "…",

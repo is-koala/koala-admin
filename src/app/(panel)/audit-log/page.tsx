@@ -86,7 +86,7 @@ async function AuditLogView({ request }: { request: AuditLogRequest }) {
           title={result.title}
           description={result.description}
           errorCode={result.errorCode}
-          correlationId={result.correlationId}
+          requestId={result.requestId}
         />
       )}
     </div>
@@ -166,7 +166,7 @@ type LoadResult =
       title: string;
       description: string;
       errorCode: string | null;
-      correlationId: string | null;
+      requestId: string | null;
     };
 
 async function loadAuditLog(request: AuditLogRequest): Promise<LoadResult> {
@@ -190,7 +190,7 @@ async function loadAuditLog(request: AuditLogRequest): Promise<LoadResult> {
         description:
           "Panel sayfayı açtı, backend denetim kaydını vermeyi reddetti. Yetki kararını backend verir; paneldeki menü ve kapılar yalnız gereksiz istekleri önler. Bu uç henüz yayına alınmamış da olabilir — koala-backend eşlenmemiş bir /admin yolunu da 403 ile reddeder.",
         errorCode: error.errorCode,
-        correlationId: error.correlationId,
+        requestId: error.requestId,
       };
     }
 
@@ -200,7 +200,7 @@ async function loadAuditLog(request: AuditLogRequest): Promise<LoadResult> {
         title: "Denetim kaydı yüklenemedi.",
         description: error.message,
         errorCode: error.errorCode,
-        correlationId: error.correlationId,
+        requestId: error.requestId,
       };
     }
 
@@ -209,7 +209,7 @@ async function loadAuditLog(request: AuditLogRequest): Promise<LoadResult> {
       title: "Denetim kaydı yüklenemedi.",
       description: error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu.",
       errorCode: null,
-      correlationId: null,
+      requestId: null,
     };
   }
 }

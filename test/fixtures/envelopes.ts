@@ -7,7 +7,7 @@
 
 /** `GET /reference/job-categories` */
 export const jobCategoriesSuccessBody = {
-  correlationId: "7ebd4805-a27f-4c1a-b306-2d927c2fc55d",
+  requestId: "7ebd4805-a27f-4c1a-b306-2d927c2fc55d",
   data: [
     {
       id: "9a1c0f10-0001-4c00-8000-000000000005",
@@ -41,7 +41,7 @@ export const endpointNotFoundBody = {
   httpStatus: "404 NOT_FOUND",
   errorCode: "ENDPOINT_NOT_FOUND",
   errorCategory: "ENDPOINT_NOT_FOUND",
-  correlationId: "917829b9-cb2c-4586-82d5-29da1c9a623f",
+  requestId: "917829b9-cb2c-4586-82d5-29da1c9a623f",
   path: "/reference/nope",
   resource: "nope",
   success: false,
@@ -54,7 +54,7 @@ export const authenticationRequiredBody = {
   httpStatus: "401 UNAUTHORIZED",
   errorCode: "AUTHENTICATION_REQUIRED",
   errorCategory: "AUTHENTICATION_REQUIRED",
-  correlationId: "47d40e1a-fabf-46d3-90e2-3d28f3d4476e",
+  requestId: "47d40e1a-fabf-46d3-90e2-3d28f3d4476e",
   path: "/admin/job-categories",
   resource: "job-categories",
   success: false,
@@ -74,7 +74,7 @@ export const adminMeSuccessBody = {
   message: "Personel kimliği çözüldü.",
   httpStatus: "200 OK",
   path: "/admin/me",
-  correlationId: "0d1b2b0f-1c8a-4a1e-9d4a-8f2c9a7b6e10",
+  requestId: "0d1b2b0f-1c8a-4a1e-9d4a-8f2c9a7b6e10",
   timeStamp: "2026-09-06T09:12:04.118273914Z",
   data: {
     staffId: "b7f4a2c1-0000-4c00-8000-000000000001",
@@ -98,7 +98,7 @@ export const adminMeNoStaffRecordBody = {
   httpStatus: "403 FORBIDDEN",
   errorCode: "STAFF_NOT_FOUND",
   errorCategory: "ACCESS_DENIED",
-  correlationId: "3f5a1c88-91f0-4c5b-9c02-5b6a1f0d9e77",
+  requestId: "3f5a1c88-91f0-4c5b-9c02-5b6a1f0d9e77",
   path: "/admin/me",
   timeStamp: "2026-09-06T09:12:41.902118004Z",
 };
@@ -113,7 +113,7 @@ export const validationFailedBody = {
   httpStatus: "400 BAD_REQUEST",
   errorCode: "JOB_CATEGORY_INVALID",
   errorCategory: "VALIDATION_FAILED",
-  correlationId: "c0ffee00-1111-2222-3333-444455556666",
+  requestId: "c0ffee00-1111-2222-3333-444455556666",
   path: "/admin/job-categories",
   resource: "job-categories",
   resourceId: "9a1c0f10-0001-4c00-8000-000000000001",

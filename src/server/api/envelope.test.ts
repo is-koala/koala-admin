@@ -10,7 +10,7 @@ import {
 
 import {
   categoryForStatus,
-  readCorrelationId,
+  readRequestId,
   readResultMeta,
   toKoalaApiError,
   unwrapDataResult,
@@ -45,7 +45,7 @@ describe("unwrapDataResult", () => {
       code: "BARISTA",
       requiresInsurance: false,
     });
-    expect(meta.correlationId).toBe("7ebd4805-a27f-4c1a-b306-2d927c2fc55d");
+    expect(meta.requestId).toBe("7ebd4805-a27f-4c1a-b306-2d927c2fc55d");
     // Spring serialises HttpStatus with toString(), not as a number.
     expect(meta.httpStatus).toBe("200 OK");
   });
@@ -64,9 +64,9 @@ describe("unwrapDataResult", () => {
       const koala = error as KoalaApiError;
       expect(koala.errorCode).toBe("RESPONSE_SCHEMA_MISMATCH");
       expect(koala.errorCategory).toBe("UNEXPECTED");
-      // The correlation id survives even a schema failure — it is the only way
+      // The request id survives even a schema failure — it is the only way
       // to find the response that caused it.
-      expect(koala.correlationId).toBe("7ebd4805-a27f-4c1a-b306-2d927c2fc55d");
+      expect(koala.requestId).toBe("7ebd4805-a27f-4c1a-b306-2d927c2fc55d");
       expect(koala.message).toContain("requiresInsurance");
     }
   });
@@ -91,7 +91,7 @@ describe("toKoalaApiError", () => {
     expect(error.message).toBe("Böyle bir uç bulunamadı.");
     expect(error.resource).toBe("nope");
     expect(error.resourceId).toBeNull();
-    expect(error.correlationId).toBe("917829b9-cb2c-4586-82d5-29da1c9a623f");
+    expect(error.requestId).toBe("917829b9-cb2c-4586-82d5-29da1c9a623f");
     expect(error.details).toEqual([]);
   });
 
@@ -126,16 +126,16 @@ describe("toKoalaApiError", () => {
     expect(error.errorCategory).toBe("UPSTREAM_FAILED");
     expect(error.errorCode).toBe("UPSTREAM_FAILED");
     expect(error.message).toBe("<html>502 Bad Gateway</html>");
-    expect(error.correlationId).toBeNull();
+    expect(error.requestId).toBeNull();
   });
 
-  it("keeps the correlation id even when the rest of the envelope is unusable", () => {
+  it("keeps the request id even when the rest of the envelope is unusable", () => {
     const error = toKoalaApiError(
-      { correlationId: "aaaa-bbbb", nonsense: true },
+      { requestId: "aaaa-bbbb", nonsense: true },
       context({ status: 500 }),
     );
 
-    expect(error.correlationId).toBe("aaaa-bbbb");
+    expect(error.requestId).toBe("aaaa-bbbb");
     expect(error.errorCategory).toBe("UPSTREAM_FAILED");
   });
 
@@ -161,13 +161,13 @@ describe("unwrapResult", () => {
         httpStatus: "204 NO_CONTENT",
         path: "/admin/job-categories/1",
         timeStamp: "2026-09-05T22:58:48.643136333Z",
-        correlationId: "dddd",
+        requestId: "dddd",
       },
       context({ status: 204, method: "DELETE" }),
     );
 
     expect(meta.success).toBe(true);
-    expect(meta.correlationId).toBe("dddd");
+    expect(meta.requestId).toBe("dddd");
   });
 
   it("throws when the envelope reports failure", () => {
@@ -178,13 +178,11 @@ describe("unwrapResult", () => {
 });
 
 describe("helpers", () => {
-  it("reads the correlation id out of anything, or nothing", () => {
-    expect(readCorrelationId(jobCategoriesSuccessBody)).toBe(
-      "7ebd4805-a27f-4c1a-b306-2d927c2fc55d",
-    );
-    expect(readCorrelationId(null)).toBeNull();
-    expect(readCorrelationId("not an object")).toBeNull();
-    expect(readCorrelationId({ correlationId: 42 })).toBeNull();
+  it("reads the request id out of anything, or nothing", () => {
+    expect(readRequestId(jobCategoriesSuccessBody)).toBe("7ebd4805-a27f-4c1a-b306-2d927c2fc55d");
+    expect(readRequestId(null)).toBeNull();
+    expect(readRequestId("not an object")).toBeNull();
+    expect(readRequestId({ requestId: 42 })).toBeNull();
   });
 
   it("returns null meta for a body that is not a Result", () => {

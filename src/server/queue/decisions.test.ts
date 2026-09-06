@@ -75,7 +75,7 @@ describe("a decision action re-checks the permission it needs", () => {
             httpStatus: "500 INTERNAL_SERVER_ERROR",
             errorCode: "UNEXPECTED",
             errorCategory: "UNEXPECTED",
-            correlationId: "cid-500",
+            requestId: "rid-500",
             path: "/admin/me",
             timeStamp: "2026-09-06T09:22:00.000000000Z",
           },
@@ -88,7 +88,7 @@ describe("a decision action re-checks the permission it needs", () => {
 
     // Not "you lack permission" — the panel does not know that.
     expect(denied?.message).toContain("İzinleriniz çözülemediği için");
-    expect(denied?.correlationId).toBe("cid-500");
+    expect(denied?.requestId).toBe("rid-500");
   });
 
   it("refuses a Keycloak identity with no staff record", async () => {
@@ -108,14 +108,14 @@ describe("how a failed queue load is described", () => {
         errorCode: "ACCESS_DENIED",
         errorCategory: "ACCESS_DENIED",
         message: "Bu işlem için yetkiniz yok.",
-        correlationId: "cid-403",
+        requestId: "rid-403",
       }),
     );
 
     expect(forbidden).toEqual({
       kind: "forbidden",
       errorCode: "ACCESS_DENIED",
-      correlationId: "cid-403",
+      requestId: "rid-403",
     });
   });
 
@@ -133,7 +133,7 @@ describe("how a failed queue load is described", () => {
       kind: "error",
       message: "Koala API'ye ulaşılamadı.",
       errorCode: "NETWORK_FAILURE",
-      correlationId: null,
+      requestId: null,
     });
   });
 
@@ -142,7 +142,7 @@ describe("how a failed queue load is described", () => {
       kind: "error",
       message: "Bilinmeyen bir hata oluştu.",
       errorCode: null,
-      correlationId: null,
+      requestId: null,
     });
   });
 });
@@ -157,13 +157,13 @@ describe("how a refused decision is described", () => {
         errorCode: "REPORT_ALREADY_REVIEWED",
         errorCategory: "DATA_CONFLICT",
         message: "Şikayet zaten sonuçlandırılmış.",
-        correlationId: "cid-409",
+        requestId: "rid-409",
       }),
       "Karar gönderilemedi.",
     );
 
     expect(state.message).toContain("sizden önce sonuçlandırılmış olabilir");
-    expect(state.correlationId).toBe("cid-409");
+    expect(state.requestId).toBe("rid-409");
   });
 
   it("says a 403 is the backend's answer, not the panel's", () => {
@@ -173,7 +173,7 @@ describe("how a refused decision is described", () => {
         errorCode: "ACCESS_DENIED",
         errorCategory: "ACCESS_DENIED",
         message: "Bu işlem için yetkiniz yok.",
-        correlationId: null,
+        requestId: null,
       }),
       "Karar gönderilemedi.",
     );
