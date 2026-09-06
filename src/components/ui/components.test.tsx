@@ -72,13 +72,13 @@ describe("EmptyState", () => {
 });
 
 describe("ErrorState", () => {
-  it("announces the failure and shows the correlation id", () => {
+  it("announces the failure and shows the request id", () => {
     render(
       <ErrorState
         title="Kategoriler yüklenemedi."
         description="Koala API'ye ulaşılamadı."
         errorCode="NETWORK_FAILURE"
-        correlationId="917829b9-cb2c-4586-82d5-29da1c9a623f"
+        requestId="917829b9-cb2c-4586-82d5-29da1c9a623f"
       />,
     );
 

@@ -18,13 +18,13 @@ export type QueueFailure =
   | {
       readonly kind: "forbidden";
       readonly errorCode: string | null;
-      readonly correlationId: string | null;
+      readonly requestId: string | null;
     }
   | {
       readonly kind: "error";
       readonly message: string;
       readonly errorCode: string | null;
-      readonly correlationId: string | null;
+      readonly requestId: string | null;
     };
 
 export interface QueueLoadFailureProps {
@@ -42,7 +42,7 @@ export function QueueLoadFailure({ subject, permission, failure }: QueueLoadFail
         title="Backend bu işlem için yetki vermedi."
         description={`Panel sayfayı açtı, backend ${subject.toLocaleLowerCase("tr")} vermeyi reddetti. Yetki kararını backend verir (${permission}); paneldeki menü ve kapılar yalnız gereksiz istekleri önler. Uç henüz yayına alınmamışsa da aynı cevap gelir — koala-backend eşlenmemiş bir /admin yolunu 404 ile değil 403 ile reddeder.`}
         errorCode={failure.errorCode}
-        correlationId={failure.correlationId}
+        requestId={failure.requestId}
       />
     );
   }
@@ -52,7 +52,7 @@ export function QueueLoadFailure({ subject, permission, failure }: QueueLoadFail
       title={`${subject} yüklenemedi.`}
       description={failure.message}
       errorCode={failure.errorCode}
-      correlationId={failure.correlationId}
+      requestId={failure.requestId}
     />
   );
 }

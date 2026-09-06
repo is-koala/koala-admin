@@ -178,7 +178,7 @@ type QueueResult =
       title: string;
       description: string;
       errorCode: string | null;
-      correlationId: string | null;
+      requestId: string | null;
     };
 
 async function loadQueue(accessToken: string): Promise<QueueResult> {
@@ -198,7 +198,7 @@ async function loadQueue(accessToken: string): Promise<QueueResult> {
         description:
           "Panel sayfayı açtı, backend listeyi reddetti. Yetki kararını backend verir; paneldeki kapı yalnız gereksiz istekleri önler. GET /admin/disputes de dispute.resolve iznini ister — ayrı bir okuma izni yoktur.",
         errorCode: error.errorCode,
-        correlationId: error.correlationId,
+        requestId: error.requestId,
       };
     }
 
@@ -211,7 +211,7 @@ async function loadQueue(accessToken: string): Promise<QueueResult> {
           ? error.message
           : "Bilinmeyen bir hata oluştu.",
       errorCode: isKoalaApiError(error) ? error.errorCode : null,
-      correlationId: isKoalaApiError(error) ? error.correlationId : null,
+      requestId: isKoalaApiError(error) ? error.requestId : null,
     };
   }
 }
@@ -219,7 +219,7 @@ async function loadQueue(accessToken: string): Promise<QueueResult> {
 interface SummaryFailure {
   readonly message: string;
   readonly errorCode: string;
-  readonly correlationId: string | null;
+  readonly requestId: string | null;
 }
 
 type SummaryEntry = { ok: true; summary: EscrowSummary } | { ok: false; failure: SummaryFailure };
@@ -267,7 +267,7 @@ async function loadSummaries(
             ? error.message
             : "Bilinmeyen bir hata oluştu.",
         errorCode: isKoalaApiError(error) ? error.errorCode : "UNEXPECTED",
-        correlationId: isKoalaApiError(error) ? error.correlationId : null,
+        requestId: isKoalaApiError(error) ? error.requestId : null,
       },
     });
   });
@@ -296,7 +296,7 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
           title={queue.title}
           description={queue.description}
           errorCode={queue.errorCode}
-          correlationId={queue.correlationId}
+          requestId={queue.requestId}
         />
         <RecentOperationsList operations={recentOperations()} />
       </div>

@@ -123,7 +123,7 @@ const queuePage = () =>
     message: "Uyuşmazlıklar listelendi.",
     httpStatus: "200 OK",
     path: "/admin/disputes",
-    correlationId: "cid-queue",
+    requestId: "rid-queue",
     timeStamp: "2026-09-06T09:00:00.000000000Z",
     data: {
       content: [DISPUTE_ROW],
@@ -142,7 +142,7 @@ const emptyQueue = () =>
     message: "Uyuşmazlıklar listelendi.",
     httpStatus: "200 OK",
     path: "/admin/disputes",
-    correlationId: "cid-queue",
+    requestId: "rid-queue",
     timeStamp: "2026-09-06T09:00:00.000000000Z",
     data: {
       content: [],
@@ -161,7 +161,7 @@ const summaryOk = () =>
     message: "Atama getirildi.",
     httpStatus: "200 OK",
     path: `/admin/job-assignments/${ASSIGNMENT}`,
-    correlationId: "cid-summary",
+    requestId: "rid-summary",
     timeStamp: "2026-09-06T09:00:00.000000000Z",
     data: SUMMARY_BODY,
   });
@@ -174,7 +174,7 @@ const summaryForbidden = () =>
       httpStatus: "403 FORBIDDEN",
       errorCode: "ACCESS_DENIED",
       errorCategory: "ACCESS_DENIED",
-      correlationId: "cid-403-summary",
+      requestId: "rid-403-summary",
       path: `/admin/job-assignments/${ASSIGNMENT}`,
       timeStamp: "2026-09-06T09:00:00.000000000Z",
     },
@@ -361,7 +361,7 @@ describe("the backend is the authority", () => {
           httpStatus: "403 FORBIDDEN",
           errorCode: "ACCESS_DENIED",
           errorCategory: "ACCESS_DENIED",
-          correlationId: "cid-403",
+          requestId: "rid-403",
           path: "/admin/disputes",
           timeStamp: "2026-09-06T09:00:00.000000000Z",
         },
@@ -373,7 +373,7 @@ describe("the backend is the authority", () => {
 
     expect(disputes.calls).toBe(1);
     expect(html).toContain("Backend uyuşmazlık kuyruğunu vermedi.");
-    expect(html).toContain("cid-403");
+    expect(html).toContain("rid-403");
     expect(html).not.toContain("Onayla ve gönder");
   });
 

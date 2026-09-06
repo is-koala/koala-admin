@@ -21,8 +21,8 @@ export interface DecisionState {
   readonly field: "decision" | "note" | null;
   /** `ErrorResult.errorCode`, when the backend produced one. */
   readonly errorCode: string | null;
-  /** The backend's correlation id — the only handle on the matching log line. */
-  readonly correlationId: string | null;
+  /** The backend's request id — the only handle on the matching log line. */
+  readonly requestId: string | null;
 }
 
 /**
@@ -37,7 +37,7 @@ export const initialDecisionState: DecisionState = {
   message: "",
   field: null,
   errorCode: null,
-  correlationId: null,
+  requestId: null,
 };
 
 /** The decision was not attempted — the form did not carry what it needed. */
@@ -45,18 +45,18 @@ export function decisionRejected(
   message: string,
   field: DecisionState["field"] = null,
 ): DecisionState {
-  return { outcome: "error", message, field, errorCode: null, correlationId: null };
+  return { outcome: "error", message, field, errorCode: null, requestId: null };
 }
 
 /** The decision was attempted and the backend refused or failed it. */
 export function decisionFailed(
   message: string,
   errorCode: string | null,
-  correlationId: string | null,
+  requestId: string | null,
 ): DecisionState {
-  return { outcome: "error", message, field: null, errorCode, correlationId };
+  return { outcome: "error", message, field: null, errorCode, requestId };
 }
 
 export function decisionSucceeded(message: string): DecisionState {
-  return { outcome: "success", message, field: null, errorCode: null, correlationId: null };
+  return { outcome: "success", message, field: null, errorCode: null, requestId: null };
 }

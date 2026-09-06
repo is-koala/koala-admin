@@ -192,9 +192,9 @@ export function DecisionForm({
       {state.outcome === "error" && state.field === null ? (
         <div role="alert" className="flex flex-col gap-1 rounded-md bg-danger-soft px-3 py-2">
           <p className="text-sm font-medium text-danger">{state.message}</p>
-          {state.errorCode || state.correlationId ? (
+          {state.errorCode || state.requestId ? (
             <p className="font-mono text-xs break-all text-ink-muted">
-              {[state.errorCode, state.correlationId].filter(Boolean).join(" · ")}
+              {[state.errorCode, state.requestId].filter(Boolean).join(" · ")}
             </p>
           ) : null}
         </div>

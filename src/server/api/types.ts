@@ -63,7 +63,7 @@ export interface KoalaResultMeta {
   path: string | null;
   timeStamp: string | null;
   /** Only way to line a panel error up with a backend log line. */
-  correlationId: string | null;
+  requestId: string | null;
 }
 
 /** `DataResult.java` / `SuccessDataResult.java`. */

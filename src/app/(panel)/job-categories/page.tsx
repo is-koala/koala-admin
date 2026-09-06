@@ -62,7 +62,7 @@ async function JobCategoryTable() {
               : "Bilinmeyen bir hata oluştu."
         }
         errorCode={isKoalaApiError(error) ? error.errorCode : null}
-        correlationId={isKoalaApiError(error) ? error.correlationId : null}
+        requestId={isKoalaApiError(error) ? error.requestId : null}
       />
     );
   }

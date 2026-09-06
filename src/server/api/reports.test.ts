@@ -49,7 +49,7 @@ function watchQueue(content: Partial<Report>[] = []) {
         message: "Liste getirildi.",
         httpStatus: "200 OK",
         path: "/admin/reports",
-        correlationId: "cid-reports",
+        requestId: "rid-reports",
         timeStamp: "2026-09-06T09:30:00.000000000Z",
         data: {
           content,
@@ -183,7 +183,7 @@ describe("submitting a verdict", () => {
           message: "Şikayet sonuçlandırıldı.",
           httpStatus: "200 OK",
           path: "/admin/reports/r-1/review",
-          correlationId: "cid-review",
+          requestId: "rid-review",
           timeStamp: "2026-09-06T09:31:00.000000000Z",
           data: {
             id: "r-1",

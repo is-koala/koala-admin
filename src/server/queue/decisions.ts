@@ -35,7 +35,7 @@ export function classifyQueueFailure(error: unknown): QueueFailure {
       return {
         kind: "forbidden",
         errorCode: error.errorCode,
-        correlationId: error.correlationId,
+        requestId: error.requestId,
       };
     }
 
@@ -43,7 +43,7 @@ export function classifyQueueFailure(error: unknown): QueueFailure {
       kind: "error",
       message: error.message,
       errorCode: error.errorCode,
-      correlationId: error.correlationId,
+      requestId: error.requestId,
     };
   }
 
@@ -51,7 +51,7 @@ export function classifyQueueFailure(error: unknown): QueueFailure {
     kind: "error",
     message: error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu.",
     errorCode: null,
-    correlationId: null,
+    requestId: null,
   };
 }
 
@@ -74,7 +74,7 @@ export async function guardDecision(permission: Permission): Promise<DecisionSta
     return decisionFailed(
       "İzinleriniz çözülemediği için karar gönderilmedi. Panel emin olmadığı hiçbir işlemi yapmaz; birkaç dakika sonra tekrar deneyin.",
       context.failure.kind,
-      context.failure.correlationId,
+      context.failure.requestId,
     );
   }
 
@@ -103,7 +103,7 @@ export function decisionFailureFrom(error: unknown, fallbackTitle: string): Deci
       return decisionFailed(
         `${error.message} Bu kayıt sizden önce sonuçlandırılmış olabilir; listeyi yenileyin.`,
         error.errorCode,
-        error.correlationId,
+        error.requestId,
       );
     }
 
@@ -111,11 +111,11 @@ export function decisionFailureFrom(error: unknown, fallbackTitle: string): Deci
       return decisionFailed(
         `Backend bu kararı reddetti: ${error.message} Yetki kararını backend verir.`,
         error.errorCode,
-        error.correlationId,
+        error.requestId,
       );
     }
 
-    return decisionFailed(error.message, error.errorCode, error.correlationId);
+    return decisionFailed(error.message, error.errorCode, error.requestId);
   }
 
   return decisionFailed(error instanceof Error ? error.message : fallbackTitle, null, null);

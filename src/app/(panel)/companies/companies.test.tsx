@@ -101,7 +101,7 @@ function watchQueue(rows: unknown[] = [], respond?: () => Response) {
         message: "Şirketler listelendi.",
         httpStatus: "200 OK",
         path: "/admin/companies",
-        correlationId: "cid-companies",
+        requestId: "rid-companies",
         timeStamp: "2026-09-06T09:40:00.000000000Z",
         data: {
           content: rows,
@@ -248,7 +248,7 @@ describe("what the queue and the detail show", () => {
           httpStatus: "403 FORBIDDEN",
           errorCode: "ACCESS_DENIED",
           errorCategory: "ACCESS_DENIED",
-          correlationId: "cid-403",
+          requestId: "rid-403",
           path: "/admin/companies",
           timeStamp: "2026-09-06T09:41:00.000000000Z",
         },
@@ -260,7 +260,7 @@ describe("what the queue and the detail show", () => {
 
     expect(queue.calls).toBe(1);
     expect(html).toContain("Backend bu işlem için yetki vermedi.");
-    expect(html).toContain("cid-403");
+    expect(html).toContain("rid-403");
   });
 });
 

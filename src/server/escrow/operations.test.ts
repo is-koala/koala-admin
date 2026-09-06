@@ -57,7 +57,7 @@ function envelope(path: string, data: unknown) {
     message: "İşlem tamam.",
     httpStatus: "200 OK",
     path,
-    correlationId: "cid-op",
+    requestId: "rid-op",
     timeStamp: "2026-09-06T10:00:00.000000000Z",
     data,
   };
@@ -251,7 +251,7 @@ describe("double submission", () => {
               httpStatus: "409 CONFLICT",
               errorCode: "DISPUTE_BLOCKS_RELEASE",
               errorCategory: "DATA_CONFLICT",
-              correlationId: "cid-409",
+              requestId: "rid-409",
               path: `/admin/job-assignments/${ASSIGNMENT}/release`,
               timeStamp: "2026-09-06T10:00:00.000000000Z",
             },
@@ -333,7 +333,7 @@ describe("the confirmed amount has to be the server's amount", () => {
             httpStatus: "403 FORBIDDEN",
             errorCode: "ACCESS_DENIED",
             errorCategory: "ACCESS_DENIED",
-            correlationId: "cid-403",
+            requestId: "rid-403",
             path: `/admin/job-assignments/${ASSIGNMENT}`,
             timeStamp: "2026-09-06T10:00:00.000000000Z",
           },
@@ -395,7 +395,7 @@ describe("permission, re-resolved on the server for every submission", () => {
             httpStatus: "500 INTERNAL_SERVER_ERROR",
             errorCode: "UNEXPECTED",
             errorCategory: "UNEXPECTED",
-            correlationId: "cid-500",
+            requestId: "rid-500",
             path: "/admin/me",
             timeStamp: "2026-09-06T10:00:00.000000000Z",
           },
@@ -449,7 +449,7 @@ describe("the backend's refusal is the operator's message", () => {
             httpStatus: "409 CONFLICT",
             errorCode: "DISPUTE_BLOCKS_RELEASE",
             errorCategory: "DATA_CONFLICT",
-            correlationId: "cid-409",
+            requestId: "rid-409",
             path: `/admin/job-assignments/${ASSIGNMENT}/release`,
             timeStamp: "2026-09-06T10:00:00.000000000Z",
           },
@@ -463,7 +463,7 @@ describe("the backend's refusal is the operator's message", () => {
     expect(outcome.status).toBe("REFUSED");
     expect(outcome.message).toBe("Açık bir uyuşmazlık varken emanetteki para çıkarılamaz.");
     expect(outcome.errorCode).toBe("DISPUTE_BLOCKS_RELEASE");
-    expect(outcome.correlationId).toBe("cid-409");
+    expect(outcome.requestId).toBe("rid-409");
     expect(recentOperations()[0]).toMatchObject({
       outcome: "REFUSED",
       errorCode: "DISPUTE_BLOCKS_RELEASE",
@@ -483,7 +483,7 @@ describe("refund", () => {
           message: "İade kaydı oluşturuldu.",
           httpStatus: "200 OK",
           path: `/admin/job-assignments/${ASSIGNMENT}/refund`,
-          correlationId: "cid-refund",
+          requestId: "rid-refund",
           timeStamp: "2026-09-06T10:00:00.000000000Z",
         });
       }),

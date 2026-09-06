@@ -57,7 +57,7 @@ export interface RecordedOperation {
   readonly errorCode: string | null;
   /** The backend's own message, Turkish, verbatim. */
   readonly message: string;
-  readonly correlationId: string | null;
+  readonly requestId: string | null;
   /** ISO-8601, minted here — the only field not sourced from the backend. */
   readonly at: string;
 }

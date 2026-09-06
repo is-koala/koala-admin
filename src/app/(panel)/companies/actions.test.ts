@@ -70,7 +70,7 @@ function watchApprove(respond?: () => Response) {
         message: "Şirket onaylandı.",
         httpStatus: "200 OK",
         path: `/admin/companies/${COMPANY_ID}/approve`,
-        correlationId: "cid-approve",
+        requestId: "rid-approve",
         timeStamp: "2026-09-06T09:41:00.000000000Z",
         data: {
           id: COMPANY_ID,
@@ -196,7 +196,7 @@ describe("the action, when it is allowed to act", () => {
           httpStatus: "409 CONFLICT",
           errorCode: "COMPANY_ALREADY_APPROVED",
           errorCategory: "DATA_CONFLICT",
-          correlationId: "cid-409",
+          requestId: "rid-409",
           path: `/admin/companies/${COMPANY_ID}/approve`,
           timeStamp: "2026-09-06T09:42:00.000000000Z",
         },
@@ -208,7 +208,7 @@ describe("the action, when it is allowed to act", () => {
 
     expect(infoLines.some((entry) => entry.startsWith("[company-approval]"))).toBe(false);
     expect(state.message).toContain("sizden önce sonuçlandırılmış olabilir");
-    expect(state.correlationId).toBe("cid-409");
+    expect(state.requestId).toBe("rid-409");
   });
 
   it("shows a backend refusal as the backend's", async () => {
@@ -221,7 +221,7 @@ describe("the action, when it is allowed to act", () => {
           httpStatus: "403 FORBIDDEN",
           errorCode: "ACCESS_DENIED",
           errorCategory: "ACCESS_DENIED",
-          correlationId: "cid-403",
+          requestId: "rid-403",
           path: `/admin/companies/${COMPANY_ID}/approve`,
           timeStamp: "2026-09-06T09:43:00.000000000Z",
         },

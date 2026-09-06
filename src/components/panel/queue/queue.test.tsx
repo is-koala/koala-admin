@@ -165,12 +165,12 @@ describe("a queue the backend would not hand over", () => {
       <QueueLoadFailure
         subject="Şikayet kuyruğu"
         permission="content.moderate"
-        failure={{ kind: "forbidden", errorCode: "ACCESS_DENIED", correlationId: "cid-403" }}
+        failure={{ kind: "forbidden", errorCode: "ACCESS_DENIED", requestId: "rid-403" }}
       />,
     );
 
     expect(screen.getByText("Backend bu işlem için yetki vermedi.")).toBeInTheDocument();
-    expect(screen.getByText("cid-403")).toBeInTheDocument();
+    expect(screen.getByText("rid-403")).toBeInTheDocument();
     expect(screen.getByText(/content.moderate/)).toBeInTheDocument();
   });
 
@@ -183,7 +183,7 @@ describe("a queue the backend would not hand over", () => {
           kind: "error",
           message: "Koala API zaman aşımına uğradı.",
           errorCode: "REQUEST_TIMEOUT",
-          correlationId: null,
+          requestId: null,
         }}
       />,
     );
@@ -290,9 +290,9 @@ describe("a decision says what it will do, and will not go without a reason", ()
     expect(submitted.get("note")).toBe("Kanıt yetersiz, ek bilgi istendi.");
   });
 
-  it("renders the backend's refusal with its correlation id", async () => {
+  it("renders the backend's refusal with its request id", async () => {
     const action = stubAction(
-      decisionFailed("Bu işlem için yetkiniz yok.", "ACCESS_DENIED", "cid-9"),
+      decisionFailed("Bu işlem için yetkiniz yok.", "ACCESS_DENIED", "rid-9"),
     );
     renderDecision(action);
 
@@ -302,7 +302,7 @@ describe("a decision says what it will do, and will not go without a reason", ()
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toContain("Bu işlem için yetkiniz yok."),
     );
-    expect(screen.getByRole("alert").textContent).toContain("cid-9");
+    expect(screen.getByRole("alert").textContent).toContain("rid-9");
   });
 
   it("puts a field-level refusal on the field it is about", async () => {
