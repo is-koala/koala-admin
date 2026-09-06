@@ -1,0 +1,323 @@
+import { HttpResponse, http } from "msw";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { adminMeSuccessBody } from "../../../test/fixtures/envelopes";
+import { apiUrl, server } from "../../../test/msw";
+import { renderServerComponent } from "../../../test/render-server";
+
+/**
+ * koala-admin#6's acceptance criteria, rendered.
+ *
+ * Same shape as `gate.test.tsx`, and for the same reason: the claim "staff
+ * without the permission never see these screens" is a claim about *requests*,
+ * not about markup. `disputes.calls === 0` is the assertion; the absent table
+ * is a consequence.
+ *
+ * The queue's own money assertion is narrow: the amount column is whatever the
+ * escrow read returned, and a dash when it returned nothing. What happens on
+ * submit is pinned in `src/server/escrow/operations.test.ts`, against request
+ * counts.
+ */
+
+const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+
+vi.mock("@/server/auth/session", () => ({
+  getKoalaAccessToken: () => getKoalaAccessToken(),
+}));
+
+const { default: DisputesPage } = await import("@/app/(panel)/disputes/page");
+const { clearRecentOperations } = await import("@/server/escrow/recent-operations");
+
+const ASSIGNMENT = "9a1c0f10-0001-4c00-8000-0000000000aa";
+const DISPUTE = "d1000000-0000-4c00-8000-000000000001";
+
+const ADMIN_ME = apiUrl("/admin/me");
+const DISPUTES = apiUrl("/admin/disputes");
+const SUMMARY = apiUrl(`/admin/job-assignments/${ASSIGNMENT}`);
+
+const TRUST_LEAD = ["dispute.resolve", "payout.release", "payment.refund"];
+const CATALOG_EDITOR = ["category.manage"];
+
+const DISPUTE_ROW = {
+  id: DISPUTE,
+  jobAssignmentId: ASSIGNMENT,
+  openedBy: { id: "w-1", firstName: "Ayşe", lastName: "Yılmaz", username: "ayse" },
+  status: "OPEN",
+  reason: "İşveren işi eksik yaptığımı söylüyor, oysa vardiyayı tamamladım.",
+  resolution: null,
+  resolutionNote: null,
+  resolvedAt: null,
+  createdAt: "2026-09-05T08:00:00.000000000Z",
+};
+
+const SUMMARY_BODY = {
+  id: ASSIGNMENT,
+  status: "COMPLETED",
+  paymentStatus: "HELD_IN_ESCROW",
+  currency: "TRY",
+  workerPayout: "1240.50",
+  commissionAmount: "137.83",
+  commissionRate: "0.1000",
+  totalCharged: "1378.33",
+  workHours: 8,
+  jobTitle: "Garsonluk",
+  worker: { id: "w-1", firstName: "Ayşe", lastName: "Yılmaz", username: "ayse" },
+  employer: { id: "e-1", firstName: "Mehmet", lastName: "Demir", username: "mehmet" },
+  companyName: "Koala Kafe",
+  settledPayment: {
+    id: "p-1",
+    currency: "TRY",
+    totalCharged: "1378.33",
+    workerPayout: "1240.50",
+    commissionAmount: "137.83",
+    commissionRate: "0.1000",
+    completedAt: "2026-09-01T10:00:00.000000000Z",
+  },
+};
+
+function stubMe(permissions: readonly string[], roles: readonly string[]) {
+  server.use(
+    http.get(ADMIN_ME, () =>
+      HttpResponse.json({
+        ...adminMeSuccessBody,
+        data: { ...adminMeSuccessBody.data, roles: [...roles], permissions: [...permissions] },
+      }),
+    ),
+  );
+}
+
+/** Counts every call to the queue endpoint, whatever the gate decided. */
+function watchDisputes(respond: () => Response = queuePage) {
+  let calls = 0;
+  server.use(
+    http.get(DISPUTES, () => {
+      calls += 1;
+      return respond();
+    }),
+  );
+  return {
+    get calls() {
+      return calls;
+    },
+  };
+}
+
+function watchSummary(respond: () => Response = summaryOk) {
+  let calls = 0;
+  server.use(
+    http.get(SUMMARY, () => {
+      calls += 1;
+      return respond();
+    }),
+  );
+  return {
+    get calls() {
+      return calls;
+    },
+  };
+}
+
+const queuePage = () =>
+  HttpResponse.json({
+    success: true,
+    message: "Uyuşmazlıklar listelendi.",
+    httpStatus: "200 OK",
+    path: "/admin/disputes",
+    correlationId: "cid-queue",
+    timeStamp: "2026-09-06T09:00:00.000000000Z",
+    data: {
+      content: [DISPUTE_ROW],
+      page: 0,
+      size: 25,
+      totalElements: 1,
+      totalPages: 1,
+      first: true,
+      last: true,
+    },
+  });
+
+const emptyQueue = () =>
+  HttpResponse.json({
+    success: true,
+    message: "Uyuşmazlıklar listelendi.",
+    httpStatus: "200 OK",
+    path: "/admin/disputes",
+    correlationId: "cid-queue",
+    timeStamp: "2026-09-06T09:00:00.000000000Z",
+    data: {
+      content: [],
+      page: 0,
+      size: 25,
+      totalElements: 0,
+      totalPages: 0,
+      first: true,
+      last: true,
+    },
+  });
+
+const summaryOk = () =>
+  HttpResponse.json({
+    success: true,
+    message: "Atama getirildi.",
+    httpStatus: "200 OK",
+    path: `/admin/job-assignments/${ASSIGNMENT}`,
+    correlationId: "cid-summary",
+    timeStamp: "2026-09-06T09:00:00.000000000Z",
+    data: SUMMARY_BODY,
+  });
+
+const summaryForbidden = () =>
+  HttpResponse.json(
+    {
+      success: false,
+      message: "Bu işlem için yetkiniz yok.",
+      httpStatus: "403 FORBIDDEN",
+      errorCode: "ACCESS_DENIED",
+      errorCategory: "ACCESS_DENIED",
+      correlationId: "cid-403-summary",
+      path: `/admin/job-assignments/${ASSIGNMENT}`,
+      timeStamp: "2026-09-06T09:00:00.000000000Z",
+    },
+    { status: 403 },
+  );
+
+const params = (values: Record<string, string> = {}) => Promise.resolve(values);
+
+beforeEach(() => {
+  getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  clearRecentOperations();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  getKoalaAccessToken.mockReset();
+});
+
+describe("a CATALOG_EDITOR typing /disputes by hand", () => {
+  it("gets a 403 state, and neither the queue nor any escrow figure is requested", async () => {
+    stubMe(CATALOG_EDITOR, ["CATALOG_EDITOR"]);
+    const disputes = watchDisputes();
+    const summary = watchSummary();
+
+    const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
+
+    // The claim, stated as numbers.
+    expect(disputes.calls).toBe(0);
+    expect(summary.calls).toBe(0);
+
+    expect(html).toContain("403 — Bu sayfa için yetkiniz yok");
+    expect(html).toContain("Anlaşmazlıkları çöz");
+    // They are told which page refused them; the queue itself is not there.
+    expect(html).toContain("Uyuşmazlıklar ve emanet");
+    expect(html).not.toContain("Etkin uyuşmazlıklar");
+  });
+});
+
+describe("a TRUST_LEAD on the queue", () => {
+  it("sees the dispute with its status, opening party, assignment, amount and date", async () => {
+    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    const disputes = watchDisputes();
+    watchSummary();
+
+    const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
+
+    expect(disputes.calls).toBe(1);
+    expect(html).toContain("Etkin uyuşmazlıklar");
+    expect(html).toContain("Ayşe Yılmaz");
+    expect(html).toContain(ASSIGNMENT);
+    // The amount comes from the escrow read, formatted through lib/format.
+    expect(html).toContain("₺1.378,33");
+    expect(html).toContain("05.09.2026");
+  });
+
+  it("offers only the statuses the endpoint can return, and says why", async () => {
+    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    watchDisputes();
+    watchSummary();
+
+    const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
+
+    expect(html).toContain("Açık");
+    expect(html).toContain("İncelemede");
+    // No "Çözüldü" filter: GET /admin/disputes never returns a resolved one.
+    expect(html).not.toContain(">Çözüldü<");
+    expect(html).toContain("yalnız <em>etkin</em>");
+  });
+
+  it("filters the loaded page by status", async () => {
+    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    watchDisputes();
+    watchSummary();
+
+    const html = await renderServerComponent(
+      <DisputesPage searchParams={params({ durum: "UNDER_REVIEW" })} />,
+    );
+
+    expect(html).toContain("Bu süzgeçle eşleşen uyuşmazlık yok.");
+  });
+
+  it("says the queue is empty rather than that it failed", async () => {
+    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    watchDisputes(emptyQueue);
+
+    const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
+
+    expect(html).toContain("Açık uyuşmazlık yok.");
+  });
+});
+
+describe("when the panel cannot read the amount", () => {
+  it("shows a dash instead of a figure, and says which read failed", async () => {
+    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    watchDisputes();
+    const summary = watchSummary(summaryForbidden);
+
+    const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
+
+    expect(summary.calls).toBe(1);
+    expect(html).toContain("Emanet tutarları okunamıyor");
+    expect(html).toContain("Panel tutar uydurmaz");
+    // The queue is still usable — the dispute is listed, the amount is not
+    // guessed at.
+    expect(html).toContain("Etkin uyuşmazlıklar");
+    expect(html).not.toContain("₺");
+  });
+});
+
+describe("the backend is the authority", () => {
+  it("renders its refusal of the queue instead of crashing", async () => {
+    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    const disputes = watchDisputes(() =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Bu işlem için yetkiniz yok.",
+          httpStatus: "403 FORBIDDEN",
+          errorCode: "ACCESS_DENIED",
+          errorCategory: "ACCESS_DENIED",
+          correlationId: "cid-403",
+          path: "/admin/disputes",
+          timeStamp: "2026-09-06T09:00:00.000000000Z",
+        },
+        { status: 403 },
+      ),
+    );
+
+    const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
+
+    expect(disputes.calls).toBe(1);
+    expect(html).toContain("Backend uyuşmazlık kuyruğunu vermedi.");
+    expect(html).toContain("cid-403");
+  });
+
+  it("shows the recent-operations panel with its caveat even when the queue fails", async () => {
+    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    watchDisputes(() => HttpResponse.json({ success: false, message: "boom" }, { status: 500 }));
+
+    const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
+
+    expect(html).toContain("Son işlemler");
+    expect(html).toContain("koala-backend#15");
+  });
+});
