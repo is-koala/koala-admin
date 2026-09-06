@@ -1,5 +1,15 @@
 # Keycloak kurulumu — `koala-staff` realm'i
 
+> **Bu kurulum yapılmayacak. Keycloak kullanmıyoruz.**
+>
+> Karar: [koala-backend ADR-0014](https://github.com/is-koala/koala-backend/blob/main/docs/adr/0014-keep-staff-identity-in-koala.md) — personel kimliği de Koala'da tutulacak, panel Koala'nın kendi JWT'siyle giriş yapacak.
+>
+> Bu dosya **yalnız `src/server/auth/**` ve `src/env.ts` hâlâ bir Keycloak'a bağlı olduğu için** duruyor: panel `KEYCLOAK_CLIENT_SECRET` olmadan açılmıyor, yani bugün yerel geliştirme için hâlâ [`local-keycloak.md`](./local-keycloak.md) gerekiyor. Auth katmanı değiştirildiğinde bu dosya, `local-keycloak.md` ve `docker/keycloak/` birlikte silinecek.
+>
+> §3'teki rol grafiği ve görev ayrılığı kuralı **kalkmıyor**: içerik ADR-0014 §Rol grafiği'ne taşındı ve tek kaynağı orası. Buradaki kopyayı referans alma.
+>
+> Yeni bir Keycloak kurma. Canlıdaki (`auth.iskoala.com`) kurulum kaldırılıyor.
+
 Bu dosya yalnız **senin elle yapacağın** adımları anlatır. Hiçbir adımda anahtar ya da parola bana iletme; sonunda bana yalnız üç değer lazım ve üçü de gizli değil.
 
 Karar gerekçesi: [koala-backend ADR-0010](https://github.com/is-koala/koala-backend/blob/main/docs/adr/0010-split-staff-identity-from-koala-authorization.md)
