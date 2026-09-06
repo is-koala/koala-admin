@@ -47,12 +47,16 @@ export default function GuardPage() {
 }
 `;
 
-/** The phrase Next.js uses when the server-only guard trips. */
-const EXPECTED_SIGNALS = [
-  "cannot be imported from a Client Component",
-  "server-only",
-  "Server Component",
-];
+/**
+ * The decisive phrase. It must appear, on its own: a build that fails for an
+ * unrelated reason still echoes the probe's path, and that path contains the
+ * substring "server-only" — so a looser match would let this check pass while
+ * verifying nothing.
+ */
+const REQUIRED_SIGNAL = "cannot be imported from a Client Component";
+
+/** Extra phrases reported alongside it, for the log only. */
+const SUPPORTING_SIGNALS = ["server-only", "Server Component"];
 
 function plant() {
   mkdirSync(guardDir, { recursive: true });
@@ -111,15 +115,18 @@ function main() {
     process.exit(1);
   }
 
-  const matched = EXPECTED_SIGNALS.filter((signal) => output.includes(signal));
-  if (matched.length === 0) {
+  if (!output.includes(REQUIRED_SIGNAL)) {
     console.error(
       "\n✗ FAIL: `next build` failed, but not for the expected reason.\n" +
-        `  None of ${JSON.stringify(EXPECTED_SIGNALS)} appeared in the output.\n` +
+        `  ${JSON.stringify(REQUIRED_SIGNAL)} did not appear in the output.\n` +
         "  The guard may be fine and something else may be broken — read the log above.",
     );
     process.exit(1);
   }
+
+  const matched = [REQUIRED_SIGNAL].concat(
+    SUPPORTING_SIGNALS.filter((signal) => output.includes(signal)),
+  );
 
   console.log(
     `\n✓ PASS: \`next build\` failed with exit code ${result.status}, ` +

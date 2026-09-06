@@ -15,6 +15,15 @@ env:
   # `force-dynamic`, so nothing is fetched at build time — but the value still
   # has to be a valid absolute http(s) URL.
   KOALA_API_BASE_URL: http://localhost:8080
+  # `next build` collects page data for /api/auth/[...nextauth], which imports
+  # `src/env.ts`. The env guard fails closed, so the build cannot run without
+  # these four. They are throwaway build-time placeholders, NOT secrets: CI
+  # never reaches Keycloak, and the real values live only in the deployment
+  # environment. AUTH_SECRET only has to be valid base64 of the right length.
+  AUTH_URL: http://localhost:3000
+  AUTH_SECRET: Q0kgYnVpbGQtdGltZSBwbGFjZWhvbGRlciwgbm90IGEgc2VjcmV0
+  KEYCLOAK_ISSUER: http://localhost:8085/realms/koala-staff
+  KEYCLOAK_CLIENT_SECRET: ci-build-time-placeholder-not-a-secret
 
 jobs:
   verify:
