@@ -16,7 +16,7 @@
 export interface AuditEntryBody {
   id: string;
   occurredAt: string;
-  actorStaffId: string;
+  actorStaffId: string | null;
   actorDisplayName: string;
   permission: string;
   action: string;

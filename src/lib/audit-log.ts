@@ -46,7 +46,11 @@ export interface AuditEntry {
   readonly id: string;
   /** ISO-8601 instant, UTC. Rendered absolute and in Europe/Istanbul, never relative. */
   readonly occurredAt: string;
-  readonly actorStaffId: string;
+  /**
+   * Null when the actor has no `staff_members` row, and for the bridge-phase
+   * marketplace admin (koala-backend#15). `actorDisplayName` is never null.
+   */
+  readonly actorStaffId: string | null;
   readonly actorDisplayName: string;
   /** The permission the interceptor checked, e.g. `category.manage`. */
   readonly permission: string;

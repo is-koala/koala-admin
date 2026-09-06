@@ -211,3 +211,39 @@ describe("the two halves of an audit record", () => {
     expect(page.content[0]?.permission).toBe("escrow.freeze");
   });
 });
+
+describe("an actor with no staff record", () => {
+  it("keeps the row instead of blanking the page", async () => {
+    // koala-backend#15 leaves actorStaffId null for a valid staff token with no
+    // staff_members row, and for the ADR-0010 bridge-phase marketplace admin.
+    // Zod parses the page as a whole, so a non-nullable field here would throw
+    // away every other row over exactly the ones worth reading.
+    captureRequest(
+      auditPageBody({
+        content: [
+          {
+            ...categoryCreatedEntry,
+            actorStaffId: null,
+            actorDisplayName: "f7c1e0d2-keycloak-subject",
+          },
+          refusedEntry,
+        ],
+      }),
+    );
+
+    const page = await fetchWith({});
+
+    expect(page.content).toHaveLength(2);
+    expect(page.content[0]?.actorStaffId).toBeNull();
+    expect(page.content[0]?.actorDisplayName).toBe("f7c1e0d2-keycloak-subject");
+    expect(page.content[1]?.id).toBe(refusedEntry.id);
+  });
+
+  it("keeps resourceId an empty string when no single record was targeted", async () => {
+    captureRequest(auditPageBody({ content: [{ ...categoryCreatedEntry, resourceId: "" }] }));
+
+    const page = await fetchWith({});
+
+    expect(page.content[0]?.resourceId).toBe("");
+  });
+});

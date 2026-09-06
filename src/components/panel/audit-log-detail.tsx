@@ -83,7 +83,7 @@ export function AuditEntryDetail({ entry, permissionLabels, onClose }: AuditEntr
           <Field label="Aktör">
             <span>{entry.actorDisplayName}</span>
             <span className="block font-mono text-xs break-all text-ink-subtle">
-              {entry.actorStaffId}
+              {entry.actorStaffId ?? "Personel kaydı yok"}
             </span>
           </Field>
           <Field label="Eylem">

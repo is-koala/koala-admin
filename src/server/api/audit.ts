@@ -26,7 +26,13 @@ import type { PageDto } from "./types";
  *
  *  - core fields are non-nullable and the schema treats a missing one as a
  *    contract violation, because a row that cannot say who did what is not a
- *    weaker audit record, it is not one;
+ *    weaker audit record, it is not one. The single exception is
+ *    `actorStaffId`: koala-backend#15 leaves it null for a valid staff token
+ *    with no `staff_members` row, and for the ADR-0010 bridge-phase
+ *    marketplace admin. Those rows are the ones most worth reading, so a
+ *    strict schema here would blank the whole page over exactly them.
+ *    `actorDisplayName` is always present and carries the Keycloak subject in
+ *    that case;
  *  - detail fields are nullable and a null is **not** an error. It is the
  *    erasure having happened. Anything rendering them has to say so out loud
  *    rather than draw an empty box.
@@ -76,7 +82,7 @@ const nullableTextSchema = z
 export const auditEntrySchema: z.ZodType<AuditEntry> = z.object({
   id: z.string(),
   occurredAt: z.string(),
-  actorStaffId: z.string(),
+  actorStaffId: z.string().nullable(),
   actorDisplayName: z.string(),
   /**
    * Deliberately `string`, not the narrowed `Permission` union. The backend
