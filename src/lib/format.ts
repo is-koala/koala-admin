@@ -54,6 +54,74 @@ export function formatDateTime(value: DateInput): string {
   });
 }
 
+/**
+ * `06.09.2026 01:58:48` — the audit log's timestamp.
+ *
+ * Seconds are not decoration here. Two `/admin/**` calls a second apart are two
+ * different decisions by koala-backend#14's interceptor, and a minute-precision
+ * column collapses them into one line that looks like a duplicate. Note also
+ * what this function is *not*: there is no relative formatter in this file, and
+ * koala-admin#10 asks for that on purpose — "3 dakika önce" is unreadable
+ * evidence, and an audit row is evidence before it is a UI element.
+ */
+export function formatDateTimeSeconds(value: DateInput): string {
+  return formatWith(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+/**
+ * The UTC offset `Europe/Istanbul` was on at a given instant, as `+03:00`.
+ *
+ * Looked up rather than hardcoded. Turkey has been on permanent UTC+3 since
+ * 2016, so today this always answers `+03:00` — but a date filter that silently
+ * assumed it would be wrong by an hour the day that changes, and being wrong by
+ * an hour is exactly how an audit query quietly excludes the row somebody was
+ * looking for.
+ */
+function istanbulOffset(at: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: KOALA_TIME_ZONE,
+    timeZoneName: "longOffset",
+  }).formatToParts(at);
+
+  const name = parts.find((part) => part.type === "timeZoneName")?.value ?? "";
+  const offset = name.replace("GMT", "");
+  /* v8 ignore next 3 -- `longOffset` always yields GMT±HH:MM for a real zone. */
+  return offset.length === 0 ? "+00:00" : offset;
+}
+
+/**
+ * `2026-09-01` → the instant that day begins (or ends) in `Europe/Istanbul`,
+ * as a UTC ISO-8601 string.
+ *
+ * A date filter typed by a person in Istanbul means an Istanbul day. Sending
+ * the bare `2026-09-01` would leave the backend to guess a zone, and the
+ * three-hour window that guess gets wrong is three hours of audit rows.
+ * Returns `null` for anything that is not a `YYYY-MM-DD` calendar date, so a
+ * hand-edited query string cannot push junk onto the wire.
+ */
+export function istanbulDayBoundary(day: string, edge: "start" | "end"): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return null;
+  }
+
+  const time = edge === "start" ? "00:00:00.000" : "23:59:59.999";
+  const utcGuess = new Date(`${day}T${time}Z`);
+  if (Number.isNaN(utcGuess.getTime())) {
+    return null;
+  }
+
+  const local = new Date(`${day}T${time}${istanbulOffset(utcGuess)}`);
+  return Number.isNaN(local.getTime()) ? null : local.toISOString();
+}
+
 /** `01:58:48` */
 export function formatTime(value: DateInput): string {
   return formatWith(value, {
