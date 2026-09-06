@@ -117,6 +117,18 @@ export const ROUTES = [
     nav: { label: "Şikayetler", order: 20 },
   },
   {
+    /**
+     * koala-admin#8. Approval is irreversible and is the gate in front of a
+     * company posting jobs at all, so it gets its own permission rather than
+     * riding along with anything else — `COMPANY_APPROVE` on the backend.
+     */
+    path: "/companies",
+    title: "Şirket onayları",
+    access: "permission",
+    permission: "company.approve",
+    nav: { label: "Şirket onayları", order: 30 },
+  },
+  {
     path: "/audit-log",
     title: "Denetim kaydı",
     access: "permission",
