@@ -1,0 +1,7 @@
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+  # MSW is used through `msw/node` in Vitest only; its postinstall exists to
+  # drop a service worker into a public directory for browser mocking, which
+  # this project does not do.
+  msw: false

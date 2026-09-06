@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/**
+ * The panel's whole design surface: a handful of semantic tokens.
+ *
+ * There is no external UI kit here on purpose — an admin panel that renders
+ * tables, forms and dialogs does not need one, and owning these six components
+ * locally is cheaper than owning someone else's upgrade path.
+ */
+@theme {
+  --color-surface: oklch(1 0 0);
+  --color-surface-muted: oklch(0.98 0.003 250);
+  --color-surface-sunken: oklch(0.96 0.005 250);
+
+  --color-border-subtle: oklch(0.9 0.006 250);
+  --color-border-strong: oklch(0.82 0.008 250);
+
+  --color-ink: oklch(0.24 0.015 260);
+  --color-ink-muted: oklch(0.5 0.012 260);
+  --color-ink-subtle: oklch(0.62 0.01 260);
+
+  --color-brand: oklch(0.55 0.15 250);
+  --color-brand-strong: oklch(0.47 0.16 250);
+  --color-brand-soft: oklch(0.95 0.03 250);
+
+  --color-danger: oklch(0.52 0.19 27);
+  --color-danger-soft: oklch(0.96 0.03 27);
+  --color-success: oklch(0.52 0.13 155);
+  --color-success-soft: oklch(0.95 0.04 155);
+  --color-warning: oklch(0.62 0.14 75);
+  --color-warning-soft: oklch(0.96 0.05 75);
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-surface-muted);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}

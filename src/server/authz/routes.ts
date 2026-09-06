@@ -1,0 +1,194 @@
+import type { Permission } from "./permissions";
+
+/**
+ * Every page and route handler the panel serves, and what it takes to reach it.
+ *
+ * This is koala-admin#5's counterpart to koala-backend#14's `/admin/**` mapping
+ * test. The backend's defect was `.requestMatchers("/admin/**").hasRole("ADMIN")`
+ * — one door in front of everything, so every endpoint added afterwards was
+ * open to every admin by default. The panel's version of that defect is a page
+ * someone adds without a gate, and the way it is prevented is the same: a
+ * registry that must name a permission, plus a test that walks `src/app` and
+ * fails when a file is not in it.
+ *
+ * Two rules make it work, and neither is optional:
+ *
+ *  1. **Anything not permission-gated has to say why, in writing.** The type
+ *     below cannot be satisfied by an entry that is `public` or `session`
+ *     without an `ungatedReason`. Adding a hole is allowed; adding one silently
+ *     is not, and `routes.test.ts` pins the exact set so growing it is a
+ *     deliberate diff someone reviews.
+ *  2. **The menu is drawn from this list and nowhere else.** The
+ *     permission→menu mapping is the `nav` field on these entries, so a screen
+ *     cannot quietly add itself to the navigation with a different rule from
+ *     the one that guards it.
+ *
+ * And the rule this registry cannot enforce on its own, stated so nobody
+ * mistakes the hiding for the protection: **the backend is the authority.**
+ * A missing menu entry is cosmetic. What actually stops a `CATALOG_EDITOR`
+ * reading the audit log is `@RequiresPermission` on the backend; the panel's
+ * gate exists so the person gets an explanation instead of a broken screen.
+ */
+
+/** How a route is reached. `permission` is the only one that protects anything. */
+type RouteGate =
+  | { readonly access: "permission"; readonly permission: Permission }
+  /** Signed in, no permission required — and a written reason for that. */
+  | { readonly access: "session"; readonly ungatedReason: string }
+  /** Reachable with no session at all — and a written reason for that. */
+  | { readonly access: "public"; readonly ungatedReason: string };
+
+interface RouteIdentity {
+  /** URL path as Next.js serves it, with route groups already stripped. */
+  readonly path: string;
+  /** What the route is, in Turkish, for anywhere the panel has to name it. */
+  readonly title: string;
+}
+
+interface NavPlacement {
+  /**
+   * Where the route appears in the menu. Absent means "reachable, but not
+   * advertised" — a verification page, or a screen only linked from another.
+   */
+  readonly nav?: {
+    readonly label: string;
+    /** Lower first. Gaps are fine; they leave room for later slices. */
+    readonly order: number;
+  };
+}
+
+type PanelRouteShape = RouteIdentity & RouteGate & NavPlacement;
+
+/**
+ * Pages — one entry per `src/app/**\/page.tsx`.
+ *
+ * `as const` on purpose: it keeps `path` a literal union, which is what lets
+ * `next.config.ts`'s `typedRoutes` check the menu's `<Link href>` values
+ * instead of waving a `string` through.
+ */
+export const ROUTES = [
+  {
+    path: "/giris",
+    title: "Giriş",
+    access: "public",
+    ungatedReason:
+      "Oturumun başladığı yer. Gate'lemek yönlendirmeyi döngüye sokar; hiçbir veri göstermez, tek bir Keycloak butonu vardır.",
+  },
+  {
+    path: "/giris/hata",
+    title: "Giriş yapılamadı",
+    access: "public",
+    ungatedReason:
+      "Oturumun neden olmadığını anlatır. Gate'lenirse her hata, bildirmeye çalıştığı hatanın arkasında kaybolur.",
+  },
+  {
+    path: "/",
+    title: "Panel",
+    access: "session",
+    ungatedReason:
+      "Kimlikten ve menüden başka bir şey göstermez; menü zaten izinlere göre çizilir. Buraya bir izin koymak, izni olmayan personele 'giriş yaptın ama hiçbir sayfaya gidemezsin' demenin yolunu kapatırdı — oysa bu, geçiş penceresinin normal durumudur.",
+  },
+  {
+    path: "/verification/job-categories",
+    title: "İş kategorileri (doğrulama)",
+    access: "session",
+    ungatedReason:
+      "koala-admin#2'nin API katmanı doğrulama sayfası. Yalnız permitAll olan GET /reference/job-categories verisini gösterir ve /admin/me çalışmadığında da ulaşılabilir kalmalıdır — aksi hâlde backend kimliği bozulduğunda API katmanını doğrulayacak sayfa da kaybolur.",
+  },
+  {
+    path: "/job-categories",
+    title: "İş kategorileri",
+    access: "permission",
+    permission: "category.manage",
+    nav: { label: "İş kategorileri", order: 10 },
+  },
+  {
+    path: "/audit-log",
+    title: "Denetim kaydı",
+    access: "permission",
+    permission: "audit.read",
+    nav: { label: "Denetim kaydı", order: 90 },
+  },
+] as const satisfies readonly PanelRouteShape[];
+
+export type PanelRoute = (typeof ROUTES)[number];
+
+/** The literal union of every path the panel serves — a valid `Link` target. */
+export type PanelRoutePath = PanelRoute["path"];
+
+/**
+ * Route handlers — one entry per `src/app/**\/route.ts`.
+ *
+ * Kept apart from the pages because they are never menu entries and never
+ * `Link` targets, but held to the same rule: a handler that is not in this list
+ * fails `routes.test.ts`. An API route is exactly as capable of leaking data as
+ * a page, and rather more likely to be added without thinking about it.
+ */
+export const ROUTE_HANDLERS = [
+  {
+    path: "/api/auth/[...nextauth]",
+    title: "Auth.js uçları",
+    access: "public",
+    ungatedReason:
+      "Oturumu üreten uç. Önüne oturum kapısı koymak, anahtarı içeride bırakılmış kilitli bir kapıdır; src/proxy.ts matcher'ı da bu yüzden dışarıda bırakır.",
+  },
+  {
+    path: "/api/health",
+    title: "Sağlık yoklaması",
+    access: "public",
+    ungatedReason:
+      "Yük dengeleyici çerezsiz çağırır ve yalnız 'ayaktayım' der; hiçbir iş verisi taşımaz.",
+  },
+] as const satisfies readonly (RouteIdentity & RouteGate)[];
+
+export type RouteHandlerEntry = (typeof ROUTE_HANDLERS)[number];
+
+/** Permission-gated pages, narrowed so `permission` is present at the type level. */
+export type GatedRoute = Extract<PanelRoute, { access: "permission" }>;
+
+export function gatedRoutes(): readonly GatedRoute[] {
+  return ROUTES.filter((route): route is GatedRoute => route.access === "permission");
+}
+
+/** A gated route that also appears in the menu — the only kind that can. */
+type NavRoute = Extract<GatedRoute, { nav: object }>;
+
+export interface NavEntry {
+  /**
+   * Narrowed to the menu's own routes rather than to every path the panel
+   * serves, so `typedRoutes` checks the `<Link href>` against real routes and a
+   * menu entry can never point at `/giris`.
+   */
+  readonly href: NavRoute["path"];
+  readonly label: string;
+  readonly permission: Permission;
+  readonly order: number;
+}
+
+/**
+ * The menu, for a given set of resolved permissions.
+ *
+ * The single place a permission becomes a menu entry. It takes the permission
+ * list rather than reading it, so it is a pure function of the registry and the
+ * backend's answer — no session, no roles, nothing to go stale.
+ *
+ * An empty list in means an empty menu out. That is the fail-closed path from
+ * `getStaffContext()` arriving intact: there is no branch here that draws a
+ * partial menu when permissions are missing, because "missing" and "none" are
+ * deliberately the same thing.
+ */
+export function navigationFor(permissions: readonly Permission[]): readonly NavEntry[] {
+  const held = new Set<Permission>(permissions);
+
+  return ROUTES.filter(
+    (route): route is NavRoute =>
+      route.access === "permission" && "nav" in route && held.has(route.permission),
+  )
+    .map((route) => ({
+      href: route.path,
+      label: route.nav.label,
+      permission: route.permission,
+      order: route.nav.order,
+    }))
+    .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label, "tr"));
+}

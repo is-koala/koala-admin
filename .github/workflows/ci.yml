@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The build imports `src/env.ts`, which refuses to start without this. CI has
+  # no backend to reach and never makes a request — the verification page is
+  # `force-dynamic`, so nothing is fetched at build time — but the value still
+  # has to be a valid absolute http(s) URL.
+  KOALA_API_BASE_URL: http://localhost:8080
+  # `next build` collects page data for /api/auth/[...nextauth], which imports
+  # `src/env.ts`. The env guard fails closed, so the build cannot run without
+  # these four. They are throwaway build-time placeholders, NOT secrets: CI
+  # never reaches Keycloak, and the real values live only in the deployment
+  # environment. AUTH_SECRET only has to be valid base64 of the right length.
+  AUTH_URL: http://localhost:3000
+  AUTH_SECRET: Q0kgYnVpbGQtdGltZSBwbGFjZWhvbGRlciwgbm90IGEgc2VjcmV0
+  KEYCLOAK_ISSUER: http://localhost:8085/realms/koala-staff
+  KEYCLOAK_CLIENT_SECRET: ci-build-time-placeholder-not-a-secret
+
+jobs:
+  verify:
+    name: lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  server-only-guard:
+    name: server-only boundary holds
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Plants a Client Component that imports the server-only API client and
+      # asserts `next build` fails. A green build there would mean the panel
+      # could ship an access token to the browser, so this runs on every PR
+      # rather than living in a runbook nobody opens.
+      - name: Verify the server-only guard breaks the build
+        run: pnpm verify:server-only
