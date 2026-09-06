@@ -1,5 +1,9 @@
 # Yerel Keycloak
 
+> **Geçici.** Keycloak projeden çıkıyor — [koala-backend ADR-0014](https://github.com/is-koala/koala-backend/blob/main/docs/adr/0014-keep-staff-identity-in-koala.md).
+>
+> Bu compose dosyası yalnız panelin bugünkü hâlini yerelde çalıştırabilmek için duruyor; `src/env.ts` `KEYCLOAK_CLIENT_SECRET`'i zorunlu tutuyor ve o kalkana kadar panel bir Keycloak olmadan açılmıyor. Auth katmanı Koala JWT'sine geçtiğinde bu dosya, [`keycloak-setup.md`](./keycloak-setup.md) ve `docker/keycloak/` birlikte silinecek.
+
 `docker/keycloak/` altındaki compose dosyası ve realm import'u, `koala-staff` realm'inin **yerel
 geliştirme kopyasıdır**. Gerçek realm'in tek kaynağı [`keycloak-setup.md`](./keycloak-setup.md)
 dosyasıdır; oradaki değerler burada tekrar edilmez, yalnız makine tarafından import edilir.
