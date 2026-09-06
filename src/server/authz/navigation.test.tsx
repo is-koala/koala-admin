@@ -97,7 +97,7 @@ describe("the menu is exactly what the backend permits", () => {
             httpStatus: "500 INTERNAL_SERVER_ERROR",
             errorCode: "UNEXPECTED",
             errorCategory: "UNEXPECTED",
-            correlationId: "cid-500",
+            requestId: "rid-500",
             path: "/admin/me",
             timeStamp: "2026-09-06T09:24:00.000000000Z",
           },
@@ -113,7 +113,7 @@ describe("the menu is exactly what the backend permits", () => {
     // And the emptiness is explained rather than left to look like "you have
     // no permissions".
     expect(html).toContain("İzinleriniz çözülemedi");
-    expect(html).toContain("cid-500");
+    expect(html).toContain("rid-500");
   });
 
   it("draws no menu when the backend cannot be reached at all", async () => {

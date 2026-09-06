@@ -67,7 +67,7 @@ type LoadResult =
       title: string;
       description: string;
       errorCode: string | null;
-      correlationId: string | null;
+      requestId: string | null;
     };
 
 async function loadJobCategories(): Promise<LoadResult> {
@@ -82,7 +82,7 @@ async function loadJobCategories(): Promise<LoadResult> {
         title: "Kategoriler yüklenemedi.",
         description: error.message,
         errorCode: error.errorCode,
-        correlationId: error.correlationId,
+        requestId: error.requestId,
       };
     }
 
@@ -91,23 +91,18 @@ async function loadJobCategories(): Promise<LoadResult> {
       title: "Kategoriler yüklenemedi.",
       description: error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu.",
       errorCode: null,
-      correlationId: null,
+      requestId: null,
     };
   }
 }
 
-function Failure({
-  title,
-  description,
-  errorCode,
-  correlationId,
-}: Extract<LoadResult, { ok: false }>) {
+function Failure({ title, description, errorCode, requestId }: Extract<LoadResult, { ok: false }>) {
   return (
     <ErrorState
       title={title}
       description={description}
       errorCode={errorCode}
-      correlationId={correlationId}
+      requestId={requestId}
     />
   );
 }

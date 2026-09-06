@@ -59,8 +59,8 @@ export interface StaffContextFailure {
   readonly authCode: AuthFailureCode | null;
   /** HTTP status, when there was a response. `0` for a transport failure. */
   readonly status: number | null;
-  /** The backend's correlation id — the only handle on the matching log line. */
-  readonly correlationId: string | null;
+  /** The backend's request id — the only handle on the matching log line. */
+  readonly requestId: string | null;
   /** Diagnostic detail, for the log and for an operator who can act on it. */
   readonly detail: string;
 }
@@ -130,7 +130,7 @@ function toFailure(error: unknown): StaffContextFailure {
       kind: "SESSION",
       authCode: error.code,
       status: null,
-      correlationId: null,
+      requestId: null,
       detail: error.message,
     };
   }
@@ -147,7 +147,7 @@ function toFailure(error: unknown): StaffContextFailure {
         kind: "NO_STAFF_RECORD",
         authCode: null,
         status: error.status,
-        correlationId: error.correlationId,
+        requestId: error.requestId,
         detail: error.message,
       };
     }
@@ -163,7 +163,7 @@ function toFailure(error: unknown): StaffContextFailure {
         kind: "SESSION",
         authCode: "SESSION_EXPIRED",
         status: error.status,
-        correlationId: error.correlationId,
+        requestId: error.requestId,
         detail: error.message,
       };
     }
@@ -172,7 +172,7 @@ function toFailure(error: unknown): StaffContextFailure {
       kind: "BACKEND_UNAVAILABLE",
       authCode: null,
       status: error.status,
-      correlationId: error.correlationId,
+      requestId: error.requestId,
       detail: error.message,
     };
   }
@@ -181,7 +181,7 @@ function toFailure(error: unknown): StaffContextFailure {
     kind: "UNEXPECTED",
     authCode: null,
     status: null,
-    correlationId: null,
+    requestId: null,
     detail: error instanceof Error ? error.message : String(error),
   };
 }

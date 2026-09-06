@@ -327,7 +327,7 @@ export function EscrowOperationForm({
                 {state.deduplicated
                   ? " Bu gönderim yinelenmişti; ikinci istek gönderilmedi."
                   : null}
-                {state.correlationId === null ? null : ` · ${state.correlationId}`}
+                {state.requestId === null ? null : ` · ${state.requestId}`}
               </p>
             ) : null}
 

@@ -21,7 +21,7 @@ export interface EscrowFormState {
   readonly status: EscrowFormStatus;
   readonly message: string;
   readonly errorCode: string | null;
-  readonly correlationId: string | null;
+  readonly requestId: string | null;
   /** What the backend said it moved, already formatted. */
   readonly amountText: string | null;
   /** True when the submission was a duplicate and no second request was sent. */
@@ -37,7 +37,7 @@ export const INITIAL_ESCROW_FORM_STATE: EscrowFormState = {
   status: "IDLE",
   message: "",
   errorCode: null,
-  correlationId: null,
+  requestId: null,
   amountText: null,
   deduplicated: false,
   operationKey: null,

@@ -11,10 +11,10 @@ export interface ErrorStateProps {
   title: string;
   description?: string;
   /**
-   * The backend's `correlationId`. Shown to the operator on purpose: it is what
+   * The backend's `requestId`. Shown to the operator on purpose: it is what
    * turns "the page was broken" into a single grep in the backend log.
    */
-  correlationId?: string | null;
+  requestId?: string | null;
   /** `ErrorResult.errorCode`, e.g. `RESOURCE_NOT_FOUND`. */
   errorCode?: string | null;
   /** `ErrorResult.details` — per-field messages from a validation failure. */
@@ -31,7 +31,7 @@ export interface ErrorStateProps {
 export function ErrorState({
   title,
   description,
-  correlationId,
+  requestId,
   errorCode,
   details,
   action,
@@ -60,7 +60,7 @@ export function ErrorState({
         </ul>
       ) : null}
 
-      {errorCode || correlationId ? (
+      {errorCode || requestId ? (
         <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-ink-muted">
           {errorCode ? (
             <div className="flex gap-1">
@@ -68,10 +68,10 @@ export function ErrorState({
               <dd className="font-mono">{errorCode}</dd>
             </div>
           ) : null}
-          {correlationId ? (
+          {requestId ? (
             <div className="flex gap-1">
-              <dt>Correlation ID:</dt>
-              <dd className="font-mono break-all">{correlationId}</dd>
+              <dt>İstek numarası:</dt>
+              <dd className="font-mono break-all">{requestId}</dd>
             </div>
           ) : null}
         </dl>
