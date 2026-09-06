@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import {
   Badge,
@@ -44,12 +43,11 @@ export default async function JobCategoriesVerificationPage() {
   const result = await loadJobCategories();
 
   return (
-    <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-12">
+    /* The panel shell supplies <main>, the sidebar and the "← Panel" way back,
+       so this page renders a plain section inside it. */
+    <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
-        <Link href="/" className="text-sm text-brand hover:underline">
-          ← Panel
-        </Link>
-        <h1 className="text-2xl font-semibold">İş kategorileri</h1>
+        <h1 className="text-2xl font-semibold">İş kategorileri (doğrulama)</h1>
         <p className="text-sm text-ink-muted">
           Sunucudan <code className="font-mono">GET /reference/job-categories</code> çağrılır;
           tarayıcı backend&apos;e hiç istek atmaz. Sayfa {formatDateTime(new Date())} itibarıyla
@@ -58,7 +56,7 @@ export default async function JobCategoriesVerificationPage() {
       </header>
 
       {result.ok ? <CategoriesResult categories={result.categories} /> : <Failure {...result} />}
-    </main>
+    </div>
   );
 }
 
