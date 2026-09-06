@@ -20,4 +20,5 @@ export {
   type TableCellProps,
   type TableHeaderCellProps,
   type TableProps,
+  type TableRowProps,
 } from "./table";

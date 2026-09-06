@@ -1,4 +1,4 @@
-import type { ReactNode, ThHTMLAttributes, TdHTMLAttributes } from "react";
+import type { HTMLAttributes, ReactNode, ThHTMLAttributes, TdHTMLAttributes } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -30,8 +30,23 @@ export function TableBody({ children }: { children: ReactNode }) {
   return <tbody className="divide-y divide-border-subtle">{children}</tbody>;
 }
 
-export function TableRow({ children }: { children: ReactNode }) {
-  return <tr className="hover:bg-surface-muted">{children}</tr>;
+export interface TableRowProps extends HTMLAttributes<HTMLTableRowElement> {
+  children: ReactNode;
+}
+
+/**
+ * `className` and the rest of the `<tr>` attributes are passed through because
+ * some rows mean something. The audit log's refused rows (`allowed = false`)
+ * have to look different from the rest — they are the only visible trace of an
+ * attempted privilege escalation — and a row that can only be styled from
+ * inside this file would push that decision into the wrong module.
+ */
+export function TableRow({ children, className, ...rest }: TableRowProps) {
+  return (
+    <tr className={cn("hover:bg-surface-muted", className)} {...rest}>
+      {children}
+    </tr>
+  );
 }
 
 export interface TableHeaderCellProps extends ThHTMLAttributes<HTMLTableCellElement> {
