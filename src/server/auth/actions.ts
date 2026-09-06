@@ -6,6 +6,7 @@ import { env } from "@/env";
 
 import { getKeycloakEndpoints } from "./discovery";
 import { signIn, signOut } from "./index";
+import { buildRpInitiatedLogoutUrl } from "./logout";
 import { getIdTokenHint } from "./session";
 
 /**
@@ -70,11 +71,7 @@ async function buildLogoutUrl(): Promise<string | null> {
     return "/giris/hata?kod=KEYCLOAK_UNREACHABLE";
   }
 
-  const url = new URL(endSessionEndpoint);
-  url.searchParams.set("id_token_hint", idToken);
-  url.searchParams.set("post_logout_redirect_uri", env.AUTH_URL);
-
-  return url.toString();
+  return buildRpInitiatedLogoutUrl({ endSessionEndpoint, idToken, returnTo: env.AUTH_URL });
 }
 
 /**
