@@ -62,6 +62,48 @@ export const authenticationRequiredBody = {
 };
 
 /**
+ * `GET /admin/me` — the response koala-backend#14 was verified to produce.
+ *
+ * Note `roles` carries the transitively-included roles rather than only the
+ * ones in the token, and both arrays arrive sorted. The panel reads `roles` as
+ * evidence and `permissions` as authority; it never converts one into the
+ * other (ADR-0010).
+ */
+export const adminMeSuccessBody = {
+  success: true,
+  message: "Personel kimliği çözüldü.",
+  httpStatus: "200 OK",
+  path: "/admin/me",
+  correlationId: "0d1b2b0f-1c8a-4a1e-9d4a-8f2c9a7b6e10",
+  timeStamp: "2026-09-06T09:12:04.118273914Z",
+  data: {
+    staffId: "b7f4a2c1-0000-4c00-8000-000000000001",
+    displayName: "Trust Lideri",
+    email: "trust-lead@koala.local",
+    roles: ["DISPUTE_HANDLER", "MODERATOR", "SUPPORT_AGENT", "TRUST_LEAD"],
+    permissions: ["content.moderate", "dispute.resolve", "user.read", "user.read_pii"],
+  },
+};
+
+/**
+ * `GET /admin/me` with a valid Keycloak token and no `staff_members` row.
+ *
+ * koala-admin#5's first comment: during the migration window this is the normal
+ * answer, not the exception — the Keycloak door opens before anything is behind
+ * it, and the first staff row is written from outside the panel.
+ */
+export const adminMeNoStaffRecordBody = {
+  success: false,
+  message: "Bu hesap için personel kaydı bulunamadı.",
+  httpStatus: "403 FORBIDDEN",
+  errorCode: "STAFF_NOT_FOUND",
+  errorCategory: "ACCESS_DENIED",
+  correlationId: "3f5a1c88-91f0-4c5b-9c02-5b6a1f0d9e77",
+  path: "/admin/me",
+  timeStamp: "2026-09-06T09:12:41.902118004Z",
+};
+
+/**
  * A validation failure, shaped after `ErrorResult.withDetails(...)`. Same
  * envelope as the captured ones plus the `details` array, which is the field
  * most likely to be quietly dropped by an unwrapper.

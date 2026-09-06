@@ -18,6 +18,25 @@ const alias = {
 };
 
 /**
+ * The `react-server` build of React, which is what Next.js loads in a Server
+ * Component and the only build where `cache()` actually memoises.
+ *
+ * The default build exports `cache` as a pass-through — literally
+ * `function (fn) { return function () { return fn.apply(null, arguments); } }`
+ * — so a test running against it cannot tell a `cache()`-wrapped function from
+ * an unwrapped one, and `getStaffContext()`'s request-scoped de-duplication
+ * (ADR-0010's one permitted memo) would be untestable.
+ *
+ * Node resolves the `react-server` export condition itself when Vitest
+ * externalises a dependency, so an alias rather than `resolve.conditions` is
+ * what takes effect. It applies to the `node` project only: the `dom` project
+ * renders with `@testing-library/react`, which needs the client build.
+ */
+const reactServerBuild = fileURLToPath(
+  new URL("./node_modules/react/react.react-server.js", import.meta.url),
+);
+
+/**
  * `src/env.ts` validates at import time and throws when anything is missing, so
  * every variable the schema requires has to exist here or no test that reaches
  * the server layer can even load.
@@ -38,7 +57,7 @@ export default defineConfig({
   test: {
     projects: [
       {
-        resolve: { alias },
+        resolve: { alias: { ...alias, react: reactServerBuild } },
         test: {
           name: "node",
           environment: "node",
