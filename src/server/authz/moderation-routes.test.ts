@@ -30,7 +30,11 @@ describe("the report queue is gated on content.moderate", () => {
   it("is invisible to a DISPUTE_HANDLER", () => {
     // The whole reason koala-admin#7 chose `content.moderate`: resolving money
     // disputes must not come with the power to act on reported content.
-    expect(navigationFor(["dispute.resolve"]).map((entry) => entry.href)).toEqual([]);
+    // Asserted as an absence rather than an empty menu: koala-admin#6 gives
+    // `dispute.resolve` its own entry, and pinning the whole list here would
+    // fail every time an unrelated screen is added, which teaches the next
+    // person to loosen the assertion instead of reading it.
+    expect(navigationFor(["dispute.resolve"]).map((entry) => entry.href)).not.toContain("/reports");
   });
 
   it("is the only entry a MODERATOR sees", () => {
