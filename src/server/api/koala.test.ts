@@ -170,7 +170,7 @@ describe("koalaRequest", () => {
     ]);
   });
 
-  it("logs one line carrying the correlation id", async () => {
+  it("logs one line carrying the request id", async () => {
     const log = captureErrorLog();
     server.use(
       http.get(apiUrl("/admin/job-categories"), () =>
@@ -183,7 +183,7 @@ describe("koalaRequest", () => {
       .catch(() => undefined);
 
     expect(log.lines).toHaveLength(1);
-    expect(log.lines[0]).toContain("correlationId=47d40e1a-fabf-46d3-90e2-3d28f3d4476e");
+    expect(log.lines[0]).toContain("requestId=47d40e1a-fabf-46d3-90e2-3d28f3d4476e");
     expect(log.lines[0]).toContain("category=AUTHENTICATION_REQUIRED");
     expect(log.lines[0]).toContain("status=401");
   });
@@ -203,8 +203,8 @@ describe("koalaRequest", () => {
     expect(koala.errorCategory).toBe("UPSTREAM_FAILED");
     expect(koala.errorCode).toBe("NETWORK_FAILURE");
     // No response, so no id exists; the log still has the field, marked absent.
-    expect(koala.correlationId).toBeNull();
-    expect(log.lines[0]).toContain("correlationId=-");
+    expect(koala.requestId).toBeNull();
+    expect(log.lines[0]).toContain("requestId=-");
   });
 
   it("aborts a request that outlives its timeout", async () => {

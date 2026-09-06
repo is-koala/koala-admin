@@ -140,8 +140,8 @@ function transportError(cause: unknown, context: EnvelopeContext): KoalaApiError
     errorCode,
     errorCategory: "UPSTREAM_FAILED",
     message: `${message} (${context.method} ${context.path}).`,
-    // No response, so no correlation id exists to log. `-` in the log line.
-    correlationId: null,
+    // No response, so no request id exists to log. `-` in the log line.
+    requestId: null,
     path: context.path,
     method: context.method,
     cause,

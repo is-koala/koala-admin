@@ -125,7 +125,7 @@ describe("failing closed", () => {
             httpStatus: "500 INTERNAL_SERVER_ERROR",
             errorCode: "UNEXPECTED",
             errorCategory: "UNEXPECTED",
-            correlationId: "cid-500",
+            requestId: "rid-500",
             path: "/admin/me",
             timeStamp: "2026-09-06T09:13:00.000000000Z",
           },
@@ -142,7 +142,7 @@ describe("failing closed", () => {
     expect(context.failure).toMatchObject({
       kind: "BACKEND_UNAVAILABLE",
       status: 500,
-      correlationId: "cid-500",
+      requestId: "rid-500",
     });
     for (const permission of ["category.manage", "audit.read", "payout.release"] as const) {
       expect(context.has(permission)).toBe(false);
@@ -159,7 +159,7 @@ describe("failing closed", () => {
     expect(context.failure).toMatchObject({
       kind: "NO_STAFF_RECORD",
       status: 403,
-      correlationId: "3f5a1c88-91f0-4c5b-9c02-5b6a1f0d9e77",
+      requestId: "3f5a1c88-91f0-4c5b-9c02-5b6a1f0d9e77",
     });
     expect(context.permissions).toEqual([]);
   });

@@ -76,7 +76,7 @@ const emptyAuditPage = () =>
     message: "Liste getirildi.",
     httpStatus: "200 OK",
     path: "/admin/audit-log",
-    correlationId: "cid-audit",
+    requestId: "rid-audit",
     timeStamp: "2026-09-06T09:20:00.000000000Z",
     data: {
       content: [],
@@ -162,7 +162,7 @@ describe("the backend is the authority and the panel behaves as though it is", (
           httpStatus: "403 FORBIDDEN",
           errorCode: "ACCESS_DENIED",
           errorCategory: "ACCESS_DENIED",
-          correlationId: "cid-403",
+          requestId: "rid-403",
           path: "/admin/audit-log",
           timeStamp: "2026-09-06T09:21:00.000000000Z",
         },
@@ -174,7 +174,7 @@ describe("the backend is the authority and the panel behaves as though it is", (
 
     expect(audit.calls).toBe(1);
     expect(html).toContain("Backend bu işlem için yetki vermedi.");
-    expect(html).toContain("cid-403");
+    expect(html).toContain("rid-403");
   });
 });
 
@@ -192,7 +192,7 @@ describe("when the panel cannot find out what you may do", () => {
             httpStatus: "500 INTERNAL_SERVER_ERROR",
             errorCode: "UNEXPECTED",
             errorCategory: "UNEXPECTED",
-            correlationId: "cid-500",
+            requestId: "rid-500",
             path: "/admin/me",
             timeStamp: "2026-09-06T09:22:00.000000000Z",
           },
@@ -207,7 +207,7 @@ describe("when the panel cannot find out what you may do", () => {
     expect(audit.calls).toBe(0);
     expect(html).toContain("İzinleriniz çözülemedi");
     expect(html).not.toContain("403 — Bu sayfa için yetkiniz yok");
-    expect(html).toContain("cid-500");
+    expect(html).toContain("rid-500");
   });
 
   it("explains a Keycloak identity with no staff record, and grants nothing", async () => {

@@ -86,7 +86,7 @@ const EXPLANATIONS: Record<StaffContextFailureKind, Explanation> = {
     title: "İzinleriniz çözülemedi",
     description:
       "Panel, hangi işlemlere yetkiniz olduğunu her istekte Koala'ya sorar ve bu sefer cevap alamadı. İzinler token'da taşınmadığı için (ADR-0010) tahmin edilecek bir liste de yok: panel hiçbir izniniz yokmuş gibi davranır. Yetkileriniz duruyor; şu an okunamıyor.",
-    nextStep: "Birkaç dakika sonra tekrar deneyin; sürerse aşağıdaki correlation ID ile bildirin.",
+    nextStep: "Birkaç dakika sonra tekrar deneyin; sürerse aşağıdaki istek numarasıyla bildirin.",
   },
   UNEXPECTED: {
     title: "İzinleriniz çözülemedi",
@@ -108,7 +108,7 @@ export function StaffContextUnavailable({ failure }: StaffContextUnavailableProp
       title={explanation.title}
       description={explanation.description}
       errorCode={failure.kind}
-      correlationId={failure.correlationId}
+      requestId={failure.requestId}
       action={
         <div className="flex flex-col gap-2">
           <p className="text-sm text-ink">

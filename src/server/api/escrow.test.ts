@@ -33,7 +33,7 @@ function envelope(path: string, data: unknown) {
     message: "İşlem tamam.",
     httpStatus: "200 OK",
     path,
-    correlationId: "cid-escrow",
+    requestId: "rid-escrow",
     timeStamp: "2026-09-06T09:30:00.000000000Z",
     data,
   };
@@ -123,7 +123,7 @@ describe("release", () => {
             httpStatus: "409 CONFLICT",
             errorCode: "DISPUTE_BLOCKS_RELEASE",
             errorCategory: "DATA_CONFLICT",
-            correlationId: "cid-409",
+            requestId: "rid-409",
             path: escrowReleasePath(ASSIGNMENT),
             timeStamp: "2026-09-06T09:31:00.000000000Z",
           },
@@ -138,7 +138,7 @@ describe("release", () => {
     if (!isKoalaApiError(error)) throw new Error("unreachable");
     expect(error.message).toBe("Açık bir uyuşmazlık varken emanetteki para çıkarılamaz.");
     expect(error.errorCode).toBe("DISPUTE_BLOCKS_RELEASE");
-    expect(error.correlationId).toBe("cid-409");
+    expect(error.requestId).toBe("rid-409");
   });
 });
 
@@ -154,7 +154,7 @@ describe("refund", () => {
           message: "İade kaydı oluşturuldu.",
           httpStatus: "200 OK",
           path: escrowRefundPath(ASSIGNMENT),
-          correlationId: "cid-refund",
+          requestId: "rid-refund",
           timeStamp: "2026-09-06T09:32:00.000000000Z",
         });
       }),
@@ -168,7 +168,7 @@ describe("refund", () => {
     // total when the field is absent.
     expect(body).not.toHaveProperty("amount");
     expect(meta.message).toBe("İade kaydı oluşturuldu.");
-    expect(meta.correlationId).toBe("cid-refund");
+    expect(meta.requestId).toBe("rid-refund");
   });
 
   it("truncates the reason to the backend's @Size(max = 512)", async () => {
@@ -182,7 +182,7 @@ describe("refund", () => {
           message: "İade kaydı oluşturuldu.",
           httpStatus: "200 OK",
           path: escrowRefundPath(ASSIGNMENT),
-          correlationId: null,
+          requestId: null,
           timeStamp: "2026-09-06T09:32:00.000000000Z",
         });
       }),
@@ -243,7 +243,7 @@ describe("the escrow summary read", () => {
             httpStatus: "403 FORBIDDEN",
             errorCode: "ACCESS_DENIED",
             errorCategory: "ACCESS_DENIED",
-            correlationId: "cid-403",
+            requestId: "rid-403",
             path: escrowSummaryPath(ASSIGNMENT),
             timeStamp: "2026-09-06T09:33:00.000000000Z",
           },

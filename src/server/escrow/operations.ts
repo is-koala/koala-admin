@@ -93,7 +93,7 @@ export interface EscrowOperationOutcome {
   /** Turkish. The backend's own message whenever there is one. */
   readonly message: string;
   readonly errorCode: string | null;
-  readonly correlationId: string | null;
+  readonly requestId: string | null;
   /**
    * The amount the backend reported having moved, formatted through
    * `lib/format`. Null when its response carried no figure — a refund answers a
@@ -208,7 +208,7 @@ function blocked(message: string, errorCode: string): EscrowOperationOutcome {
     status: "BLOCKED",
     message,
     errorCode,
-    correlationId: null,
+    requestId: null,
     amountText: null,
     deduplicated: false,
   };
@@ -328,7 +328,7 @@ async function execute(request: EscrowOperationRequest): Promise<EscrowOperation
       reason,
       errorCode: null,
       message: success.message,
-      correlationId: success.correlationId,
+      requestId: success.requestId,
       at: new Date().toISOString(),
     });
 
@@ -336,7 +336,7 @@ async function execute(request: EscrowOperationRequest): Promise<EscrowOperation
       status: "SUCCEEDED",
       message: success.message,
       errorCode: null,
-      correlationId: success.correlationId,
+      requestId: success.requestId,
       amountText: success.amountText,
       deduplicated: false,
     };
@@ -355,12 +355,12 @@ async function execute(request: EscrowOperationRequest): Promise<EscrowOperation
       ? {
           message: error.message,
           errorCode: error.errorCode,
-          correlationId: error.correlationId,
+          requestId: error.requestId,
         }
       : {
           message: error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu.",
           errorCode: "UNEXPECTED",
-          correlationId: null,
+          requestId: null,
         };
 
     recordOperation({
@@ -375,7 +375,7 @@ async function execute(request: EscrowOperationRequest): Promise<EscrowOperation
       reason,
       errorCode: failure.errorCode,
       message: failure.message,
-      correlationId: failure.correlationId,
+      requestId: failure.requestId,
       at: new Date().toISOString(),
     });
 
@@ -383,7 +383,7 @@ async function execute(request: EscrowOperationRequest): Promise<EscrowOperation
       status: "REFUSED",
       message: failure.message,
       errorCode: failure.errorCode,
-      correlationId: failure.correlationId,
+      requestId: failure.requestId,
       amountText: null,
       deduplicated: false,
     };
@@ -454,7 +454,7 @@ async function confirmAmount(
 interface SuccessDetail {
   readonly message: string;
   readonly amountText: string | null;
-  readonly correlationId: string | null;
+  readonly requestId: string | null;
 }
 
 async function send(
@@ -469,7 +469,7 @@ async function send(
         message: `Çıkış kaydı oluşturuldu (durum: ${payout.status}).`,
         // The backend's own figure, not the one that was confirmed.
         amountText: payout.amount === null ? null : formatCurrency(payout.amount, payout.currency),
-        correlationId: null,
+        requestId: null,
       };
     }
 
@@ -480,7 +480,7 @@ async function send(
         // `SuccessResult` carries no data. Left null rather than filled in from
         // the panel's read: this field means "what the backend said it moved".
         amountText: null,
-        correlationId: meta.correlationId,
+        requestId: meta.requestId,
       };
     }
 
@@ -499,7 +499,7 @@ async function send(
       return {
         message: `Uyuşmazlık ${disputeResolutionSpec(resolution).label.toLocaleLowerCase("tr-TR")} kararıyla kapatıldı (durum: ${dispute.status}).`,
         amountText: null,
-        correlationId: null,
+        requestId: null,
       };
     }
   }

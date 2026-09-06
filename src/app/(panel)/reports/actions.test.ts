@@ -66,7 +66,7 @@ function watchReview(respond?: () => Response) {
         message: "Şikayet sonuçlandırıldı.",
         httpStatus: "200 OK",
         path: `/admin/reports/${REPORT_ID}/review`,
-        correlationId: "cid-review",
+        requestId: "rid-review",
         timeStamp: "2026-09-06T09:31:00.000000000Z",
         data: {
           id: REPORT_ID,
@@ -187,7 +187,7 @@ describe("the action, when it is allowed to act", () => {
           httpStatus: "409 CONFLICT",
           errorCode: "REPORT_ALREADY_REVIEWED",
           errorCategory: "DATA_CONFLICT",
-          correlationId: "cid-409",
+          requestId: "rid-409",
           path: `/admin/reports/${REPORT_ID}/review`,
           timeStamp: "2026-09-06T09:32:00.000000000Z",
         },
@@ -199,7 +199,7 @@ describe("the action, when it is allowed to act", () => {
 
     expect(state.outcome).toBe("error");
     expect(state.message).toContain("sizden önce sonuçlandırılmış olabilir");
-    expect(state.correlationId).toBe("cid-409");
+    expect(state.requestId).toBe("rid-409");
   });
 
   it("shows a backend refusal as the backend's, even though the panel let it through", async () => {
@@ -212,7 +212,7 @@ describe("the action, when it is allowed to act", () => {
           httpStatus: "403 FORBIDDEN",
           errorCode: "ACCESS_DENIED",
           errorCategory: "ACCESS_DENIED",
-          correlationId: "cid-403",
+          requestId: "rid-403",
           path: `/admin/reports/${REPORT_ID}/review`,
           timeStamp: "2026-09-06T09:33:00.000000000Z",
         },

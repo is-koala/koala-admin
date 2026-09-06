@@ -15,7 +15,7 @@ import {
  * module turns that envelope into either the caller's `data` or a typed
  * `KoalaApiError`, and it does so defensively: a body that does not match the
  * contract still produces a `KoalaApiError` carrying whatever could be salvaged
- * (above all the `correlationId`), never an unhandled `TypeError`.
+ * (above all the `requestId`), never an unhandled `TypeError`.
  */
 
 const nullableString = z
@@ -29,7 +29,7 @@ const resultMetaSchema = z.object({
   httpStatus: nullableString,
   path: nullableString,
   timeStamp: nullableString,
-  correlationId: nullableString,
+  requestId: nullableString,
 });
 
 const fieldErrorSchema = z.object({
@@ -53,7 +53,7 @@ const errorResultSchema = resultMetaSchema.extend({
 const loosePartialSchema = z.object({
   success: z.boolean().nullish(),
   message: z.string().nullish(),
-  correlationId: z.string().nullish(),
+  requestId: z.string().nullish(),
   path: z.string().nullish(),
   errorCode: z.string().nullish(),
   errorCategory: z.string().nullish(),
@@ -100,16 +100,16 @@ export function categoryForStatus(status: number): ErrorCategory {
 }
 
 /**
- * Pull the correlation id out of anything. Used on the failure path where the
+ * Pull the request id out of anything. Used on the failure path where the
  * body may not match the contract at all — the id is the only handle we have
  * on the corresponding backend log line, so it is worth digging for.
  */
-export function readCorrelationId(body: unknown): string | null {
+export function readRequestId(body: unknown): string | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }
 
-  const value = (body as { correlationId?: unknown }).correlationId;
+  const value = (body as { requestId?: unknown }).requestId;
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
@@ -136,7 +136,7 @@ export function toKoalaApiError(body: unknown, context: EnvelopeContext): KoalaA
       errorCategory: error.errorCategory,
       message: error.message ?? error.errorCode,
       details: error.details,
-      correlationId: error.correlationId,
+      requestId: error.requestId,
       resource: error.resource,
       resourceId: error.resourceId,
       path: error.path ?? context.path,
@@ -166,7 +166,7 @@ export function toKoalaApiError(body: unknown, context: EnvelopeContext): KoalaA
       salvaged?.message ??
       `Koala API isteği başarısız oldu (${context.method} ${context.path}, HTTP ${context.status}).`,
     details,
-    correlationId: readCorrelationId(body),
+    requestId: readRequestId(body),
     resource: salvaged?.resource ?? null,
     resourceId: salvaged?.resourceId ?? null,
     path: salvaged?.path ?? context.path,
@@ -207,7 +207,7 @@ export function unwrapDataResult<T>(
           (issue) => `  - ${issue.path.join(".") || "data"}: ${issue.message}`,
         ),
       ].join("\n"),
-      correlationId: meta.correlationId,
+      requestId: meta.requestId,
       path: meta.path ?? context.path,
       method: context.method,
       cause: parsed.error,
