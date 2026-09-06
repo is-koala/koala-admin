@@ -129,6 +129,20 @@ export const ROUTES = [
     nav: { label: "Şirket onayları", order: 30 },
   },
   {
+    /**
+     * The queue *and* the detail *and* the escrow operations, on one path.
+     * There is no `GET /admin/disputes/{id}` to build a detail route on — see
+     * the comment at the top of `src/app/(panel)/disputes/page.tsx` — so the
+     * selected dispute travels in `?uyusmazlik=`, which needs no second entry
+     * here and no second gate to keep in step with this one.
+     */
+    path: "/disputes",
+    title: "Uyuşmazlıklar",
+    access: "permission",
+    permission: "dispute.resolve",
+    nav: { label: "Uyuşmazlıklar", order: 40 },
+  },
+  {
     path: "/audit-log",
     title: "Denetim kaydı",
     access: "permission",
