@@ -103,6 +103,32 @@ export const ROUTES = [
     nav: { label: "İş kategorileri", order: 10 },
   },
   {
+    /**
+     * koala-admin#7. `content.moderate`, deliberately not `dispute.resolve`:
+     * a DISPUTE_HANDLER settling money disputes has no business taking images
+     * down, and the backend draws the same line
+     * (`ReportsController` and `DELETE /admin/images/{imageId}` both sit behind
+     * `CONTENT_MODERATE`).
+     */
+    path: "/reports",
+    title: "Şikayetler",
+    access: "permission",
+    permission: "content.moderate",
+    nav: { label: "Şikayetler", order: 20 },
+  },
+  {
+    /**
+     * koala-admin#8. Approval is irreversible and is the gate in front of a
+     * company posting jobs at all, so it gets its own permission rather than
+     * riding along with anything else — `COMPANY_APPROVE` on the backend.
+     */
+    path: "/companies",
+    title: "Şirket onayları",
+    access: "permission",
+    permission: "company.approve",
+    nav: { label: "Şirket onayları", order: 30 },
+  },
+  {
     path: "/audit-log",
     title: "Denetim kaydı",
     access: "permission",
