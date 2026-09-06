@@ -139,6 +139,21 @@ describe("the menu is exactly what the backend permits", () => {
     expect(html).toContain("Çıkış yap");
   });
 
+  it("explains a session failure on an ungated page, which has no gate to redirect it", async () => {
+    // The gate sends these four codes to /giris and /giris/hata. The home page
+    // has no gate, so without this the person would get an empty menu and no
+    // reason for it — which is the one outcome the fail-closed path must not
+    // produce.
+    const { StaffAuthError } = await import("@/server/auth/errors");
+    getKoalaAccessToken.mockRejectedValue(new StaffAuthError("AUDIENCE_MISCONFIGURED"));
+
+    const html = await shell();
+
+    expect(menuLinks(html)).toEqual([]);
+    expect(html).toContain("Oturumunuz doğrulanamadı");
+    expect(html).toContain("/giris/hata?kod=AUDIENCE_MISCONFIGURED");
+  });
+
   it("draws no menu when the backend grants permissions this panel has no screen for", async () => {
     // `staff.manage` and `role.manage` are in the catalogue and have no screen
     // in slice 1. Holding them must not conjure a menu entry.

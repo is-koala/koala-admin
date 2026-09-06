@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { ErrorState } from "@/components/ui";
 import { permissionLabel, type Permission } from "@/server/authz/permissions";
 import type { StaffContextFailure, StaffContextFailureKind } from "@/server/authz/staff-context";
@@ -61,11 +63,18 @@ interface Explanation {
  * One entry per failure kind, because collapsing them is how a configuration
  * problem gets reported as a permission problem.
  *
- * `SESSION` has no entry: those four codes already have a page
- * (`/giris`, `/giris/hata`), and the gate redirects there rather than
- * paraphrasing it.
+ * `SESSION` gets an entry too, short on purpose: the gate redirects those four
+ * codes to `/giris` or `/giris/hata`, which explain them properly, but an
+ * *ungated* page has nothing to redirect and would otherwise show an empty menu
+ * with no reason for it. This says the reason and points at the door.
  */
-const EXPLANATIONS: Record<Exclude<StaffContextFailureKind, "SESSION">, Explanation> = {
+const EXPLANATIONS: Record<StaffContextFailureKind, Explanation> = {
+  SESSION: {
+    title: "Oturumunuz doğrulanamadı",
+    description:
+      "Panel izinleri sormak için geçerli bir oturum kullanamadı. Bu bir yetki sorunu değil; oturumun kendisiyle ilgili. Ayrıntısı ve ne yapılması gerektiği giriş hatası sayfasında yazılı.",
+    nextStep: "Yeniden giriş yapın.",
+  },
   NO_STAFF_RECORD: {
     title: "Kimliğiniz doğrulandı, Koala'da personel kaydınız yok",
     description:
@@ -92,8 +101,7 @@ export interface StaffContextUnavailableProps {
 }
 
 export function StaffContextUnavailable({ failure }: StaffContextUnavailableProps) {
-  const explanation =
-    failure.kind === "SESSION" ? EXPLANATIONS.UNEXPECTED : EXPLANATIONS[failure.kind];
+  const explanation = EXPLANATIONS[failure.kind];
 
   return (
     <ErrorState
@@ -102,10 +110,24 @@ export function StaffContextUnavailable({ failure }: StaffContextUnavailableProp
       errorCode={failure.kind}
       correlationId={failure.correlationId}
       action={
-        <p className="text-sm text-ink">
-          <span className="font-medium">Ne yapmalı: </span>
-          {explanation.nextStep}
-        </p>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-ink">
+            <span className="font-medium">Ne yapmalı: </span>
+            {explanation.nextStep}
+          </p>
+          {failure.authCode === null ? null : (
+            <Link
+              href={
+                failure.authCode === "SESSION_REQUIRED"
+                  ? "/giris"
+                  : `/giris/hata?kod=${encodeURIComponent(failure.authCode)}`
+              }
+              className="self-start text-sm font-medium text-brand hover:underline"
+            >
+              Giriş hatası ayrıntısı
+            </Link>
+          )}
+        </div>
       }
     />
   );

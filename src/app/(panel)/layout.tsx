@@ -70,10 +70,13 @@ export default async function PanelLayout({ children }: { children: ReactNode })
          * permissions could not be resolved still sees where they are and can
          * still sign out; what they do not see is a menu implying doors that
          * were never checked.
+         *
+         * Every failure, including the session ones. A gated page redirects
+         * those to /giris or /giris/hata, but an ungated page has nothing to
+         * redirect and would otherwise show an empty menu with no reason
+         * attached to it.
          */}
-        {context.failure !== null && context.failure.authCode === null ? (
-          <StaffContextUnavailable failure={context.failure} />
-        ) : null}
+        {context.failure === null ? null : <StaffContextUnavailable failure={context.failure} />}
         {children}
       </main>
     </div>
