@@ -103,6 +103,46 @@ export const ROUTES = [
     nav: { label: "İş kategorileri", order: 10 },
   },
   {
+    /**
+     * koala-admin#7. `content.moderate`, deliberately not `dispute.resolve`:
+     * a DISPUTE_HANDLER settling money disputes has no business taking images
+     * down, and the backend draws the same line
+     * (`ReportsController` and `DELETE /admin/images/{imageId}` both sit behind
+     * `CONTENT_MODERATE`).
+     */
+    path: "/reports",
+    title: "Şikayetler",
+    access: "permission",
+    permission: "content.moderate",
+    nav: { label: "Şikayetler", order: 20 },
+  },
+  {
+    /**
+     * koala-admin#8. Approval is irreversible and is the gate in front of a
+     * company posting jobs at all, so it gets its own permission rather than
+     * riding along with anything else — `COMPANY_APPROVE` on the backend.
+     */
+    path: "/companies",
+    title: "Şirket onayları",
+    access: "permission",
+    permission: "company.approve",
+    nav: { label: "Şirket onayları", order: 30 },
+  },
+  {
+    /**
+     * The queue *and* the detail *and* the escrow operations, on one path.
+     * There is no `GET /admin/disputes/{id}` to build a detail route on — see
+     * the comment at the top of `src/app/(panel)/disputes/page.tsx` — so the
+     * selected dispute travels in `?uyusmazlik=`, which needs no second entry
+     * here and no second gate to keep in step with this one.
+     */
+    path: "/disputes",
+    title: "Uyuşmazlıklar",
+    access: "permission",
+    permission: "dispute.resolve",
+    nav: { label: "Uyuşmazlıklar", order: 40 },
+  },
+  {
     path: "/audit-log",
     title: "Denetim kaydı",
     access: "permission",
