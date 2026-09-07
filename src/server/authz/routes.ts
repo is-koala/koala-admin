@@ -72,7 +72,7 @@ export const ROUTES = [
     title: "Giriş",
     access: "public",
     ungatedReason:
-      "Oturumun başladığı yer. Gate'lemek yönlendirmeyi döngüye sokar; hiçbir veri göstermez, tek bir Keycloak butonu vardır.",
+      "Oturumun başladığı yer. Gate'lemek yönlendirmeyi döngüye sokar; hiçbir iş verisi göstermez, yalnız e-posta ve parola sorar.",
   },
   {
     path: "/giris/hata",
@@ -80,6 +80,13 @@ export const ROUTES = [
     access: "public",
     ungatedReason:
       "Oturumun neden olmadığını anlatır. Gate'lenirse her hata, bildirmeye çalıştığı hatanın arkasında kaybolur.",
+  },
+  {
+    path: "/giris/parola",
+    title: "Parola değiştirme",
+    access: "session",
+    ungatedReason:
+      "İlk girişte parola değiştirme ekranı. Bir izin isteyemez, çünkü backend o bayrak açıkken /admin/me dâhil her ucu 403'le reddeder — yani izin çözülemez ve izin isteyen bir kapı bu sayfayı kalıcı olarak kilitlerdi. Bayrağı düşürmenin tek yolu bu ekran.",
   },
   {
     path: "/",
@@ -165,13 +172,6 @@ export type PanelRoutePath = PanelRoute["path"];
  * a page, and rather more likely to be added without thinking about it.
  */
 export const ROUTE_HANDLERS = [
-  {
-    path: "/api/auth/[...nextauth]",
-    title: "Auth.js uçları",
-    access: "public",
-    ungatedReason:
-      "Oturumu üreten uç. Önüne oturum kapısı koymak, anahtarı içeride bırakılmış kilitli bir kapıdır; src/proxy.ts matcher'ı da bu yüzden dışarıda bırakır.",
-  },
   {
     path: "/api/health",
     title: "Sağlık yoklaması",

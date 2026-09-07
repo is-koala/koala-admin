@@ -40,56 +40,23 @@ const serverEnvSchema = z.object({
     .default(15_000),
 
   /**
-   * The panel's own public origin. Auth.js builds the OAuth `redirect_uri` and
-   * the post-logout return URL from it, and Keycloak compares both against the
-   * realm's allow-list — a mismatch is answered with `invalid_redirect_uri` and
-   * no explanation, so this is validated here rather than discovered in a
-   * Keycloak error page.
+   * The panel's own public origin.
    *
-   * It also decides whether the session cookie is marked `Secure`
-   * (`src/server/auth/cookies.ts`).
+   * One job left, and it is not cosmetic: it decides whether the session cookie
+   * is marked `Secure` (`src/server/auth/cookies.ts`). A `Secure` cookie is not
+   * stored at all over plain HTTP, so an `http://admin.iskoala.com` would not
+   * fail loudly — nobody could sign in and the reason would be invisible. This
+   * variable is validated instead, so that deployment never boots.
+   *
+   * Named after what it is rather than after the auth library that used to read
+   * an `AUTH_URL` to build an OIDC `redirect_uri`. There is no redirect any
+   * more: ADR-0014 dropped the identity provider and the panel signs people in
+   * itself.
    */
-  AUTH_URL: absoluteUrl({
+  ADMIN_PUBLIC_ORIGIN: absoluteUrl({
     required: "zorunlu (panelin dış adresi, ör. http://localhost:3000)",
     localhostOnlyHttp: true,
   }),
-
-  /**
-   * Key the session cookie is encrypted with. 32 bytes of randomness:
-   * `openssl rand -base64 32`.
-   *
-   * The cookie is a JWE, not a signed-but-readable JWT: whoever holds this
-   * value can read the Keycloak tokens inside it, so it is a real secret and
-   * never a `NEXT_PUBLIC_*`.
-   */
-  AUTH_SECRET: z
-    .string({ error: "zorunlu (openssl rand -base64 32)" })
-    .min(32, "en az 32 karakter olmalı (openssl rand -base64 32)"),
-
-  /** `https://auth.iskoala.com/realms/koala-staff` (docs/keycloak-setup.md §7). */
-  KEYCLOAK_ISSUER: absoluteUrl({
-    required: "zorunlu (ör. https://auth.iskoala.com/realms/koala-staff)",
-    localhostOnlyHttp: true,
-  }),
-
-  KEYCLOAK_CLIENT_ID: z.string().min(1, "boş olamaz").default("koala-admin-web"),
-
-  /**
-   * The confidential client's secret. Server-side only — it never reaches a
-   * `NEXT_PUBLIC_*` variable, the browser bundle, or a tracked file.
-   */
-  KEYCLOAK_CLIENT_SECRET: z
-    .string({ error: "zorunlu (Keycloak → Clients → koala-admin-web → Credentials)" })
-    .min(1, "boş olamaz"),
-
-  /**
-   * Audience the access token must carry, produced by the realm's audience
-   * mapper (docs/keycloak-setup.md §4). The panel checks every token against
-   * this before using it: without the mapper the backend answers 401, and a
-   * 401 is indistinguishable from "you lack permission" unless the panel knows
-   * what the audience was supposed to be.
-   */
-  KOALA_API_AUDIENCE: z.string().min(1, "boş olamaz").default("koala-api"),
 
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
@@ -137,12 +104,11 @@ export const env: ServerEnv = parseServerEnv(process.env);
  * An absolute `http(s)` URL with any trailing slash removed, so callers can
  * always append a leading-slash path.
  *
- * `localhostOnlyHttp` marks the variables that address a service which must be
- * behind TLS in production but is a plain-HTTP container during development —
- * Keycloak and the panel's own origin. Plain HTTP against anything but
- * localhost would silently put the client secret, the authorization code and
- * the session cookie on the wire in the clear, so it is rejected rather than
- * merely discouraged.
+ * `localhostOnlyHttp` marks a variable addressing something that must be behind
+ * TLS in production but is plain HTTP during development — today only the
+ * panel's own origin. Plain HTTP anywhere but localhost would put the session
+ * cookie, and with it a staff access token, on the wire in the clear, so it is
+ * rejected rather than merely discouraged.
  */
 function absoluteUrl(options: { required: string; localhostOnlyHttp?: boolean }) {
   const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]", "host.docker.internal"];

@@ -91,11 +91,7 @@ function main() {
         // build would fail on a missing variable instead of on the violation,
         // and this script would report a guard that it never actually tested.
         KOALA_API_BASE_URL: process.env.KOALA_API_BASE_URL ?? "http://localhost:8080",
-        AUTH_URL: process.env.AUTH_URL ?? "http://localhost:3000",
-        AUTH_SECRET: process.env.AUTH_SECRET ?? "guard-probe-secret-guard-probe-secret",
-        KEYCLOAK_ISSUER: process.env.KEYCLOAK_ISSUER ?? "http://localhost:8085/realms/koala-staff",
-        KEYCLOAK_CLIENT_ID: process.env.KEYCLOAK_CLIENT_ID ?? "koala-admin-web",
-        KEYCLOAK_CLIENT_SECRET: process.env.KEYCLOAK_CLIENT_SECRET ?? "guard-probe-secret",
+        ADMIN_PUBLIC_ORIGIN: process.env.ADMIN_PUBLIC_ORIGIN ?? "http://localhost:3000",
       },
     });
   } finally {

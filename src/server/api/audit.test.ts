@@ -224,7 +224,7 @@ describe("an actor with no staff record", () => {
           {
             ...categoryCreatedEntry,
             actorStaffId: null,
-            actorDisplayName: "f7c1e0d2-keycloak-subject",
+            actorDisplayName: "f7c1e0d2-marketplace-admin",
           },
           refusedEntry,
         ],
@@ -235,7 +235,7 @@ describe("an actor with no staff record", () => {
 
     expect(page.content).toHaveLength(2);
     expect(page.content[0]?.actorStaffId).toBeNull();
-    expect(page.content[0]?.actorDisplayName).toBe("f7c1e0d2-keycloak-subject");
+    expect(page.content[0]?.actorDisplayName).toBe("f7c1e0d2-marketplace-admin");
     expect(page.content[1]?.id).toBe(refusedEntry.id);
   });
 

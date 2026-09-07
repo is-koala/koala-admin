@@ -86,11 +86,12 @@ export const adminMeSuccessBody = {
 };
 
 /**
- * `GET /admin/me` with a valid Keycloak token and no `staff_members` row.
+ * `GET /admin/me` refusing a token it accepted the signature of.
  *
- * koala-admin#5's first comment: during the migration window this is the normal
- * answer, not the exception — the Keycloak door opens before anything is behind
- * it, and the first staff row is written from outside the panel.
+ * Two situations produce this body and the panel cannot tell them apart from
+ * the wire: no `staff_members` row for the token's subject, and an account still
+ * carrying the "change your password first" flag — the backend denies every
+ * `@RequiresPermission` endpoint in both cases.
  */
 export const adminMeNoStaffRecordBody = {
   success: false,

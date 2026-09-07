@@ -6,9 +6,11 @@ import { apiUrl, server } from "../../../test/msw";
 import { withReactCacheScope } from "../../../test/react-cache-scope";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+const backendSaysPasswordMustChange = vi.fn<() => Promise<boolean | null>>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
+  backendSaysPasswordMustChange: () => backendSaysPasswordMustChange(),
 }));
 
 const { StaffAuthError } = await import("@/server/auth/errors");
@@ -18,6 +20,7 @@ const ADMIN_ME = apiUrl("/admin/me");
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  backendSaysPasswordMustChange.mockResolvedValue(false);
   // Failures are logged by the API client; the assertions are about the return
   // value, not the noise.
   vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -26,6 +29,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   getKoalaAccessToken.mockReset();
+  backendSaysPasswordMustChange.mockReset();
 });
 
 /** `GET /admin/me` answering 200 with the given permission names. */
@@ -163,6 +167,68 @@ describe("failing closed", () => {
     });
     expect(context.permissions).toEqual([]);
   });
+});
+
+/**
+ * Aynı 403, iki farklı sebep, iki farklı ekran.
+ *
+ * `StaffPermissionAuthorizationManager` bayrak açıkken `/admin/me` dâhil her
+ * `@RequiresPermission` ucunu reddediyor — yani tel üzerinde bu 403, personel
+ * kaydının hiç çözülememesinden ayırt edilemez. Ayıran tek şey backend'e
+ * sorulan ikinci soru.
+ *
+ * Bu ayrımı gerektiren durum uydurma değil: çerez imzasız, `mustChangePassword`
+ * elle `false` yapılabiliyor, ve o hâlde `getKoalaAccessToken()`'ın bayrak
+ * kontrolü hiç çalışmıyor.
+ */
+describe("a 403 from /admin/me, told apart by asking the backend", () => {
+  function stubNoStaffRecord() {
+    server.use(
+      http.get(ADMIN_ME, () => HttpResponse.json(adminMeNoStaffRecordBody, { status: 403 })),
+    );
+  }
+
+  it("routes to the password screen when the backend says the flag is on", async () => {
+    backendSaysPasswordMustChange.mockResolvedValue(true);
+    stubNoStaffRecord();
+
+    const context = await loadStaffContext();
+
+    // `authCode` bu kararın taşıyıcısı: `require-permission.tsx` onu görüp
+    // /giris/parola'ya yönlendiriyor — açıklayan ekrana değil, düzelten ekrana.
+    expect(context.failure).toMatchObject({
+      kind: "SESSION",
+      authCode: "PASSWORD_CHANGE_REQUIRED",
+      status: 403,
+    });
+    expect(context.permissions).toEqual([]);
+  });
+
+  it("keeps calling it a missing staff record when the backend says the flag is off", async () => {
+    backendSaysPasswordMustChange.mockResolvedValue(false);
+    stubNoStaffRecord();
+
+    expect((await loadStaffContext()).failure?.kind).toBe("NO_STAFF_RECORD");
+  });
+
+  it("does not upgrade a guess into a diagnosis when it cannot find out", async () => {
+    // `null` = soru sorulamadı (yenileme reddedildi ya da backend sustu). Bunu
+    // "bayrak kapalı" diye okumak da "bayrak açık" diye okumak da uydurma
+    // olurdu; panel bildiği tek şeyde kalıyor — token kabul edildi, kayıt
+    // çözülemedi.
+    backendSaysPasswordMustChange.mockResolvedValue(null);
+    stubNoStaffRecord();
+
+    expect((await loadStaffContext()).failure?.kind).toBe("NO_STAFF_RECORD");
+  });
+
+  it("asks nothing when the failure was never a 403", async () => {
+    // Bedeli olan bir soru, yalnız cevabı bir şeyi değiştirdiğinde soruluyor.
+    server.use(http.get(ADMIN_ME, () => HttpResponse.error()));
+
+    expect((await loadStaffContext()).failure?.kind).toBe("BACKEND_UNAVAILABLE");
+    expect(backendSaysPasswordMustChange).not.toHaveBeenCalled();
+  });
 
   it("empties the permission list when the backend cannot be reached at all", async () => {
     server.use(http.get(ADMIN_ME, () => HttpResponse.error()));
@@ -192,7 +258,7 @@ describe("failing closed", () => {
   });
 
   it("routes a session failure to the code the existing error page already explains", async () => {
-    for (const code of ["SESSION_EXPIRED", "AUDIENCE_MISCONFIGURED", "KEYCLOAK_UNREACHABLE"]) {
+    for (const code of ["SESSION_EXPIRED", "PASSWORD_CHANGE_REQUIRED", "BACKEND_UNREACHABLE"]) {
       getKoalaAccessToken.mockRejectedValueOnce(new StaffAuthError(code as "SESSION_EXPIRED"));
 
       const context = await loadStaffContext();

@@ -69,7 +69,7 @@ describe("the permission catalogue", () => {
 
     // `content.moderate` exists precisely so image removal is *not* reachable
     // through `dispute.resolve` — see koala-admin#5's second comment and
-    // docs/keycloak-setup.md §3 on separation of duties.
+    // koala-backend ADR-0014 §Rol grafiği on separation of duties.
     expect(byName.get("content.moderate")).toMatchObject({
       mutating: true,
       sensitivity: "NORMAL",
@@ -94,7 +94,7 @@ describe("the permission catalogue", () => {
   });
 
   it("carries no role names, because roles do not live in the panel", () => {
-    // ADR-0010: role membership is Keycloak's, the role→permission graph is the
+    // ADR-0010, kept by ADR-0014: the role→permission graph is the
     // backend's. A role name appearing in the catalogue would be the first step
     // towards resolving permissions in the panel.
     const serialised = JSON.stringify(PERMISSION_SPECS);

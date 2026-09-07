@@ -18,9 +18,12 @@ import { PERMISSIONS } from "./permissions";
  */
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+/** Backend'in parola bayrağı hakkındaki cevabı; `/admin/me` 403 dönünce soruluyor. */
+const backendSaysPasswordMustChange = vi.fn<() => Promise<boolean | null>>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
+  backendSaysPasswordMustChange: () => backendSaysPasswordMustChange(),
 }));
 
 const { default: AuditLogPage } = await import("@/app/(panel)/audit-log/page");
@@ -35,12 +38,14 @@ const CATALOG_EDITOR_PERMISSIONS = ["category.manage"];
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  backendSaysPasswordMustChange.mockResolvedValue(false);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   getKoalaAccessToken.mockReset();
+  backendSaysPasswordMustChange.mockReset();
 });
 
 function stubMe(permissions: readonly string[], roles: readonly string[]) {
@@ -108,13 +113,13 @@ describe("a CATALOG_EDITOR typing /audit-log by hand", () => {
     expect(html).not.toContain("<table");
   });
 
-  it("is told what to do about it, and that the panel is not where roles change", async () => {
+  it("is told what to do about it, and which roles they actually hold", async () => {
     stubMe(CATALOG_EDITOR_PERMISSIONS, ["CATALOG_EDITOR"]);
     watchAuditLog(emptyAuditPage);
 
     const html = await renderServerComponent(<AuditLogPage />);
 
-    expect(html).toContain("Keycloak");
+    expect(html).toContain("rolünüzün genişletilmesini isteyin");
     expect(html).toContain("CATALOG_EDITOR");
   });
 });
@@ -210,7 +215,7 @@ describe("when the panel cannot find out what you may do", () => {
     expect(html).toContain("rid-500");
   });
 
-  it("explains a Keycloak identity with no staff record, and grants nothing", async () => {
+  it("explains an accepted token that resolved to no staff record, and grants nothing", async () => {
     server.use(
       http.get(ADMIN_ME, () => HttpResponse.json(adminMeNoStaffRecordBody, { status: 403 })),
     );
@@ -220,7 +225,7 @@ describe("when the panel cannot find out what you may do", () => {
 
     expect(audit.calls).toBe(0);
     // Apostrophes arrive HTML-escaped, so the assertion sits either side of one.
-    expect(html).toContain("personel kaydınız yok");
+    expect(html).toContain("bir personel kaydı vermedi");
     expect(html).toContain("NO_STAFF_RECORD");
     // Not "you lack this permission" — the difference is the whole point.
     expect(html).not.toContain("403 — Bu sayfa için yetkiniz yok");
@@ -228,7 +233,7 @@ describe("when the panel cannot find out what you may do", () => {
 
   it("hands a broken session to the page that already explains it", async () => {
     const { StaffAuthError } = await import("@/server/auth/errors");
-    getKoalaAccessToken.mockRejectedValue(new StaffAuthError("AUDIENCE_MISCONFIGURED"));
+    getKoalaAccessToken.mockRejectedValue(new StaffAuthError("BACKEND_UNREACHABLE"));
     const audit = watchAuditLog(emptyAuditPage);
 
     // `redirect()` throws `NEXT_REDIRECT`; the destination rides on `digest`.
@@ -237,9 +242,52 @@ describe("when the panel cannot find out what you may do", () => {
       (error: unknown) => error,
     );
 
-    expect((thrown as { digest?: string }).digest).toContain(
-      "/giris/hata?kod=AUDIENCE_MISCONFIGURED",
+    expect((thrown as { digest?: string }).digest).toContain("/giris/hata?kod=BACKEND_UNREACHABLE");
+    expect(audit.calls).toBe(0);
+  });
+
+  it("still reaches the password screen when the cookie's flag says otherwise", async () => {
+    /**
+     * Çerez imzasız, yani `mustChangePassword`'ü elle `false` yapmak mümkün ve
+     * o hâlde `getKoalaAccessToken()` token'ı verir — yukarıdaki testin yakaladığı
+     * yol hiç çalışmaz. Geriye backend'in 403'ü kalır, ve o 403 "personel kaydınız
+     * yok" ile aynı statü.
+     *
+     * Bayrağı düşürmek bir yetki kazandırmıyor (backend zaten reddediyor); tek
+     * kazandırdığı şey **yanlış teşhis**: iki tık uzaktaki kişi, kendisinin
+     * çözemeyeceği bir engele bakıyor sanır. Burada ölçülen, o teşhisin
+     * düzeltilmiş olması.
+     */
+    backendSaysPasswordMustChange.mockResolvedValue(true);
+    server.use(
+      http.get(ADMIN_ME, () => HttpResponse.json(adminMeNoStaffRecordBody, { status: 403 })),
     );
+    const audit = watchAuditLog(emptyAuditPage);
+
+    const thrown = await renderServerComponent(<AuditLogPage />).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect((thrown as { digest?: string }).digest).toContain("/giris/parola");
+    expect(audit.calls).toBe(0);
+  });
+
+  it("sends a must-change-password session to the screen that fixes it, not the one that explains it", async () => {
+    // Bu ayrım kâğıt üzerinde küçük, pratikte belirleyici: bootstrap ile doğan
+    // ilk OWNER tam olarak bu durumda ve /giris/hata onu bir açıklamayla baş
+    // başa bırakırdı. Backend bayrak açıkken /admin/me dâhil her ucu reddettiği
+    // için panel bunu kendisi bilmek zorunda.
+    const { StaffAuthError } = await import("@/server/auth/errors");
+    getKoalaAccessToken.mockRejectedValue(new StaffAuthError("PASSWORD_CHANGE_REQUIRED"));
+    const audit = watchAuditLog(emptyAuditPage);
+
+    const thrown = await renderServerComponent(<AuditLogPage />).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect((thrown as { digest?: string }).digest).toContain("/giris/parola");
     expect(audit.calls).toBe(0);
   });
 });

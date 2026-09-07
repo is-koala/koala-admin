@@ -19,6 +19,12 @@ const getKoalaAccessToken = vi.fn<() => Promise<string>>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
+  /**
+   * Bu dosyadaki her 403 gerçekten "personel kaydı çözülemedi" demek, ve
+   * `staff-context.ts` bunu backend'e sorarak doğruluyor. Sabit `false`,
+   * o sorunun burada verilen cevabı.
+   */
+  backendSaysPasswordMustChange: () => Promise.resolve(false),
 }));
 
 const { KoalaApiError } = await import("@/server/api/errors");
@@ -91,7 +97,7 @@ describe("a decision action re-checks the permission it needs", () => {
     expect(denied?.requestId).toBe("rid-500");
   });
 
-  it("refuses a Keycloak identity with no staff record", async () => {
+  it("refuses a token the backend resolved to no staff record", async () => {
     server.use(
       http.get(ADMIN_ME, () => HttpResponse.json(adminMeNoStaffRecordBody, { status: 403 })),
     );

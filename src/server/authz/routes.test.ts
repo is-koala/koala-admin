@@ -35,9 +35,15 @@ const APP_DIR = fileURLToPath(new URL("../../app", import.meta.url));
 const EXPECTED_UNGATED: Record<string, "public" | "session"> = {
   "/giris": "public",
   "/giris/hata": "public",
+  /**
+   * Oturum ister, izin isteyemez. Backend "ilk girişte parola değiştir" bayrağı
+   * açıkken `/admin/me` dâhil her `/admin/**` ucunu reddediyor, yani bu sayfada
+   * çözülecek bir izin yok — izin isteyen bir kapı, bayrağı düşürmenin tek
+   * yolunu kalıcı olarak kilitlerdi.
+   */
+  "/giris/parola": "session",
   "/": "session",
   "/verification/job-categories": "session",
-  "/api/auth/[...nextauth]": "public",
   "/api/health": "public",
 };
 

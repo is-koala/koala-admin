@@ -44,13 +44,9 @@ const reactServerBuild = fileURLToPath(
 const env = {
   KOALA_API_BASE_URL: "http://koala-backend.test",
   KOALA_API_TIMEOUT_MS: "1000",
-  AUTH_URL: "http://localhost:3000",
-  // Test-only, and long enough to satisfy the 32-character minimum.
-  AUTH_SECRET: "test-secret-test-secret-test-secret-32",
-  KEYCLOAK_ISSUER: "http://localhost:8085/realms/koala-staff",
-  KEYCLOAK_CLIENT_ID: "koala-admin-web",
-  KEYCLOAK_CLIENT_SECRET: "test-client-secret",
-  KOALA_API_AUDIENCE: "koala-api",
+  // Plain http, so `buildSessionCookie` produces the non-`__Secure-` name the
+  // cookie tests assert on — the same shape local development runs with.
+  ADMIN_PUBLIC_ORIGIN: "http://localhost:3000",
 };
 
 export default defineConfig({

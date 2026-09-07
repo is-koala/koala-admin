@@ -65,13 +65,19 @@ export async function RequirePermission({ permission, children }: RequirePermiss
 /**
  * Hand a broken session back to the pages that already explain it.
  *
- * `/giris/hata` distinguishes a dead session from a switched-off audience
- * mapper from an unreachable Keycloak, in those words. Rewriting any of that
- * here would mean two places to keep right.
+ * `/giris/hata` distinguishes a dead session from an unreachable backend, in
+ * those words. Rewriting any of that here would mean two places to keep right.
+ *
+ * `PASSWORD_CHANGE_REQUIRED` is the exception: it has a screen that *fixes* it
+ * rather than one that explains it, so it goes straight there.
  */
 function redirectForAuthFailure(code: AuthFailureCode): never {
   if (code === "SESSION_REQUIRED") {
     redirect("/giris");
+  }
+
+  if (code === "PASSWORD_CHANGE_REQUIRED") {
+    redirect("/giris/parola");
   }
 
   redirect(`/giris/hata?kod=${encodeURIComponent(code)}`);

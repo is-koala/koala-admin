@@ -5,10 +5,7 @@ import { EnvValidationError, parseServerEnv } from "./env";
 /** Every required variable, so a test can vary one thing at a time. */
 const COMPLETE = {
   KOALA_API_BASE_URL: "http://localhost:8080",
-  AUTH_URL: "http://localhost:3000",
-  AUTH_SECRET: "0123456789abcdef0123456789abcdef",
-  KEYCLOAK_ISSUER: "http://localhost:8085/realms/koala-staff",
-  KEYCLOAK_CLIENT_SECRET: "local-dev-only",
+  ADMIN_PUBLIC_ORIGIN: "http://localhost:3000",
 } as const;
 
 describe("parseServerEnv", () => {
@@ -18,8 +15,6 @@ describe("parseServerEnv", () => {
     expect(env.KOALA_API_BASE_URL).toBe("http://localhost:8080");
     expect(env.KOALA_API_TIMEOUT_MS).toBe(15_000);
     expect(env.NODE_ENV).toBe("development");
-    expect(env.KEYCLOAK_CLIENT_ID).toBe("koala-admin-web");
-    expect(env.KOALA_API_AUDIENCE).toBe("koala-api");
   });
 
   it("normalises a trailing slash so paths join cleanly", () => {
@@ -82,49 +77,42 @@ describe("parseServerEnv", () => {
     }
   });
 
-  it("refuses a client secret that is missing, and says where to find it", () => {
-    // The one variable that is a real secret. An empty string is the shape this
-    // goes wrong in — a `.env.local` copied from the template and never filled.
-    expect(() => parseServerEnv({ ...COMPLETE, KEYCLOAK_CLIENT_SECRET: "" })).toThrow(
-      /KEYCLOAK_CLIENT_SECRET/,
-    );
-  });
-
-  it("refuses a session secret too short to be one", () => {
-    expect(() => parseServerEnv({ ...COMPLETE, AUTH_SECRET: "kısa" })).toThrow(/en az 32 karakter/);
-  });
-
-  it("allows plain http only against localhost", () => {
-    // Locally Keycloak and the panel are http containers. Anywhere else, plain
-    // http would put the client secret, the authorization code and the session
-    // cookie on the wire in the clear.
-    expect(
-      parseServerEnv({ ...COMPLETE, KEYCLOAK_ISSUER: "http://127.0.0.1:8085/realms/koala-staff" })
-        .KEYCLOAK_ISSUER,
-    ).toBe("http://127.0.0.1:8085/realms/koala-staff");
-
-    expect(() =>
-      parseServerEnv({
-        ...COMPLETE,
-        KEYCLOAK_ISSUER: "http://auth.iskoala.com/realms/koala-staff",
-      }),
-    ).toThrow(/localhost dışında https/);
-
-    expect(() => parseServerEnv({ ...COMPLETE, AUTH_URL: "http://admin.iskoala.com" })).toThrow(
-      /localhost dışında https/,
-    );
-  });
-
-  it("lists every missing auth variable at once", () => {
+  it("refuses to boot without the panel's own origin", () => {
+    // Not a formality: `buildSessionCookie` reads this to decide `Secure`, and
+    // a wrong answer there is invisible — the browser simply does not store the
+    // cookie and nobody can sign in.
     try {
       parseServerEnv({ KOALA_API_BASE_URL: "http://localhost:8080" });
       expect.unreachable("should have thrown");
     } catch (error) {
-      const issues = (error as EnvValidationError).issues.join("\n");
-      expect(issues).toContain("AUTH_URL");
-      expect(issues).toContain("AUTH_SECRET");
-      expect(issues).toContain("KEYCLOAK_ISSUER");
-      expect(issues).toContain("KEYCLOAK_CLIENT_SECRET");
+      expect((error as EnvValidationError).issues.join("\n")).toContain("ADMIN_PUBLIC_ORIGIN");
     }
+  });
+
+  it("allows plain http only against localhost", () => {
+    // Locally the panel is a plain-HTTP process. Anywhere else, plain http
+    // would put the session cookie — and with it a staff access token — on the
+    // wire in the clear.
+    expect(
+      parseServerEnv({ ...COMPLETE, ADMIN_PUBLIC_ORIGIN: "http://127.0.0.1:3000" })
+        .ADMIN_PUBLIC_ORIGIN,
+    ).toBe("http://127.0.0.1:3000");
+
+    expect(() =>
+      parseServerEnv({ ...COMPLETE, ADMIN_PUBLIC_ORIGIN: "http://admin.iskoala.com" }),
+    ).toThrow(/localhost dışında https/);
+
+    expect(
+      parseServerEnv({ ...COMPLETE, ADMIN_PUBLIC_ORIGIN: "https://admin.iskoala.com" })
+        .ADMIN_PUBLIC_ORIGIN,
+    ).toBe("https://admin.iskoala.com");
+  });
+
+  it("has no variable left that a Keycloak would have owned", () => {
+    // ADR-0014: the panel boots without an identity provider. A variable that
+    // came back would be a dependency coming back with it.
+    const env = parseServerEnv({ ...COMPLETE });
+
+    expect(Object.keys(env).filter((key) => /KEYCLOAK|AUTH_SECRET|AUDIENCE/.test(key))).toEqual([]);
   });
 });

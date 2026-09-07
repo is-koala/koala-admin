@@ -31,8 +31,7 @@ import type { PageDto } from "./types";
  *    with no `staff_members` row, and for the ADR-0010 bridge-phase
  *    marketplace admin. Those rows are the ones most worth reading, so a
  *    strict schema here would blank the whole page over exactly them.
- *    `actorDisplayName` is always present and carries the Keycloak subject in
- *    that case;
+ *    `actorDisplayName` is always present and names the actor in that case;
  *  - detail fields are nullable and a null is **not** an error. It is the
  *    erasure having happened. Anything rendering them has to say so out loud
  *    rather than draw an empty box.
