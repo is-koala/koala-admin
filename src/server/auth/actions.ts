@@ -12,7 +12,12 @@ import {
   logoutStaff,
   refreshStaffSession,
 } from "./staff-auth-api";
-import { clearStaffSession, readStaffSession, writeStaffSession } from "./session";
+import {
+  clearStaffSession,
+  isAccessTokenFresh,
+  readStaffSession,
+  writeStaffSession,
+} from "./session";
 
 /**
  * Panelin üç kimlik eylemi: gir, çık, parolanı değiştir.
@@ -131,9 +136,14 @@ export async function changeOwnPassword(formData: FormData): Promise<void> {
  * çalışmak zorunda olan uçtur (backend'de izin denetimine değil doğrudan
  * `STAFF_AUTHORITY`'ye bağlı). Bu yüzden token buradan, taze değilse bir
  * yenilemeyle alınıyor.
+ *
+ * "Taze" sorusuna cevabı {@link isAccessTokenFresh} veriyor, elle yazılmış bir
+ * pay değil. Payı kim değiştirirse `session.ts`'te değiştirir ve burası onu
+ * izler; iki ayrı kopya, ikincisini güncellemeyi unutan kişiye hiçbir şey
+ * söylemezdi.
  */
 async function usableAccessToken(session: StaffSession): Promise<string> {
-  if (session.accessExpiresAt - 60_000 > Date.now()) {
+  if (isAccessTokenFresh(session)) {
     return session.accessToken;
   }
 

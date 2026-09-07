@@ -36,12 +36,13 @@ vi.mock("next/headers", () => ({
     }),
 }));
 
-const { SESSION_COOKIE_NAME } = await import("./session");
+const { SESSION_COOKIE_NAME, isAccessTokenFresh } = await import("./session");
 const { changeOwnPassword, signInWithPassword, signOut } = await import("./actions");
 
 const LOGIN = apiUrl("/admin/auth/login");
 const LOGOUT = apiUrl("/admin/auth/logout");
 const PASSWORD = apiUrl("/admin/auth/password");
+const REFRESH = apiUrl("/admin/auth/refresh");
 
 const HOUR = 60 * 60 * 1000;
 
@@ -255,6 +256,73 @@ describe("signing out", () => {
 
     expect(await destinationOf(signOut())).toContain("/giris");
     expect(calls).toBe(0);
+  });
+});
+
+describe("the freshness line, drawn in one place", () => {
+  /**
+   * Çıkış ve parola değiştirme `getKoalaAccessToken()`'ı kullanamıyor (bkz.
+   * `usableAccessToken`), yani "bu token hâlâ taze mi" sorusunu ikinci kez
+   * soran bir yer var. Sorunun **cevabı** ikinci kez yazılırsa payı değiştiren
+   * kişi burayı unutur ve hiçbir şey bunu söylemez: iki eşik de bugün 60 saniye
+   * olduğu için davranış aynıdır, ta ki biri değişene kadar.
+   *
+   * Bu yüzden beklenti sabit bir sayıdan değil, ihraç edilen yardımcının
+   * kendisinden türetiliyor. Payı `session.ts`'te değiştirmek bu testi hâlâ
+   * yeşil bırakır; payı orada değiştirip burada değiştirmemek bırakmaz.
+   */
+  it("spends a refresh exactly when the shared helper calls the token stale", async () => {
+    const now = Date.now();
+
+    for (const offset of [-60_000, -1, 0, 30_000, 59_000, 5 * 60_000, 15 * 60_000]) {
+      jar.clear();
+      written = [];
+      server.resetHandlers();
+
+      const account = session({ accessExpiresAt: now + offset });
+      jar.set(SESSION_COOKIE_NAME, encodeStaffSession(account));
+
+      let refreshes = 0;
+      server.use(
+        http.post(REFRESH, () => {
+          refreshes += 1;
+          return HttpResponse.json({
+            success: true,
+            message: "Token yenilendi.",
+            httpStatus: "200 OK",
+            path: "/admin/auth/refresh",
+            requestId: "rid-refresh",
+            timeStamp: "2026-09-08T09:00:00.000000000Z",
+            data: {
+              accessToken: "fresh-access-token",
+              refreshToken: "fresh-refresh-token",
+              accessExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
+              refreshExpiresAt: new Date(now + 12 * HOUR).toISOString(),
+              mustChangePassword: false,
+            },
+          });
+        }),
+      );
+      server.use(
+        http.post(LOGOUT, () =>
+          HttpResponse.json({
+            success: true,
+            message: "Çıkış yapıldı.",
+            httpStatus: "200 OK",
+            path: "/admin/auth/logout",
+            requestId: "rid-logout",
+            timeStamp: "2026-09-08T09:00:00.000000000Z",
+          }),
+        ),
+      );
+
+      await destinationOf(signOut());
+
+      expect(
+        refreshes,
+        `accessExpiresAt = now ${offset >= 0 ? "+" : "-"} ${Math.abs(offset)}`,
+      ).toBe(isAccessTokenFresh(account, now) ? 0 : 1);
+    }
   });
 });
 
