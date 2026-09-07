@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiUrl, server } from "../test/msw";
 
 import { buildSessionCookie, encodeStaffSession, type StaffSession } from "@/server/auth/cookies";
+import { isAuthFailureCode } from "@/server/auth/errors";
 
 import proxy from "./proxy";
 
@@ -122,9 +123,18 @@ describe("a request with no token", () => {
 });
 
 describe("a token that is no longer usable", () => {
-  it("is refused when the backend rejects the refresh, and nothing is let through", async () => {
-    // Erişim token'ı ölmüş, yenileme reddedildi: parola değişmiş, çıkış
-    // yapılmış ya da hesap kapatılmış olabilir. Üçü de oturumun bitmesi demek.
+  it("calls a rejected refresh what it is: the session ended", async () => {
+    /**
+     * Erişim token'ı ölmüş, yenileme **401** ile reddedildi: parola değişmiş,
+     * çıkış yapılmış ya da bir yönetici parolayı sıfırlamış olabilir. Üçü de
+     * `tokenVersion`'ı artırıyor, üçü de oturumun bitmesi demek — ve hiçbiri
+     * "Koala'ya ulaşılamıyor" değil.
+     *
+     * Bu ayrımın bedeli ekranda ödeniyor: `/giris/hata` `BACKEND_UNREACHABLE`
+     * için "yetkinizle ya da hesabınızla ilgili bir sorun değil, backend'in
+     * ayakta olduğunu doğrulayın" yazıyor. Meslektaşı parolasını sıfırladığı
+     * için oturumu düşen kişiye söylenecek en yanlış iki cümle bunlar.
+     */
     let calls = 0;
     server.use(
       http.post(REFRESH, () => {
@@ -151,7 +161,81 @@ describe("a token that is no longer usable", () => {
 
     expect(calls).toBe(1);
     expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain("/giris/hata?kod=SESSION_EXPIRED");
+
+    // Ve reddedilen yenileme token'ı, ömrü dolmuş olandan daha kullanışlı
+    // değil: çerez düşüyor, yoksa her istek aynı reddi bir kez daha satın
+    // alırdı.
+    const dropped = setCookie(response);
+    expect(dropped).toMatch(/Max-Age=0/i);
+  });
+
+  it("says the backend is unreachable only when it actually is, and keeps the cookie", async () => {
+    // Taşıma hatası: oturum hâlâ geçerli olabilir, ve çerezi tutmak bir sonraki
+    // istekte yeniden denemeyi mümkün kılıyor. 401'in tersi, ikisi de.
+    server.use(http.post(REFRESH, () => HttpResponse.error()));
+
+    const response = await proxy(
+      request("/audit-log", session({ accessExpiresAt: Date.now() - 1000 })),
+    );
+
+    expect(response.status).toBe(307);
     expect(response.headers.get("location")).toContain("/giris/hata?kod=BACKEND_UNREACHABLE");
+    expect(setCookie(response)).toBeNull();
+  });
+
+  it("does not report a 500 as a dead session either", async () => {
+    server.use(
+      http.post(REFRESH, () =>
+        HttpResponse.json(
+          {
+            success: false,
+            message: "Beklenmedik bir hata oluştu.",
+            httpStatus: "500 INTERNAL_SERVER_ERROR",
+            errorCode: "UNEXPECTED",
+            errorCategory: "UNEXPECTED",
+            path: "/admin/auth/refresh",
+            requestId: "rid-500",
+            timeStamp: "2026-09-08T09:00:00.000000000Z",
+          },
+          { status: 500 },
+        ),
+      ),
+    );
+
+    const response = await proxy(
+      request("/audit-log", session({ accessExpiresAt: Date.now() - 1000 })),
+    );
+
+    expect(response.headers.get("location")).toContain("/giris/hata?kod=BACKEND_UNREACHABLE");
+    expect(setCookie(response)).toBeNull();
+  });
+
+  it("never invents a code the error page has no words for", async () => {
+    /**
+     * Kapının ürettiği kod ile ekranın anladığı kelime dağarcığını birbirine
+     * bağlayan yer burası. `hata/page.tsx`'in tablosu tip düzeyinde
+     * `Record<AuthFailureCode, …>`, yani **tanınan** her kodun bir karşılığı
+     * olduğu derleyicinin garantisi; buradaki iddia, proxy'nin tanınmayan bir
+     * şey göndermediği. İkisi olmadan `?kod=` sessizce "Giriş tamamlanamadı"ya
+     * düşerdi — hiçbir testin göremeyeceği bir gerileme.
+     */
+    const failures = [
+      () => HttpResponse.json({ hata: "gövde sözleşmeye uymuyor" }),
+      () => new HttpResponse(null, { status: 418 }),
+      () => HttpResponse.error(),
+    ];
+
+    for (const [index, respond] of failures.entries()) {
+      server.use(http.post(REFRESH, respond));
+
+      const response = await proxy(
+        request("/audit-log", session({ accessExpiresAt: Date.now() - 1000 })),
+      );
+
+      const code = new URL(response.headers.get("location") ?? "").searchParams.get("kod");
+      expect(isAuthFailureCode(code), `${index}: ${code}`).toBe(true);
+    }
   });
 
   it("drops the cookie outright once the refresh token is past its life", async () => {

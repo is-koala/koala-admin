@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { env } from "@/env";
 import { buildSessionCookie, decodeStaffSession, encodeStaffSession } from "@/server/auth/cookies";
-import { isAccessTokenFresh } from "@/server/auth/session";
+import type { AuthFailureCode } from "@/server/auth/errors";
+import { classifyRefreshFailure, isAccessTokenFresh } from "@/server/auth/session";
 import { refreshStaffSession } from "@/server/auth/staff-auth-api";
 
 /**
@@ -111,21 +112,37 @@ export default async function proxy(request: NextRequest): Promise<NextResponse>
           headers: response.headers,
         })
       : response;
-  } catch {
+  } catch (error) {
     /**
-     * Yenileme başarısız. İki sebep olabilir ve ayırt etmenin bedeli, ayırt
-     * etmemenin bedelinden büyük: reddedildiyse oturum bitmiştir, backend
-     * cevap vermediyse oturum hâlâ geçerli olabilir. Her iki hâlde de erişim
-     * token'ı kullanılamaz durumda, ve çerezi tutmak bir sonraki istekte
-     * yeniden denemeyi mümkün kılar — bu yüzden çerez düşürülmüyor, kişi
-     * sebebi yazan sayfaya gönderiliyor.
+     * Yenileme başarısız — ve **hangi** başarısızlık olduğu, kişiye söylenecek
+     * şeyi tersine çeviriyor:
      *
-     * Oturumun gerçekten bittiği hâli `getKoalaAccessToken()` `SESSION_EXPIRED`
-     * olarak ayırt eder ve gate oradan `/giris`e yönlendirir.
+     *  - **401** oturumun bittiği anlamına gelir. Backend'de `tokenVersion`'ı
+     *    artıran üç yol var (çıkış, kendi parolasını değiştirme, bir yöneticinin
+     *    parolayı sıfırlaması) ve üçü de açık bütün token'ları anında öldürür.
+     *    Yani bu, bekleneni yapan bir sistemin normal sonucu. Buna
+     *    "Koala'ya ulaşılamıyor" demek, meslektaşı parolasını sıfırladığı için
+     *    oturumu düşen kişiyi backend'in ayakta olup olmadığını doğrulamaya
+     *    gönderirdi.
+     *  - **Ulaşılamamak** (taşıma hatası ya da 5xx) gerçekten "sizinle ilgili
+     *    değil" demek; oturum hâlâ geçerli olabilir.
+     *
+     * Ayrımı burada yeniden yazmıyoruz: `classifyRefreshFailure` `session.ts`'te
+     * zaten var ve tek doğru olarak kalması gereken şey o.
+     *
+     * Çerez yalnız 401'de düşüyor. Reddedilen bir yenileme token'ı, ömrü dolmuş
+     * olanla aynı ölçüde işe yaramaz (yukarıdaki `dropSessionAndSignIn` ile aynı
+     * gerekçe); ulaşılamamakta ise çerezi tutmak bir sonraki istekte yeniden
+     * denemeyi mümkün kılar.
      */
-    return NextResponse.redirect(
-      new URL("/giris/hata?kod=BACKEND_UNREACHABLE", request.nextUrl.origin),
-    );
+    const { code } = classifyRefreshFailure(error);
+    const response = redirectToAuthError(request, code);
+
+    if (code === "SESSION_EXPIRED") {
+      response.cookies.set(SESSION_COOKIE.name, "", { ...SESSION_COOKIE.options, maxAge: 0 });
+    }
+
+    return response;
   }
 }
 
@@ -139,6 +156,17 @@ function dropSessionAndSignIn(request: NextRequest, callbackUrl: string): NextRe
   const response = redirectToSignIn(request, callbackUrl);
   response.cookies.set(SESSION_COOKIE.name, "", { ...SESSION_COOKIE.options, maxAge: 0 });
   return response;
+}
+
+/**
+ * `/giris/hata`, her koda kendi cümlesini yazan sayfa. Kod oraya olduğu gibi
+ * geçiyor: metni burada üretmek, aynı açıklamanın ikinci bir kopyasını yaratıp
+ * ikisinin ayrışmasını beklemek olurdu.
+ */
+function redirectToAuthError(request: NextRequest, code: AuthFailureCode): NextResponse {
+  const target = new URL("/giris/hata", request.nextUrl.origin);
+  target.searchParams.set("kod", code);
+  return NextResponse.redirect(target);
 }
 
 export const config = {

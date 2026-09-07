@@ -143,7 +143,7 @@ export async function getKoalaAccessToken(): Promise<string> {
   try {
     refreshed = await refreshStaffSession(session.refreshToken);
   } catch (error) {
-    throw toAuthError(error);
+    throw classifyRefreshFailure(error);
   }
 
   await persistIfWritable(refreshed);
@@ -169,7 +169,16 @@ async function persistIfWritable(session: StaffSession): Promise<void> {
   }
 }
 
-function toAuthError(error: unknown): StaffAuthError {
+/**
+ * Başarısız bir yenilemeyi, ekranı olan bir koda çevirir.
+ *
+ * İhraç edilmesinin sebebi `src/proxy.ts`: o da yeniliyor, o da başarısız
+ * olabiliyor, ve ayrımı orada bir kez daha yazmak iki yerde iki farklı cevap
+ * üretmenin yoluydu — 401 "oturumunuz bitti", ulaşılamamak "sizinle ilgili
+ * değil" demek, ve bu ikisini birleştiren bir panel, parolası bir yönetici
+ * tarafından sıfırlanan kişiye backend'in çöktüğünü söyler.
+ */
+export function classifyRefreshFailure(error: unknown): StaffAuthError {
   if (isKoalaApiError(error)) {
     if (error.isAuthFailure || error.status === 401) {
       return new StaffAuthError("SESSION_EXPIRED", `Yenileme reddedildi: ${error.message}`, {
