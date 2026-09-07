@@ -20,16 +20,16 @@ const getKoalaAccessToken = vi.fn<() => Promise<string>>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
-  getIdTokenHint: () => Promise.resolve(null),
 }));
 
 /**
- * The shell's sign-out button is a Server Action, and the real one drags in
- * `next-auth`, which cannot be resolved under the jsdom project's conditions.
- * It is also not what this file is about: `logout.test.ts` covers it.
+ * The shell's sign-out button is a Server Action, and the real one reaches for
+ * `next/headers` to drop the cookie — which needs a request scope this render
+ * does not have. It is also not what this file is about: `sign-out.test.ts`
+ * covers the cookie actually falling.
  */
 vi.mock("@/server/auth/actions", () => ({
-  signOutFromKeycloak: async () => undefined,
+  signOut: async () => undefined,
 }));
 
 const { default: PanelLayout } = await import("@/app/(panel)/layout");
@@ -124,9 +124,9 @@ describe("the menu is exactly what the backend permits", () => {
     expect(menuLinks(html)).toEqual([]);
   });
 
-  it("draws no menu for a Keycloak identity with no staff record, and says why", async () => {
-    // The migration window's normal state: signed in, reaching nothing, and
-    // told which door has not been opened yet.
+  it("draws no menu when the backend resolves the token to no staff record, and says why", async () => {
+    // Signed in, reaching nothing, and told why rather than shown an empty
+    // menu with no explanation attached to it.
     server.use(
       http.get(ADMIN_ME, () => HttpResponse.json(adminMeNoStaffRecordBody, { status: 403 })),
     );
@@ -134,24 +134,23 @@ describe("the menu is exactly what the backend permits", () => {
     const html = await shell();
 
     expect(menuLinks(html)).toEqual([]);
-    expect(html).toContain("personel kaydınız yok");
+    expect(html).toContain("bir personel kaydı vermedi");
     // They can still leave.
     expect(html).toContain("Çıkış yap");
   });
 
   it("explains a session failure on an ungated page, which has no gate to redirect it", async () => {
-    // The gate sends these four codes to /giris and /giris/hata. The home page
-    // has no gate, so without this the person would get an empty menu and no
-    // reason for it — which is the one outcome the fail-closed path must not
-    // produce.
+    // The gate sends these codes to /giris and /giris/hata. The home page has no
+    // gate, so without this the person would get an empty menu and no reason
+    // for it — which is the one outcome the fail-closed path must not produce.
     const { StaffAuthError } = await import("@/server/auth/errors");
-    getKoalaAccessToken.mockRejectedValue(new StaffAuthError("AUDIENCE_MISCONFIGURED"));
+    getKoalaAccessToken.mockRejectedValue(new StaffAuthError("BACKEND_UNREACHABLE"));
 
     const html = await shell();
 
     expect(menuLinks(html)).toEqual([]);
     expect(html).toContain("Oturumunuz doğrulanamadı");
-    expect(html).toContain("/giris/hata?kod=AUDIENCE_MISCONFIGURED");
+    expect(html).toContain("/giris/hata?kod=BACKEND_UNREACHABLE");
   });
 
   it("draws no menu when the backend grants permissions this panel has no screen for", async () => {

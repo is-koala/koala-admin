@@ -1,20 +1,53 @@
 /**
- * The session cookie, spelled out rather than left to a default.
+ * Oturum çerezi: adı, bayrakları ve içine ne konduğu.
  *
- * Auth.js would derive all of this on its own. It is written down here for two
- * reasons that are not style:
+ * Çerez, Koala'nın personel token'larını taşır ve **tarayıcı JavaScript'i onu
+ * hiç göremez**. `httpOnly` bunun tek garantisi: panelin izin kümesinde
+ * `payout.release` var, yani token'ı okuyabilen bir XSS emanetten para
+ * çıkarabilir. Bayraklar varsayılana bırakılmıyor, çünkü varsayılan bir
+ * incelemede parmakla gösterilemez; `cookies.test.ts` üçünü de doğruluyor.
  *
- *  1. The cookie carries the Keycloak tokens (encrypted). `httpOnly` is what
- *     keeps an XSS from reading them, and the panel's permission set reaches
- *     `payout.release`. A default is not something you can point at in a
- *     review; `cookies.test.ts` asserts these three flags.
- *  2. The cookie's **name is the JWE salt**. `session.ts` decrypts the cookie
- *     itself to hand the access token to the server-side Koala client, and it
- *     has to derive the same key Auth.js used. One definition, two readers.
+ * ### Neden şifrelenmiyor?
+ *
+ * Auth.js dönemi çerezi bir JWE idi ve `AUTH_SECRET` gerektiriyordu. Burada
+ * şifreleme bir şey satın almıyor: çerezin içeriği **zaten kimlik bilgisinin
+ * kendisi** — backend'in imzaladığı bir bearer token. Onu, yanı başında duran
+ * bir anahtarla şifrelemek sırrı korumaz, yalnız yönetilecek bir sır daha
+ * ekler. Çerezi okuyabilen taraf her iki hâlde de aynı yetkiye sahiptir.
+ *
+ * Aynı sebeple imzalanmıyor da: çerezi kendi eliyle değiştirebilen biri en
+ * fazla geçersiz bir token uydurabilir, ki backend onu reddeder ve kişi giriş
+ * sayfasına düşer — çerezi silmekle aynı sonuç. İçeriği uydurmak, backend'in
+ * HMAC anahtarını uydurmak demektir.
  */
 
-/** Base name; chunks append `.0`, `.1`, … when the value exceeds ~4 KB. */
-const BASE_NAME = "authjs.session-token";
+/**
+ * Çerezde duran her şey. Kişiye dair hiçbir şey burada değil: ad, rol ve izinler
+ * her istekte `/admin/me`'den okunur (ADR-0010'un ADR-0014'ün de devraldığı
+ * yarısı). Buraya bir izin listesi koymak, tam olarak o ADR'nin taşıdığı
+ * bayatlığı geri getirirdi.
+ */
+export interface StaffSession {
+  readonly accessToken: string;
+  readonly refreshToken: string;
+  /** Epoch **milisaniye**. Backend `Instant` olarak yollar, burada sayıya çevrilir. */
+  readonly accessExpiresAt: number;
+  /** Epoch milisaniye. Bu geçtikten sonra yenileme de mümkün değil. */
+  readonly refreshExpiresAt: number;
+  /**
+   * Backend'in giriş yanıtındaki bayrak. Bu doğruyken backend `/admin/**`'ın
+   * tamamını 403'le reddeder (`StaffPermissionAuthorizationManager.decideForStaff`),
+   * parola değiştirme ucu hariç — yani `/admin/me` de cevap vermez. Bu yüzden
+   * bayrağın tek kaynağı giriş yanıtı olmak zorunda ve çerezde durmak zorunda.
+   *
+   * Bir kapı değil, bir yön levhası: kararı backend veriyor, panel yalnız
+   * kişiyi doğru ekrana götürüyor.
+   */
+  readonly mustChangePassword: boolean;
+}
+
+/** Temel ad. `__Secure-` öneki yalnız güvenli çerezde yasaldır, aşağıya bak. */
+const BASE_NAME = "koala_admin_session";
 
 export interface SessionCookieDefinition {
   readonly name: string;
@@ -27,24 +60,24 @@ export interface SessionCookieDefinition {
 }
 
 /**
- * `secure` follows the panel's own scheme, and it has to.
+ * `secure`, panelin kendi şemasını izler ve izlemek zorunda.
  *
- * A `Secure` cookie is simply not stored by the browser over plain HTTP, so
- * hard-coding `true` would not harden development — it would make local sign-in
- * impossible and push someone to turn the whole thing off. `AUTH_URL` is
- * validated in `src/env.ts` to be HTTPS anywhere but localhost, so `https`
- * in production is not a hope: an `http://admin.iskoala.com` never boots.
+ * `Secure` işaretli bir çerez düz HTTP üzerinde tarayıcı tarafından hiç
+ * saklanmaz; sabit `true` yazmak yereli sertleştirmez, yerel girişi imkânsız
+ * kılar ve birini bayrağı tamamen kapatmaya iter. `ADMIN_PUBLIC_ORIGIN`
+ * `src/env.ts` içinde localhost dışında https olmaya zorlanır, dolayısıyla
+ * canlıda `https` bir umut değil: `http://admin.iskoala.com` hiç açılmaz.
  *
- * `sameSite: "lax"` is the setting the OIDC redirect needs. `strict` would drop
- * the cookie on the top-level navigation back from Keycloak and loop the login.
+ * `sameSite: "lax"` — `strict` değil. OIDC yönlendirmesi kalktığı için eski
+ * gerekçe düştü, ama yenisi var: `strict` çerezi başka bir yerden gelen
+ * üst-seviye gezinmede de göndermez, yani panele bir bağlantıyla giren herkes
+ * önce giriş sayfasına düşer. `lax` siteler arası POST'u zaten engelliyor ve
+ * Next.js Server Action'ları ayrıca origin doğrulaması yapıyor.
  */
-export function buildSessionCookie(authUrl: string): SessionCookieDefinition {
-  const secure = authUrl.startsWith("https:");
+export function buildSessionCookie(publicOrigin: string): SessionCookieDefinition {
+  const secure = publicOrigin.startsWith("https:");
 
   return {
-    // `__Secure-` is only legal on a secure cookie, and Auth.js applies the
-    // same prefix rule — the names have to agree or the cookie is written under
-    // one name and read under another.
     name: secure ? `__Secure-${BASE_NAME}` : BASE_NAME,
     options: {
       httpOnly: true,
@@ -56,34 +89,67 @@ export function buildSessionCookie(authUrl: string): SessionCookieDefinition {
 }
 
 /**
- * Reassemble a chunked session cookie.
+ * Çerez değeri: base64url'lenmiş JSON.
  *
- * A Keycloak token set — access + refresh + id — is comfortably over the 4 KB a
- * cookie may hold, so Auth.js splits the encrypted value across
- * `authjs.session-token.0`, `.1`, … Anything reading the cookie directly has to
- * put it back together in the same order, or it decrypts nothing.
- *
- * Mirrors `SessionStore` in `@auth/core/lib/utils/cookie`: every cookie whose
- * name starts with the base name, ordered by the numeric suffix.
+ * base64url, ham JSON'un içindeki `{`, `"` ve `,` karakterlerini çerez
+ * dilbilgisinden çıkarır — aksi hâlde değeri tırnaklamak gerekir ve tırnaklama
+ * kuralları sunucu ile tarayıcı arasında sessizce ayrışabilir.
  */
-export function joinSessionCookieChunks(
-  cookies: readonly { readonly name: string; readonly value: string }[],
-  cookieName: string,
-): string | null {
-  const chunks = cookies.filter(
-    (cookie) => cookie.name.startsWith(cookieName) && cookie.value.length > 0,
-  );
-
-  if (chunks.length === 0) return null;
-
-  return chunks
-    .slice()
-    .sort((a, b) => suffixIndex(a.name) - suffixIndex(b.name))
-    .map((cookie) => cookie.value)
-    .join("");
+export function encodeStaffSession(session: StaffSession): string {
+  return toBase64Url(JSON.stringify(session));
 }
 
-function suffixIndex(name: string): number {
-  const suffix = Number.parseInt(name.split(".").pop() ?? "0", 10);
-  return Number.isNaN(suffix) ? 0 : suffix;
+/**
+ * Çerezi geri oku, ya da `null`.
+ *
+ * Her başarısızlık `null` — bozuk, eksik alanlı ya da başka bir şema ile
+ * yazılmış bir çerez "oturum yok" demektir. Yarım bir oturum döndürmek, kapıyı
+ * açık bırakmanın en sessiz yoludur.
+ */
+export function decodeStaffSession(value: string | undefined | null): StaffSession | null {
+  if (typeof value !== "string" || value.length === 0) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fromBase64Url(value)) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const record = parsed as Record<string, unknown>;
+
+  const accessToken = record.accessToken;
+  const refreshToken = record.refreshToken;
+  const accessExpiresAt = record.accessExpiresAt;
+  const refreshExpiresAt = record.refreshExpiresAt;
+
+  if (typeof accessToken !== "string" || accessToken.length === 0) return null;
+  if (typeof refreshToken !== "string" || refreshToken.length === 0) return null;
+  if (typeof accessExpiresAt !== "number" || !Number.isFinite(accessExpiresAt)) return null;
+  if (typeof refreshExpiresAt !== "number" || !Number.isFinite(refreshExpiresAt)) return null;
+
+  return {
+    accessToken,
+    refreshToken,
+    accessExpiresAt,
+    refreshExpiresAt,
+    // Eksikse `true` değil `false`: bayrak yalnız yönlendirme içindir ve kapıyı
+    // backend tutar. Eksik bir alan yüzünden herkesi parola ekranına kilitlemek,
+    // hiçbir şeyi korumadan paneli kullanılamaz hâle getirirdi.
+    mustChangePassword: record.mustChangePassword === true,
+  };
+}
+
+function toBase64Url(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function fromBase64Url(value: string): string {
+  const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+  return new TextDecoder().decode(Uint8Array.from(atob(padded), (char) => char.charCodeAt(0)));
 }

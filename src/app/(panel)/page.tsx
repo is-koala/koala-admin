@@ -10,19 +10,23 @@ import { getStaffContext } from "@/server/authz/staff-context";
  * The landing page, and the one screen that is deliberately not
  * permission-gated (`src/server/authz/routes.ts` records why).
  *
- * It shows the two answers side by side because they come from two systems and
- * confusing them is the mistake ADR-0010 exists to prevent. Keycloak's realm
- * roles arrive in the session and say who you are. Koala's permissions arrive
- * from `GET /admin/me` on this request and say what you may do. The panel never
- * derives the second from the first, and printing both makes that visible
- * rather than merely documented.
+ * It shows the two answers side by side because confusing them is the mistake
+ * ADR-0010 exists to prevent — and ADR-0014 kept that half untouched even after
+ * identity came back into Koala. Role membership says *who you are*; the
+ * permissions resolved from the role graph say *what you may do*. Both arrive
+ * from `GET /admin/me` on this request, and neither is derived from the other
+ * here: the panel prints the backend's answer rather than computing one.
  *
  * When the permission side cannot be resolved, the shell above renders the
  * explanation and this page shows an empty list — which is the honest picture:
  * signed in, and permitted nothing.
  */
 export default async function PanelHomePage() {
-  const session = await requireStaffSession();
+  // The second lock. `src/proxy.ts` already turned anonymous requests away; this
+  // catches a session that died in the gap between the gate and the render.
+  // Its return value is deliberately unused: nothing about a person is in the
+  // session cookie, and everything printed below comes from the backend.
+  await requireStaffSession();
   const context = await getStaffContext();
   const reachable = navigationFor(context.permissions);
 
@@ -31,46 +35,47 @@ export default async function PanelHomePage() {
       <header className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Panel</h1>
         <p className="max-w-prose text-sm text-ink-muted">
-          Kim olduğunuzu Keycloak, ne yapabildiğinizi Koala söyler. Panel ikincisini her istekte
-          backend&apos;e sorar ve hiçbir yerde saklamaz.
+          Kim olduğunuzu rol üyeliğiniz, ne yapabildiğinizi rol grafiğinden çözülen izinler söyler.
+          Panel ikisini de her istekte backend&apos;e sorar ve hiçbirini saklamaz.
         </p>
       </header>
 
       <section className="grid gap-4 md:grid-cols-2">
         <article className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-5">
           <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-semibold">Kimlik · Keycloak</h2>
-            <p className="text-sm text-ink">{session.user?.name ?? session.user?.email}</p>
-            <p className="text-xs text-ink-muted">{session.user?.email}</p>
+            <h2 className="text-sm font-semibold">Kimlik · rol üyeliği</h2>
+            <p className="text-sm text-ink">{context.staff?.displayName ?? "—"}</p>
+            <p className="text-xs text-ink-muted">{context.staff?.email ?? "—"}</p>
           </div>
 
           <div className="flex flex-col gap-2">
             <h3 className="text-xs font-semibold text-ink-muted">
-              Token&apos;daki realm rolleri ({session.roles.length})
+              Roller ({context.staff?.roles.length ?? 0})
             </h3>
             <ul className="flex flex-wrap gap-2">
-              {session.roles.map((role) => (
+              {(context.staff?.roles ?? []).map((role) => (
                 <li key={role}>
                   <Badge tone={role === "OWNER" ? "brand" : "neutral"}>{role}</Badge>
                 </li>
               ))}
             </ul>
             <p className="text-xs text-ink-subtle">
-              Bu liste yalnız rol üyeliğidir. Hangi işlemi açtığı buradan okunmaz.
+              Kapsanan roller de dâhil, backend&apos;in çözdüğü üyelik. Hangi işlemi açtığı buradan
+              okunmaz.
             </p>
           </div>
         </article>
 
         <article className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-5">
           <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-semibold">Yetki · Koala</h2>
+            <h2 className="text-sm font-semibold">Yetki · rol grafiği</h2>
             <p className="text-sm text-ink">
-              {context.staff?.displayName ?? "Personel kaydı çözülemedi"}
+              {context.staff === null ? "Personel kaydı çözülemedi" : "Her istekte yeniden çözüldü"}
             </p>
             <p className="text-xs text-ink-muted">
               {context.staff === null
                 ? "GET /admin/me yanıt vermedi; izin listesi boş kabul edildi."
-                : `Backend'in çözdüğü roller: ${context.staff.roles.join(", ") || "—"}`}
+                : "İzinler token'da taşınmaz; bir rol geri alındığında anında düşer."}
             </p>
           </div>
 

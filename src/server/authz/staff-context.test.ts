@@ -192,7 +192,7 @@ describe("failing closed", () => {
   });
 
   it("routes a session failure to the code the existing error page already explains", async () => {
-    for (const code of ["SESSION_EXPIRED", "AUDIENCE_MISCONFIGURED", "KEYCLOAK_UNREACHABLE"]) {
+    for (const code of ["SESSION_EXPIRED", "PASSWORD_CHANGE_REQUIRED", "BACKEND_UNREACHABLE"]) {
       getKoalaAccessToken.mockRejectedValueOnce(new StaffAuthError(code as "SESSION_EXPIRED"));
 
       const context = await loadStaffContext();

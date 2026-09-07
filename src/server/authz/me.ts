@@ -32,10 +32,12 @@ import { isPermission, type Permission } from "./permissions";
  * }
  * ```
  *
- * A valid Keycloak token with no `staff_members` row answers **403** with
- * `errorCategory: "ACCESS_DENIED"`, and koala-admin#5's first comment is
- * explicit that this is the normal state during the migration window, not an
- * exception — the Keycloak door opens before anything is behind it.
+ * A **403** with `errorCategory: "ACCESS_DENIED"` is not only "no staff row":
+ * since ADR-0014 the backend answers the same way while an account carries the
+ * "change your password first" flag, because `StaffPermissionAuthorizationManager`
+ * denies every `@RequiresPermission` endpoint — this one included — until it is
+ * cleared. `src/server/auth/session.ts` therefore refuses to hand out a token in
+ * that state, so the panel never has to guess which of the two it is looking at.
  */
 
 export const ADMIN_ME_PATH = "/admin/me";

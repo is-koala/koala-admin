@@ -91,7 +91,7 @@ describe("a decision action re-checks the permission it needs", () => {
     expect(denied?.requestId).toBe("rid-500");
   });
 
-  it("refuses a Keycloak identity with no staff record", async () => {
+  it("refuses a token the backend resolved to no staff record", async () => {
     server.use(
       http.get(ADMIN_ME, () => HttpResponse.json(adminMeNoStaffRecordBody, { status: 403 })),
     );

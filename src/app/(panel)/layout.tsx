@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { StaffContextUnavailable } from "@/components/panel/access-states";
 import { StaffNav } from "@/components/panel/staff-nav";
-import { signOutFromKeycloak } from "@/server/auth/actions";
+import { signOut } from "@/server/auth/actions";
 import { navigationFor } from "@/server/authz/routes";
 import { getStaffContext } from "@/server/authz/staff-context";
 
@@ -53,7 +53,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
               <span className="text-xs text-ink-muted">{context.staff.email}</span>
             </div>
           )}
-          <form action={signOutFromKeycloak}>
+          <form action={signOut}>
             <button
               type="submit"
               className="rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"

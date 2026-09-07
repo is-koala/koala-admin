@@ -1,90 +1,198 @@
 "use server";
 
-import { redirect, unstable_rethrow } from "next/navigation";
+import { redirect } from "next/navigation";
 
-import { env } from "@/env";
+import { isKoalaApiError } from "@/server/api/errors";
 
-import { getKeycloakEndpoints } from "./discovery";
-import { signIn, signOut } from "./index";
-import { buildRpInitiatedLogoutUrl } from "./logout";
-import { getIdTokenHint } from "./session";
-
-/**
- * The panel's two auth actions. There is no third: no password form, no
- * registration, no password reset, no MFA enrolment. ADR-0010 puts all of that
- * in the Keycloak admin console, and the realm has registration switched off
- * anyway, so a screen here would be a dead end with a Koala logo on it.
- */
+import type { StaffSession } from "./cookies";
+import type { PasswordChangeFailureCode, SignInFailureCode } from "./errors";
+import {
+  changeStaffPassword,
+  loginStaff,
+  logoutStaff,
+  refreshStaffSession,
+} from "./staff-auth-api";
+import { clearStaffSession, readStaffSession, writeStaffSession } from "./session";
 
 /**
- * Hand the browser to Keycloak. Authorization Code + PKCE; the panel never sees
- * a password.
+ * Panelin üç kimlik eylemi: gir, çık, parolanı değiştir.
+ *
+ * Üçü de Server Action — yani çerezi yazabilen tek yer sınıfı. Tarayıcı bu
+ * uçlarda backend'i hiç görmez: form Next sunucusuna gider, Koala ile konuşan
+ * odur (ADR-0011'in BFF mantığı) ve token tarayıcıya hiç inmez.
+ *
+ * ### Hata neden sorgu dizesinden dönüyor?
+ *
+ * `useActionState` bir Client Component gerektirirdi. Giriş sayfası bugün
+ * **hiç istemci JavaScript'i göndermiyor** ve bu, kimlik bilgisi yazılan bir
+ * sayfa için ucuza satılmayacak bir özellik. Bunun yerine başarısızlıkta
+ * sayfaya bir kodla geri dönülüyor.
+ *
+ * Sorgu dizesine giden şey **yalnız bir kod**: e-posta, parola ya da token
+ * hiçbir koşulda URL'e yazılmaz — URL sunucu günlüğüne, tarayıcı geçmişine ve
+ * `Referer` başlığına düşer.
  */
-export async function signInWithKeycloak(callbackUrl?: string): Promise<void> {
+
+export async function signInWithPassword(
+  callbackUrl: string | undefined,
+  formData: FormData,
+): Promise<void> {
+  const target = safeCallbackUrl(callbackUrl);
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  if (email === "" || password === "") {
+    redirect(`/giris?${signInFailureQuery("MISSING_FIELDS", target)}`);
+  }
+
+  let session: StaffSession;
   try {
-    await signIn("keycloak", { redirectTo: safeCallbackUrl(callbackUrl) });
+    session = await loginStaff(email, password);
   } catch (error) {
-    // `signIn` finishes by throwing the redirect. Anything else is Keycloak
-    // failing to answer discovery, which must land on a page that says so
-    // rather than a generic 500.
-    unstable_rethrow(error);
-    redirect("/giris/hata?kod=KEYCLOAK_UNREACHABLE");
+    redirect(`/giris?${signInFailureQuery(toSignInFailure(error), target)}`);
   }
+
+  await writeStaffSession(session);
+
+  /**
+   * İlk giriş bayrağı açıksa hedef sayfaya göndermenin anlamı yok: backend
+   * `/admin/**`'ın tamamını reddedeceği için kişi boş bir panele düşerdi.
+   */
+  redirect(session.mustChangePassword ? "/giris/parola" : target);
 }
 
 /**
- * Sign out of the panel **and** of Keycloak.
+ * Çıkış: önce backend'e, sonra çereze.
  *
- * Clearing the local cookie is the easy half and on its own it is a bug: the
- * Keycloak SSO session stays open, so the next "sign in" bounces straight
- * through without asking for a password and the person believes they logged
- * out. The fix is RP-initiated logout — send the browser to the realm's
- * `end_session_endpoint` with `id_token_hint` so Keycloak knows which session
- * to end.
+ * Sıra önemli. Backend `tokenVersion`'ı artırarak o personelin bütün açık
+ * token'larını öldürür; yalnız çerezi silmek, panelin sizi unutması ama
+ * token'ın ömrü dolana kadar geçerli kalması demekti.
  *
- * Order matters: read the id token first (it lives in the cookie we are about
- * to delete), then drop the local session, then leave.
+ * Backend'e ulaşılamazsa da çerez yine düşer: çıkmak isteyen birini panelde
+ * bırakmak daha kötü bir sonuç. Bu durumda sunucu tarafındaki token, ömrü
+ * dolana kadar (erişim için 15 dakika) geçerli kalır ve bu bilinen bir sınır.
  */
-export async function signOutFromKeycloak(): Promise<void> {
-  const logoutUrl = await buildLogoutUrl();
+export async function signOut(): Promise<void> {
+  const session = await readStaffSession();
 
-  // `redirect: false` because the redirect below is ours, not Auth.js's.
-  await signOut({ redirect: false });
+  if (session !== null) {
+    try {
+      await logoutStaff(await usableAccessToken(session));
+    } catch (error) {
+      console.warn(
+        `[staff-auth] çıkışta backend çağrısı başarısız: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
 
-  // `typedRoutes` narrows `redirect` to this app's own routes. Keycloak's
-  // `end_session_endpoint` is by definition not one of them, and it is not a
-  // route we made up either — it came from the realm's discovery document.
-  redirect((logoutUrl ?? "/giris") as Parameters<typeof redirect>[0]);
+  await clearStaffSession();
+  redirect("/giris");
 }
 
-async function buildLogoutUrl(): Promise<string | null> {
-  const idToken = await getIdTokenHint();
-  if (idToken === null) return null;
+/**
+ * Kişinin kendi parolasını değiştirmesi — ilk girişte zorunlu olan adım.
+ *
+ * Başarıdan sonra çerez **silinir**: backend parola değişiminde `tokenVersion`'ı
+ * artırıyor, yani elimizdeki token o anda ölüyor. Onu tutmak, bir sonraki
+ * isteğin sebepsiz 401 almasıyla biterdi.
+ */
+export async function changeOwnPassword(formData: FormData): Promise<void> {
+  const session = await readStaffSession();
 
-  let endSessionEndpoint: string;
+  if (session === null) {
+    redirect("/giris");
+  }
+
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const newPassword = String(formData.get("newPassword") ?? "");
+  const newPasswordRepeat = String(formData.get("newPasswordRepeat") ?? "");
+
+  if (currentPassword === "" || newPassword === "") {
+    redirect(`/giris/parola?hata=MISSING_FIELDS`);
+  }
+
+  if (newPassword !== newPasswordRepeat) {
+    redirect(`/giris/parola?hata=MISMATCH`);
+  }
+
   try {
-    ({ endSessionEndpoint } = await getKeycloakEndpoints());
-  } catch {
-    // Keycloak is unreachable. The local cookie still goes — leaving someone
-    // signed in to a panel they asked to leave would be worse — but say so
-    // rather than pretend the SSO session is closed.
-    return "/giris/hata?kod=KEYCLOAK_UNREACHABLE";
+    await changeStaffPassword(await usableAccessToken(session), currentPassword, newPassword);
+  } catch (error) {
+    redirect(`/giris/parola?hata=${toPasswordFailure(error)}`);
   }
 
-  return buildRpInitiatedLogoutUrl({ endSessionEndpoint, idToken, returnTo: env.AUTH_URL });
+  await clearStaffSession();
+  redirect("/giris?bilgi=PASSWORD_CHANGED");
 }
 
 /**
- * Only ever come back to this panel.
- *
- * `callbackUrl` arrives from the query string the proxy wrote, and a query
- * string is user input: an absolute URL here would turn the login page into an
- * open redirect that borrows the panel's credibility.
+ * Bu iki uç `getKoalaAccessToken()` kullanamaz: o, `mustChangePassword` açıkken
+ * bilerek hata fırlatır — oysa parola değiştirme ucu tam olarak o durumda
+ * çalışmak zorunda olan uçtur (backend'de izin denetimine değil doğrudan
+ * `STAFF_AUTHORITY`'ye bağlı). Bu yüzden token buradan, taze değilse bir
+ * yenilemeyle alınıyor.
  */
-function safeCallbackUrl(candidate: string | undefined): string {
+async function usableAccessToken(session: StaffSession): Promise<string> {
+  if (session.accessExpiresAt - 60_000 > Date.now()) {
+    return session.accessToken;
+  }
+
+  const refreshed = await refreshStaffSession(session.refreshToken);
+  return refreshed.accessToken;
+}
+
+/**
+ * Sorgu dizesi — yalnız bir hata kodu ve kişinin gitmek istediği panel yolu.
+ * E-posta bilerek taşınmıyor: kişisel veri URL'e, günlüğe ve `Referer`
+ * başlığına yazılmaz. Bedeli, formun e-posta alanının boşalması.
+ */
+function signInFailureQuery(code: SignInFailureCode, callbackUrl: string): string {
+  const params = new URLSearchParams({ hata: code });
+  if (callbackUrl !== "/") params.set("callbackUrl", callbackUrl);
+  return params.toString();
+}
+
+function toSignInFailure(error: unknown): SignInFailureCode {
+  if (!isKoalaApiError(error)) return "UNKNOWN";
+
+  // Backend yanlış parolayı, olmayan hesabı, kilitli hesabı ve devre dışı
+  // hesabı ayırt edilemez kılıyor; panel de tek bir mesaj verir.
+  if (error.status === 401) return "INVALID_CREDENTIALS";
+  if (error.status === 429) return "TOO_MANY_ATTEMPTS";
+  if (error.status === 0 || error.status >= 500) return "BACKEND_UNREACHABLE";
+  if (error.isValidationFailure) return "MISSING_FIELDS";
+
+  return "UNKNOWN";
+}
+
+function toPasswordFailure(error: unknown): PasswordChangeFailureCode {
+  if (!isKoalaApiError(error)) return "UNKNOWN";
+
+  if (error.status === 401) return "CURRENT_PASSWORD_WRONG";
+  if (error.status === 409) return "PASSWORD_UNCHANGED";
+  if (error.isValidationFailure) return "PASSWORD_REJECTED";
+  if (error.status === 0 || error.status >= 500) return "BACKEND_UNREACHABLE";
+
+  return "UNKNOWN";
+}
+
+/**
+ * Yalnız bu panele geri dön.
+ *
+ * `callbackUrl` proxy'nin yazdığı sorgu dizesinden geliyor ve sorgu dizesi
+ * kullanıcı girdisidir: buraya mutlak bir URL koyabilmek, giriş sayfasını
+ * panelin itibarını ödünç veren açık bir yönlendiriciye çevirirdi.
+ *
+ * Dönüş tipindeki dönüştürme `typedRoutes` yüzünden: değer derleme anında değil
+ * çalışma anında doğrulanıyor, yani tip sistemi onu bir rota olarak tanıyamaz.
+ * Dönüştürmenin güvenli olmasını sağlayan şey tam olarak yukarıdaki üç koşul —
+ * bu yüzden dönüştürme, doğrulamanın yapıldığı yerde duruyor ve çağrı yerlerine
+ * dağılmıyor.
+ */
+function safeCallbackUrl(candidate: string | undefined): Parameters<typeof redirect>[0] {
   if (candidate === undefined || !candidate.startsWith("/") || candidate.startsWith("//")) {
     return "/";
   }
 
-  return candidate;
+  return candidate as Parameters<typeof redirect>[0];
 }

@@ -80,7 +80,7 @@ export async function guardDecision(permission: Permission): Promise<DecisionSta
 
   if (!context.has(permission)) {
     return decisionRejected(
-      `Bu karar "${permissionLabel(permission)}" iznini gerektiriyor ve hesabınızda bu izin yok. Rol üyeliği Keycloak konsolunda, rolün izinleri Koala'da tanımlıdır.`,
+      `Bu karar "${permissionLabel(permission)}" iznini gerektiriyor ve hesabınızda bu izin yok. Rol üyeliğini de rolün izinlerini de Koala tutar.`,
     );
   }
 

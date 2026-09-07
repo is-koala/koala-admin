@@ -37,9 +37,9 @@ export function PermissionDenied({ permission, roles = [] }: PermissionDeniedPro
           <div className="flex flex-col gap-2 text-sm text-ink">
             <p>
               <span className="font-medium">Ne yapmalı: </span>
-              Bu izne ihtiyacınız varsa rolünüzün genişletilmesini isteyin. Rol üyeliği Keycloak
-              konsolunda, rolün hangi izinleri içerdiği Koala&apos;da tanımlıdır; ikisi de bu
-              panelden düzenlenmez.
+              Bu izne ihtiyacınız varsa rolünüzün genişletilmesini isteyin. Rol üyeliğini de rolün
+              hangi izinleri içerdiğini de Koala tutar; ikisini de personel yönetimi izni olan biri
+              değiştirebilir.
             </p>
             {roles.length > 0 ? (
               <p className="text-xs text-ink-muted">
@@ -76,11 +76,11 @@ const EXPLANATIONS: Record<StaffContextFailureKind, Explanation> = {
     nextStep: "Yeniden giriş yapın.",
   },
   NO_STAFF_RECORD: {
-    title: "Kimliğiniz doğrulandı, Koala'da personel kaydınız yok",
+    title: "Oturumunuz açık, ama backend size bir personel kaydı vermedi",
     description:
-      "Keycloak sizi tanıdı ve giriş yaptınız; Koala tarafında bu hesaba bağlı bir personel kaydı bulunamadı. Bu yüzden hiçbir izniniz yok ve menü boş. Bir yetki kaybı değil: kayıt henüz açılmamış. ADR-0010 gereği personel kaydı ve rol→izin grafiği panelden değil, Keycloak konsolundan ve backend'den yönetilir.",
+      "Token geçerli; backend GET /admin/me'yi yine de reddetti. Bu bir yetki kaybı değil, kaydın çözülememesi: hesap devre dışı bırakılmış ya da hiçbir role bağlı olmayabilir. İzin listesi boş kabul edildi ve menü bu yüzden boş — panel emin olmadığı hiçbir kapıyı açık göstermez.",
     nextStep:
-      "Koala yöneticisinden bu hesap için personel kaydı açmasını ve rollerinizi tanımlamasını isteyin.",
+      "Personel yönetimi izni olan bir çalışandan hesabınızın etkin olduğunu ve rollerinizi doğrulamasını isteyin.",
   },
   BACKEND_UNAVAILABLE: {
     title: "İzinleriniz çözülemedi",

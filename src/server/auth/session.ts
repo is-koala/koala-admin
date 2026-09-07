@@ -2,29 +2,24 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { Session } from "next-auth";
-import { decode, type JWT } from "next-auth/jwt";
 
 import { env } from "@/env";
+import { isKoalaApiError } from "@/server/api/errors";
 
-import { hasAudience } from "./claims";
-import { SESSION_COOKIE_NAME } from "./config";
-import { joinSessionCookieChunks } from "./cookies";
+import {
+  buildSessionCookie,
+  decodeStaffSession,
+  encodeStaffSession,
+  type StaffSession,
+} from "./cookies";
 import { StaffAuthError } from "./errors";
-import { auth } from "./index";
-import { refreshAccessToken } from "./refresh";
-import "./types";
+import { refreshStaffSession } from "./staff-auth-api";
 
 /**
- * The server's two ways of asking about the signed-in staff member.
+ * Sunucunun, giriş yapmış personeli sorma yolları.
  *
- * {@link getStaffSession} returns the sanitised session — identity and role
- * names, no tokens. Anything rendering a page wants this one.
- *
- * {@link getKoalaAccessToken} returns the access token, and is the *only* way
- * to get one. It is what `src/server/api/koala.ts` expects in its
- * `accessToken` parameter, and #5's server-side `GET /admin/me` is its first
- * real caller:
+ * {@link readStaffSession} çerezi çözer; {@link getKoalaAccessToken} backend'e
+ * gidecek geçerli bir erişim token'ı verir ve **tek yoldur**.
  *
  * ```ts
  * const me = await koalaApi.get({
@@ -34,152 +29,167 @@ import "./types";
  * });
  * ```
  *
- * Both are server-only. There is no client-side counterpart, by design.
+ * Hepsi `server-only`. İstemci tarafında karşılığı yok ve olmayacak: token
+ * tarayıcı JavaScript'ine hiç inmez.
  */
 
-/** Matches `REFRESH_SKEW_MS` in `config.ts`: don't hand out a token about to die mid-call. */
+export const SESSION_COOKIE = buildSessionCookie(env.ADMIN_PUBLIC_ORIGIN);
+
+export const SESSION_COOKIE_NAME = SESSION_COOKIE.name;
+
+/**
+ * Erişim token'ını ölmeden bu kadar önce yenile.
+ *
+ * Backend'de erişim token'ı 15 dakika yaşıyor (`StaffAuthProperties`). Altmış
+ * saniyelik pay, bir çağrının başında alınan token'ın çağrı bitmeden ölmesini
+ * engeller.
+ */
 const REFRESH_SKEW_MS = 60_000;
 
-export async function getStaffSession(): Promise<Session | null> {
-  return auth();
+/** Çerezdeki oturum, ya da `null`. Hiçbir zaman fırlatmaz. */
+export async function readStaffSession(): Promise<StaffSession | null> {
+  const store = await cookies();
+  return decodeStaffSession(store.get(SESSION_COOKIE_NAME)?.value);
 }
 
 /**
- * The session, or a redirect. For pages that have nothing to render without an
- * identity.
- *
- * `src/proxy.ts` already turns anonymous requests away, so this is the second
- * lock rather than the first — it catches a route left out of the matcher, and
- * a session that died in the gap between the gate and the render. It redirects
- * instead of throwing so neither case can surface as a 500.
+ * Oturumu çereze yaz. Yalnız Server Action ve Route Handler içinde çalışır —
+ * Next.js bir Server Component'in çerez yazmasına izin vermez, çünkü render'ın
+ * yazacağı bir yanıt yoktur.
  */
-export async function requireStaffSession(): Promise<Session> {
-  const session = await getStaffSession();
+export async function writeStaffSession(session: StaffSession): Promise<void> {
+  const store = await cookies();
+  store.set(SESSION_COOKIE_NAME, encodeStaffSession(session), {
+    ...SESSION_COOKIE.options,
+    /**
+     * Çerezin ömrü yenileme token'ınınkine bağlanır: o öldükten sonra çerez
+     * hiçbir işe yaramaz, tarayıcıda durması yalnız her isteği bir yenileme
+     * denemesine çevirir.
+     */
+    expires: new Date(session.refreshExpiresAt),
+  });
+}
+
+/** Çerezi düşür. Aynı kısıt: Server Action ya da Route Handler. */
+export async function clearStaffSession(): Promise<void> {
+  const store = await cookies();
+  store.set(SESSION_COOKIE_NAME, "", { ...SESSION_COOKIE.options, maxAge: 0 });
+}
+
+export function isAccessTokenFresh(session: StaffSession, now: number = Date.now()): boolean {
+  return session.accessExpiresAt - REFRESH_SKEW_MS > now;
+}
+
+/**
+ * Oturum, ya da yönlendirme. Kimlik olmadan gösterecek bir şeyi olmayan
+ * sayfalar için.
+ *
+ * `src/proxy.ts` anonim isteği zaten geri çeviriyor, yani bu ikinci kilit:
+ * matcher'ın dışında kalmış bir rotayı ve kapı ile render arasındaki boşlukta
+ * ölmüş bir oturumu yakalar. Fırlatmak yerine yönlendirir ki ikisi de 500
+ * olarak görünmesin.
+ */
+export async function requireStaffSession(): Promise<StaffSession> {
+  const session = await readStaffSession();
 
   if (session === null) {
     redirect("/giris");
   }
 
-  if (session.authError !== null) {
-    redirect(`/giris/hata?kod=${encodeURIComponent(session.authError)}`);
+  if (session.mustChangePassword) {
+    redirect("/giris/parola");
   }
 
   return session;
 }
 
 /**
- * Read the JWT out of the session cookie.
+ * Şu anda geçerli olan bir erişim token'ı.
  *
- * `auth()` deliberately cannot return the access token — the `session` callback
- * strips it — so this decrypts the cookie itself, with the same secret and the
- * same salt (the cookie name) Auth.js used to write it.
- *
- * The cookie is chunked when a Keycloak token set pushes it past 4 KB, which it
- * routinely does, so the chunks are rejoined first.
- */
-async function readStaffJwt(): Promise<JWT | null> {
-  const store = await cookies();
-  const value = joinSessionCookieChunks(store.getAll(), SESSION_COOKIE_NAME);
-
-  if (value === null) return null;
-
-  const payload = await decode({
-    token: value,
-    secret: env.AUTH_SECRET,
-    // Auth.js derives the encryption key from secret + salt, and uses the
-    // cookie name as the salt. Get this wrong and decryption simply returns
-    // null, with nothing to say why.
-    salt: SESSION_COOKIE_NAME,
-  });
-
-  return payload;
-}
-
-/**
- * An access token that is valid right now, for a server-side call to the Koala
- * backend.
- *
- * Refreshing here rather than only in the proxy is not belt-and-braces. Auth.js
- * can only write a rotated cookie from a response, and a Server Component has
- * no response to write to — so within a single request the render still sees
- * the pre-refresh cookie. `refreshAccessToken` de-duplicates by refresh token,
- * so this call joins the proxy's refresh instead of spending the same rotated
- * token a second time, which Keycloak would answer by revoking the session.
- *
- * @throws {StaffAuthError} — the code says which of the four things went wrong,
- * and callers need the difference: `SESSION_REQUIRED`/`SESSION_EXPIRED` mean
- * sign in again, `AUDIENCE_MISCONFIGURED` means the realm is wrong and the
- * person is fine, `KEYCLOAK_UNREACHABLE` means nothing will work until it is
- * back.
+ * @throws {StaffAuthError} — kod hangi şeyin bozulduğunu söyler ve çağıranlar
+ * farkı bilmek zorundadır: `SESSION_REQUIRED`/`SESSION_EXPIRED` "yeniden giriş
+ * yapın", `PASSWORD_CHANGE_REQUIRED` "önce parolanızı değiştirin",
+ * `BACKEND_UNREACHABLE` "Koala cevap vermiyor, sizinle ilgili değil".
  */
 export async function getKoalaAccessToken(): Promise<string> {
-  const token = await readStaffJwt();
+  const session = await readStaffSession();
 
-  if (token === null) {
+  if (session === null) {
     throw new StaffAuthError("SESSION_REQUIRED", "Oturum çerezi yok ya da çözülemedi.");
   }
 
-  if (token.authError === "AUDIENCE_MISCONFIGURED") {
+  /**
+   * Bayrak açıkken backend `/admin/**`'ın tamamını 403'le reddediyor, `/admin/me`
+   * dâhil. Token'ı yine de verirsek panel "personel kaydınız yok" diye yanlış
+   * bir cevap üretir; burada durup doğru sebebi söylemek, o yanlış cevabın
+   * önündeki tek şey.
+   */
+  if (session.mustChangePassword) {
     throw new StaffAuthError(
-      "AUDIENCE_MISCONFIGURED",
-      `Access token'ın audience değeri "${env.KOALA_API_AUDIENCE}" değil.`,
+      "PASSWORD_CHANGE_REQUIRED",
+      "Hesap ilk girişte parola değiştirme bayrağıyla işaretli.",
     );
   }
 
-  const fresh =
-    typeof token.accessToken === "string" &&
-    typeof token.accessTokenExpiresAt === "number" &&
-    token.accessTokenExpiresAt - REFRESH_SKEW_MS > Date.now();
-
-  if (fresh && typeof token.accessToken === "string") {
-    return assertAudience(token.accessToken);
+  if (isAccessTokenFresh(session)) {
+    return session.accessToken;
   }
 
-  if (typeof token.refreshToken !== "string" || token.refreshToken.length === 0) {
-    throw new StaffAuthError("SESSION_EXPIRED", "Yenilenebilecek bir refresh token yok.");
+  if (session.refreshExpiresAt <= Date.now()) {
+    throw new StaffAuthError("SESSION_EXPIRED", "Yenileme token'ının da ömrü dolmuş.");
   }
 
-  const outcome = await refreshAccessToken(token.refreshToken, token.idToken ?? null);
-
-  switch (outcome.status) {
-    case "refreshed":
-      return assertAudience(outcome.tokens.accessToken);
-    case "rejected":
-      throw new StaffAuthError("SESSION_EXPIRED", `Yenileme reddedildi: ${outcome.reason}`);
-    case "unreachable":
-      throw new StaffAuthError("KEYCLOAK_UNREACHABLE", `Keycloak yanıt vermedi: ${outcome.reason}`);
+  let refreshed: StaffSession;
+  try {
+    refreshed = await refreshStaffSession(session.refreshToken);
+  } catch (error) {
+    throw toAuthError(error);
   }
+
+  await persistIfWritable(refreshed);
+  return refreshed.accessToken;
 }
 
 /**
- * Last gate before a token leaves for the backend.
+ * Yenilenen oturumu yazmayı dener ve yazamazsa sessizce geçer.
  *
- * The `jwt` callback already checks this, but that check runs when the token is
- * minted and this one runs when it is spent — and a token can reach here from a
- * cookie written before the mapper was switched off. Without it the backend
- * answers 401 and the panel has no way left to tell a configuration problem
- * from a permission problem.
+ * Bunun sessiz kalabilmesinin sebebi tek bir olgu: **personel yenileme
+ * token'ı tek kullanımlık değil.** Backend aynı `tokenVersion` ile yeni token
+ * üretir, eskisini geçersiz kılmaz. Yazamamanın bedeli, bir sonraki istekte
+ * bir kez daha yenilemek; oturum kaybı değil.
+ *
+ * Çerezi kalıcı olarak yazan yer `src/proxy.ts`: her istek oradan geçer ve
+ * yazacak bir yanıtı vardır.
  */
-function assertAudience(accessToken: string): string {
-  if (!hasAudience(accessToken, env.KOALA_API_AUDIENCE)) {
-    throw new StaffAuthError(
-      "AUDIENCE_MISCONFIGURED",
-      `Access token'ın audience değeri "${env.KOALA_API_AUDIENCE}" değil.`,
-    );
+async function persistIfWritable(session: StaffSession): Promise<void> {
+  try {
+    await writeStaffSession(session);
+  } catch {
+    // Server Component render'ı. Bkz. yukarıdaki açıklama.
   }
-
-  return accessToken;
 }
 
-/**
- * The id token, for RP-initiated logout only.
- *
- * Keycloak needs `id_token_hint` to know *which* SSO session to end. Without it
- * the logout endpoint shows a confirmation screen or does nothing, the local
- * cookie disappears anyway, and the next sign-in comes back without asking for
- * a password — a logout that looks like it worked and did not.
- */
-export async function getIdTokenHint(): Promise<string | null> {
-  const token = await readStaffJwt();
-  return typeof token?.idToken === "string" ? token.idToken : null;
+function toAuthError(error: unknown): StaffAuthError {
+  if (isKoalaApiError(error)) {
+    if (error.isAuthFailure || error.status === 401) {
+      return new StaffAuthError("SESSION_EXPIRED", `Yenileme reddedildi: ${error.message}`, {
+        cause: error,
+      });
+    }
+
+    // `status === 0` taşıma hatası (DNS, bağlantı reddi, zaman aşımı) demek.
+    if (error.status === 0 || error.status >= 500) {
+      return new StaffAuthError("BACKEND_UNREACHABLE", `Koala yanıt vermedi: ${error.message}`, {
+        cause: error,
+      });
+    }
+
+    return new StaffAuthError("UNKNOWN", `Yenileme başarısız: ${error.message}`, { cause: error });
+  }
+
+  return new StaffAuthError(
+    "UNKNOWN",
+    error instanceof Error ? error.message : "Yenileme beklenmedik şekilde başarısız oldu.",
+    { cause: error },
+  );
 }
