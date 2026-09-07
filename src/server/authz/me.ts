@@ -36,8 +36,10 @@ import { isPermission, type Permission } from "./permissions";
  * since ADR-0014 the backend answers the same way while an account carries the
  * "change your password first" flag, because `StaffPermissionAuthorizationManager`
  * denies every `@RequiresPermission` endpoint — this one included — until it is
- * cleared. `src/server/auth/session.ts` therefore refuses to hand out a token in
- * that state, so the panel never has to guess which of the two it is looking at.
+ * cleared. `src/server/auth/session.ts` stops the common case a request earlier,
+ * but only from an unsigned cookie, so a 403 can still arrive here for either
+ * reason; `staff-context.ts` asks the backend which one it is rather than
+ * assuming.
  */
 
 export const ADMIN_ME_PATH = "/admin/me";

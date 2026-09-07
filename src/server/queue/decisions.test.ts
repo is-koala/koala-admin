@@ -19,6 +19,12 @@ const getKoalaAccessToken = vi.fn<() => Promise<string>>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
+  /**
+   * Bu dosyadaki her 403 gerçekten "personel kaydı çözülemedi" demek, ve
+   * `staff-context.ts` bunu backend'e sorarak doğruluyor. Sabit `false`,
+   * o sorunun burada verilen cevabı.
+   */
+  backendSaysPasswordMustChange: () => Promise.resolve(false),
 }));
 
 const { KoalaApiError } = await import("@/server/api/errors");

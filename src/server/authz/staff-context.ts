@@ -4,7 +4,7 @@ import { cache } from "react";
 
 import { isKoalaApiError } from "@/server/api/errors";
 import { isStaffAuthError, type AuthFailureCode } from "@/server/auth/errors";
-import { getKoalaAccessToken } from "@/server/auth/session";
+import { backendSaysPasswordMustChange, getKoalaAccessToken } from "@/server/auth/session";
 
 import { fetchAdminMe, type StaffIdentity } from "./me";
 import type { Permission } from "./permissions";
@@ -98,7 +98,7 @@ export async function loadStaffContext(): Promise<StaffContext> {
     const accessToken = await getKoalaAccessToken();
     return granted(await fetchAdminMe(accessToken));
   } catch (error) {
-    return denied(toFailure(error));
+    return denied(await toFailure(error));
   }
 }
 
@@ -125,7 +125,7 @@ function denied(failure: StaffContextFailure): StaffContext {
   };
 }
 
-function toFailure(error: unknown): StaffContextFailure {
+async function toFailure(error: unknown): Promise<StaffContextFailure> {
   if (isStaffAuthError(error)) {
     return {
       kind: "SESSION",
@@ -138,17 +138,37 @@ function toFailure(error: unknown): StaffContextFailure {
 
   if (isKoalaApiError(error)) {
     /**
-     * 403 from `/admin/me` is the one failure that is about the *person* rather
-     * than the machinery: the token was accepted and the account still resolved
-     * to nothing usable — no staff row, or an account switched off. It gets its
-     * own kind and its own screen so it is never reported as "sign in again".
+     * 403 from `/admin/me` has **two** causes and they need opposite screens.
      *
-     * The third cause — the "change your password first" flag, which the backend
-     * also answers with 403 — never reaches here: `getKoalaAccessToken()` refuses
-     * to mint a token in that state and throws `PASSWORD_CHANGE_REQUIRED`
-     * instead, so the person is sent to the one screen that works.
+     * One is about the person: the token was accepted and the account still
+     * resolved to nothing usable — no staff row, or an account switched off.
+     * Nobody but an administrator can fix that.
+     *
+     * The other is the "change your password first" flag, which
+     * `StaffPermissionAuthorizationManager` answers with the same 403 on every
+     * `@RequiresPermission` endpoint, this one included. That one the person
+     * fixes themselves, in one step, on a screen that already exists — and
+     * being told "the backend gave you no staff record" instead would send
+     * someone who is two clicks from working to ask a colleague for roles they
+     * already hold.
+     *
+     * `getKoalaAccessToken()` catches the second cause first *when it can*, but
+     * it reads the flag off an unsigned cookie: a `false` written there by hand
+     * walks straight past it. So the backend gets asked, and only on this path —
+     * the person is already looking at an error screen, and an extra round trip
+     * buys the difference between the right screen and the wrong one.
      */
     if (error.status === 403 || error.errorCategory === "ACCESS_DENIED") {
+      if (await backendSaysPasswordMustChange()) {
+        return {
+          kind: "SESSION",
+          authCode: "PASSWORD_CHANGE_REQUIRED",
+          status: error.status,
+          requestId: error.requestId,
+          detail: `Backend /admin/me'yi reddetti ve parola değiştirme bayrağını açık bildirdi: ${error.message}`,
+        };
+      }
+
       return {
         kind: "NO_STAFF_RECORD",
         authCode: null,

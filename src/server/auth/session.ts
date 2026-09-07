@@ -121,8 +121,13 @@ export async function getKoalaAccessToken(): Promise<string> {
   /**
    * Bayrak açıkken backend `/admin/**`'ın tamamını 403'le reddediyor, `/admin/me`
    * dâhil. Token'ı yine de verirsek panel "personel kaydınız yok" diye yanlış
-   * bir cevap üretir; burada durup doğru sebebi söylemek, o yanlış cevabın
-   * önündeki tek şey.
+   * bir cevap üretir; burada durmak o yanlış cevabı bir istek önce keser.
+   *
+   * Ama bu kontrol **çerezdeki** bayrağa bakıyor ve çerez imzasız: `false`
+   * yazan biri buradan geçer. Bu yüzden tek başına yeterli sayılmıyor —
+   * aşağıdaki yenileme yanıtı ve {@link backendSaysPasswordMustChange} aynı
+   * soruyu backend'e soruyor. Buradaki kontrolün işi doğruyu **garanti etmek**
+   * değil, doğru olduğu hâlde bir round trip'i harcamamak.
    */
   if (session.mustChangePassword) {
     throw new StaffAuthError(
@@ -147,7 +152,59 @@ export async function getKoalaAccessToken(): Promise<string> {
   }
 
   await persistIfWritable(refreshed);
+
+  /**
+   * Bayrak yukarıda çerezden okundu; burada **backend'den** geliyor. İkisi aynı
+   * olmak zorunda değil: çerez imzasız, yani `true`'yu `false` yapmak elle
+   * yapılabilir bir iş, ve o hâlde yukarıdaki kontrol sessizce geçilir. Bu
+   * satır o kestirmeyi kapatan yer — bayrağın tek kaynağı token yanıtı, ve
+   * yanıt her elimize geçtiğinde ona uyuyoruz.
+   */
+  if (refreshed.mustChangePassword) {
+    throw new StaffAuthError(
+      "PASSWORD_CHANGE_REQUIRED",
+      "Backend yenileme yanıtında parola değiştirme bayrağını açık bildirdi.",
+    );
+  }
+
   return refreshed.accessToken;
+}
+
+/**
+ * Backend'in bayrak hakkındaki **şu anki** cevabı: `true`, `false`, ya da
+ * öğrenilemediyse `null`.
+ *
+ * Neden bir yenileme çağrısı: `mustChangePassword`'ün tek kaynağı
+ * `StaffTokenDto`, yani giriş ve yenileme yanıtları. Üstelik
+ * `POST /admin/auth/refresh` `permitAll` — bayrak açıkken `/admin/**`'ın geri
+ * kalanı 403 dönerken bile cevap veren uçlardan biri. Ve yenileme token'ı tek
+ * kullanımlık olmadığı için sorup öğrenmenin bedeli bir round trip'ten ibaret.
+ *
+ * Çağrılacağı tek yer `/admin/me`'nin 403'ü: o 403'ün iki sebebi var —
+ * personel kaydının çözülememesi ve bu bayrak — ve panel ikisine **farklı**
+ * ekran gösteriyor. Çerezdeki bayrak `false` diyorsa (elle yazılmış olabilir)
+ * ayırt etmenin başka yolu yok.
+ *
+ * Öğrendiğini çereze de yazıyor: bir sonraki isteğin `src/proxy.ts`'i kişiyi
+ * doğrudan parola ekranına götürsün diye. Yazamamak zararsız — bkz.
+ * {@link persistIfWritable}.
+ */
+export async function backendSaysPasswordMustChange(): Promise<boolean | null> {
+  const session = await readStaffSession();
+
+  if (session === null || session.refreshExpiresAt <= Date.now()) {
+    return null;
+  }
+
+  try {
+    const refreshed = await refreshStaffSession(session.refreshToken);
+    await persistIfWritable(refreshed);
+    return refreshed.mustChangePassword;
+  } catch {
+    // Reddedildi ya da ulaşılamadı. İkisi de "bilmiyorum" demek, ve bilmediğini
+    // "hayır" diye okumak yanlış teşhisin ta kendisi olurdu.
+    return null;
+  }
 }
 
 /**
