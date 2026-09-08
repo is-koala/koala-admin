@@ -150,6 +150,39 @@ export const ROUTES = [
     nav: { label: "Uyuşmazlıklar", order: 40 },
   },
   {
+    /**
+     * koala-admin#9, rol→izin yarısı. `role.manage`, ve bu izin tek başına
+     * `/admin/roles`'un yedi ucunun tamamını açıyor — okumalar dâhil, çünkü
+     * backend'de `role.read` diye bir izin yok.
+     *
+     * Rol *üyeliği* burada değil: o `staff.manage`'e bağlı ve `/staff`'ta.
+     * İkisini tek ekranda toplamak, bir kişiye rol grafiğini gösterirken
+     * personel kayıtlarını da göstermek olurdu — oysa backend bunları ayrı
+     * izinlere bağlamış.
+     */
+    path: "/roles",
+    title: "Roller ve izinler",
+    access: "permission",
+    permission: "role.manage",
+    nav: { label: "Roller ve izinler", order: 70 },
+  },
+  {
+    /**
+     * koala-admin#9, personel yarısı — ADR-0014 ile dış yönetim konsolundan
+     * devralınan iş.
+     *
+     * Kapı `staff.read`, `staff.manage` değil: sayfanın gösterdiği şey
+     * `GET /admin/staff` ve backend onu `staff.read`'e bağlamış. Yazma formları
+     * sayfanın içinde ayrıca `staff.manage`'e bakıyor, ve asıl kapı orada
+     * değil — `runAuthorizationChange` her gönderimde izni yeniden çözüyor.
+     */
+    path: "/staff",
+    title: "Personel",
+    access: "permission",
+    permission: "staff.read",
+    nav: { label: "Personel", order: 80 },
+  },
+  {
     path: "/audit-log",
     title: "Denetim kaydı",
     access: "permission",

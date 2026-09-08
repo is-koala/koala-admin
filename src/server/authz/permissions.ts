@@ -16,11 +16,18 @@
  *     staleness the ADR exists to avoid, so the catalogue lists permissions and
  *     says nothing about who holds them.
  *
- * Source of truth: koala-backend#14's `/admin/**` mapping test, which forces
- * every admin endpoint to name one of these. The issue body for koala-admin#5
- * lists twelve; #14 added `content.moderate`, `badge.manage` and
- * `settings.manage` (three surfaces matched none of the twelve) and
- * `user.role.manage` for the marketplace role-grant endpoints. Sixteen.
+ * Source of truth: `entities/StaffPermission.java` in koala-backend, which is
+ * also what koala-backend#14's `/admin/**` mapping test holds every admin
+ * endpoint to. The issue body for koala-admin#5 listed twelve; #14 added
+ * `content.moderate`, `badge.manage`, `settings.manage` and `user.role.manage`.
+ * Sonraki dalgalar üç tane daha ekledi ve panel bunları bilmiyordu:
+ * `user.deletion.manage`, `bank.account.verify` ve `staff.read`. Bugün ondokuz.
+ *
+ * Eksik kalan bir ad, "izin verilmiş gibi görünmek" değil, **adlandırılamamak**
+ * demekti: `partitionPermissions` onu `unknownPermissions`'a atıyor, yani o izne
+ * bir kapı kurulamıyor ve bir rol detayında etiketi yazılamıyordu. `staff.read`
+ * tam olarak bunun bedeliydi — `GET /admin/staff` o izne bağlı, dolayısıyla
+ * personel ekranı ondan önce hiç kurulamazdı.
  */
 
 /** `sensitivity` on the backend's permission rows — what an audit reviewer cares about. */
@@ -66,6 +73,12 @@ const CATALOGUE = [
     label: "Kullanıcı kimlik bilgilerini görüntüle",
   },
   {
+    name: "user.deletion.manage",
+    mutating: true,
+    sensitivity: "PERSONAL_DATA",
+    label: "Hesap silme taleplerini yönet",
+  },
+  {
     name: "user.role.manage",
     mutating: true,
     sensitivity: "NORMAL",
@@ -106,6 +119,18 @@ const CATALOGUE = [
     mutating: true,
     sensitivity: "FINANCIAL",
     label: "Ödeme iade et",
+  },
+  {
+    name: "bank.account.verify",
+    mutating: true,
+    sensitivity: "FINANCIAL",
+    label: "Banka hesaplarını doğrula",
+  },
+  {
+    name: "staff.read",
+    mutating: false,
+    sensitivity: "PERSONAL_DATA",
+    label: "Personel kayıtlarını görüntüle",
   },
   {
     name: "staff.manage",

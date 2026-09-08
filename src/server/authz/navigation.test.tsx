@@ -159,10 +159,22 @@ describe("the menu is exactly what the backend permits", () => {
     expect(html).toContain("/giris/hata?kod=BACKEND_UNREACHABLE");
   });
 
+  it("draws the two screens koala-admin#9 gave role.manage and staff.read", async () => {
+    // Bu iki izin dilim 1'de katalogdaydı ve karşılığında hiçbir ekran yoktu.
+    // koala-admin#9 ekranları getirdi; menü de bunu göstermek zorunda.
+    stubMe(["role.manage", "staff.read"], ["OWNER"]);
+
+    const html = await shell();
+
+    expect(menuLinks(html)).toEqual(["/roles", "/staff"]);
+  });
+
   it("draws no menu when the backend grants permissions this panel has no screen for", async () => {
-    // `staff.manage` and `role.manage` are in the catalogue and have no screen
-    // in slice 1. Holding them must not conjure a menu entry.
-    stubMe(["staff.manage", "role.manage", "payout.release"], ["OWNER"]);
+    // `payout.release` ve `staff.manage` katalogda ve hiçbir menü girdisinin
+    // kuralı değil: para hareketi uyuşmazlık ekranından yapılıyor, personel
+    // *yazma* izni ise `/staff`'ı açmıyor — o ekranın kuralı `staff.read`.
+    // İkisini taşımak tek başına bir kapı açmamalı.
+    stubMe(["staff.manage", "payout.release"], ["OWNER"]);
 
     const html = await shell();
 

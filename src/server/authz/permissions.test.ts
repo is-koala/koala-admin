@@ -3,16 +3,18 @@ import { describe, expect, it } from "vitest";
 import { PERMISSIONS, PERMISSION_SPECS, isPermission, permissionLabel } from "./permissions";
 
 /**
- * The catalogue is a contract with koala-backend#14, so these tests read like a
- * transcription of it rather than like unit tests. That is deliberate: if the
- * backend adds a permission and the panel does not, a gate somewhere is named
- * after a permission nobody can hold.
+ * The catalogue is a contract with koala-backend's `StaffPermission` enum, so
+ * these tests read like a transcription of it rather than like unit tests. That
+ * is deliberate: if the backend adds a permission and the panel does not, the
+ * panel cannot name it — it cannot gate on it, and it cannot label it on the
+ * role screen. `staff.read` was exactly that hole until koala-admin#9.
  */
 
-/** koala-backend#14, verbatim. */
+/** `entities/StaffPermission.java`, verbatim, sorted. */
 const EXPECTED = [
   "audit.read",
   "badge.manage",
+  "bank.account.verify",
   "category.manage",
   "company.approve",
   "content.moderate",
@@ -24,13 +26,15 @@ const EXPECTED = [
   "role.manage",
   "settings.manage",
   "staff.manage",
+  "staff.read",
+  "user.deletion.manage",
   "user.read",
   "user.read_pii",
   "user.role.manage",
 ];
 
 describe("the permission catalogue", () => {
-  it("names the sixteen permissions koala-backend#14 defines, and no others", () => {
+  it("names the nineteen permissions koala-backend defines, and no others", () => {
     expect([...PERMISSIONS].sort()).toEqual(EXPECTED);
   });
 
@@ -66,6 +70,21 @@ describe("the permission catalogue", () => {
       mutating: true,
       sensitivity: "PERSONAL_DATA",
     });
+    // The read/write split on the staff surface: `GET /admin/staff` is gated by
+    // `staff.read` and every write by `staff.manage`, so a panel that knew only
+    // the second one could not draw the list at all.
+    expect(byName.get("staff.read")).toMatchObject({
+      mutating: false,
+      sensitivity: "PERSONAL_DATA",
+    });
+    expect(byName.get("user.deletion.manage")).toMatchObject({
+      mutating: true,
+      sensitivity: "PERSONAL_DATA",
+    });
+    expect(byName.get("bank.account.verify")).toMatchObject({
+      mutating: true,
+      sensitivity: "FINANCIAL",
+    });
 
     // `content.moderate` exists precisely so image removal is *not* reachable
     // through `dispute.resolve` — see koala-admin#5's second comment and
@@ -83,7 +102,7 @@ describe("the permission catalogue", () => {
   });
 
   it("refuses names it does not know", () => {
-    // A backend that grows a seventeenth permission must not be able to widen
+    // A backend that grows a twentieth permission must not be able to widen
     // the panel's vocabulary by simply naming it in a response.
     expect(isPermission("category.manage")).toBe(true);
     expect(isPermission("category.mange")).toBe(false);
