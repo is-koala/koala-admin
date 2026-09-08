@@ -24,7 +24,7 @@ env:
 jobs:
   verify:
     name: lint · typecheck · test · build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
 
     steps:
@@ -54,7 +54,7 @@ jobs:
 
   server-only-guard:
     name: server-only boundary holds
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
 
     steps:
