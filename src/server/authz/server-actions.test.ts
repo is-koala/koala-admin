@@ -46,14 +46,16 @@ const SRC_DIR = fileURLToPath(new URL("../..", import.meta.url));
 /**
  * Bir eylemin izni yeniden çözmek için geçebileceği kapılar.
  *
- * İkisi de aynı şeyi yapıyor — `getStaffContext()`'i çağırıp cevaba göre
+ * Üçü de aynı şeyi yapıyor — `getStaffContext()`'i çağırıp cevaba göre
  * reddediyor — ama farklı biçimde cevap veriyorlar: `guardDecision` bir kuyruk
  * kararı için hazır `DecisionState`, `runEscrowOperation` para hareketinin
- * tamamı. Liste burada duruyor ki üçüncü bir kapı eklemek bir diff olsun.
+ * tamamı, `runAuthorizationChange` rol grafiğine ve personel kayıtlarına yapılan
+ * her yazım. Liste burada duruyor ki dördüncü bir kapı eklemek bir diff olsun.
  */
 const ACTION_GATES: Record<string, string> = {
   "guardDecision(": "src/server/queue/decisions.ts",
   "runEscrowOperation(": "src/server/escrow/operations.ts",
+  "runAuthorizationChange(": "src/server/authz/administration.ts",
 };
 
 /**
