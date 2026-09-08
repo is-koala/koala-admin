@@ -6,6 +6,7 @@ import {
   type AuthorizationChangeOutcome,
   type AuthorizationChangeStatus,
 } from "@/lib/authorization-change";
+import type { RoleCode, RoleId } from "@/lib/role-identity";
 import {
   STAFF_PASSWORD_MAX_BYTES,
   STAFF_PASSWORD_MIN_LENGTH,
@@ -56,38 +57,48 @@ import { getStaffContext } from "./staff-context";
  * ## Görev ayrılığı burada **yok**, ve bu bilinçli
  *
  * ADR-0014 §Rol grafiği'nin kuralını backend çalışma anında uygulamıyor — bkz.
- * `ROLE_GRAPH_BACKEND_GAPS`. Panelin burada bir kontrol koyması, var olmayan
- * bir kuralı varmış gibi göstermek olurdu: aynı yazım `curl` ile geçerdi ve
- * ekran onu engellediğini sanırdı. Teşhis ekranda, `src/lib/role-graph.ts`
+ * `ROLE_GRAPH_BACKEND_GAPS` ve `STAFF_BACKEND_GAPS`, eksik
+ * `is-koala/koala-backend#133`. Kuralı bozan **iki** yazım var ve ikisi de
+ * burada kontrolsüz geçiyor: bir rolün iki dalı kapsaması
+ * (`ROLE_INCLUDE_ADD`) ve bir kişinin iki dalın rollerini birden taşıması
+ * (`STAFF_ROLE_GRANT`). Panelin burada bir kontrol koyması, var olmayan bir
+ * kuralı varmış gibi göstermek olurdu: aynı yazım `curl` ile geçerdi ve ekran
+ * onu engellediğini sanırdı. Teşhis ekranda, `src/lib/role-graph.ts`
  * üzerinden; kapıda değil.
  */
 
+/**
+ * Rol kimliği ile rol kodu tip düzeyinde ayrı (`src/lib/role-identity.ts`).
+ *
+ * Aşağıdaki `STAFF_ROLE_NOT_FOUND` açıklaması karışıklığı zaten anlatıyordu;
+ * dördü de `string` olduğu sürece anlatmak dışında bir şey yapamıyordu.
+ */
 export type AuthorizationChange =
   | {
       readonly kind: "ROLE_PERMISSION_GRANT";
-      readonly roleId: string;
-      readonly roleCode: string;
+      readonly roleId: RoleId;
+      readonly roleCode: RoleCode;
       readonly permission: string;
     }
   | {
       readonly kind: "ROLE_PERMISSION_REVOKE";
-      readonly roleId: string;
-      readonly roleCode: string;
+      readonly roleId: RoleId;
+      readonly roleCode: RoleCode;
       readonly permission: string;
     }
   | {
       readonly kind: "ROLE_INCLUDE_ADD";
-      readonly roleId: string;
-      readonly roleCode: string;
-      readonly includedRoleId: string;
-      readonly includedRoleCode: string;
+      readonly roleId: RoleId;
+      readonly roleCode: RoleCode;
+      readonly includedRoleId: RoleId;
+      readonly includedRoleCode: RoleCode;
     }
   | {
       readonly kind: "ROLE_INCLUDE_REMOVE";
-      readonly roleId: string;
-      readonly roleCode: string;
-      readonly includedRoleId: string;
-      readonly includedRoleCode: string;
+      readonly roleId: RoleId;
+      readonly roleCode: RoleCode;
+      readonly includedRoleId: RoleId;
+      readonly includedRoleCode: RoleCode;
     }
   | {
       readonly kind: "STAFF_CREATE";
@@ -105,13 +116,13 @@ export type AuthorizationChange =
       readonly kind: "STAFF_ROLE_GRANT";
       readonly staffId: string;
       readonly staffLabel: string;
-      readonly roleCode: string;
+      readonly roleCode: RoleCode;
     }
   | {
       readonly kind: "STAFF_ROLE_REVOKE";
       readonly staffId: string;
       readonly staffLabel: string;
-      readonly roleCode: string;
+      readonly roleCode: RoleCode;
     }
   | {
       readonly kind: "STAFF_PASSWORD_RESET";
@@ -171,6 +182,17 @@ export const AUDIT_ACTION_FOR: Record<AuthorizationChangeKind, string> = {
 export type { AuthorizationChangeAction, AuthorizationChangeOutcome, AuthorizationChangeStatus };
 export { IDLE_AUTHORIZATION_OUTCOME };
 
+/**
+ * Kapsama seçiminin **formdaki** adı.
+ *
+ * Backend kenarı `includedRoleId` diye adlandırıyor, formdaki tek kontrolün adı
+ * ise `includedRole` — çünkü o kontrol `uuid:KOD` çiftini taşıyor. Mesajın
+ * altına asılacağı kontrol bu, o yüzden panelin kendi reddi de backend'in
+ * doğrulama hatası da bu ada çevriliyor; `permissionKnown` → `permission`
+ * eşlemesiyle aynı sebep.
+ */
+const INCLUDED_ROLE_FIELD = "includedRole";
+
 function blocked(
   message: string,
   errorCode: string,
@@ -215,8 +237,16 @@ function validate(change: AuthorizationChange): AuthorizationChangeOutcome | nul
     case "ROLE_INCLUDE_ADD":
     case "ROLE_INCLUDE_REMOVE": {
       if (change.roleId.trim().length === 0) return missing("Rol kimliği");
+      /**
+       * Kimlik **ve** kod. Kimlik isteğe, kod cevabın cümlesine gidiyor ve
+       * yalnız kimliğe bakmak, bir yazımın "TRUST_LEAD artık  rolünü kapsıyor"
+       * diye bildirilmesi demekti — yapılan işin adı ekranda boş bir boşluk.
+       */
       if (change.includedRoleId.trim().length === 0) {
-        return missing("Kapsanacak rol", "includedRoleId");
+        return missing("Kapsanacak rol", INCLUDED_ROLE_FIELD);
+      }
+      if (change.includedRoleCode.trim().length === 0) {
+        return missing("Kapsanacak rolün kodu", INCLUDED_ROLE_FIELD);
       }
       return null;
     }
@@ -493,6 +523,9 @@ function fieldFor(error: {
 
   // `@AssertTrue public boolean isPermissionKnown()` alan adını getter'dan
   // türetiyor, yani tel üzerinde `permissionKnown` görünüyor; formdaki
-  // kontrolün adı `permission`.
-  return field === "permissionKnown" ? "permission" : field;
+  // kontrolün adı `permission`. `includedRoleId` de aynı durumda: formdaki
+  // kontrol `uuid:KOD` çiftini taşıdığı için `includedRole` adını taşıyor.
+  if (field === "permissionKnown") return "permission";
+  if (field === "includedRoleId") return INCLUDED_ROLE_FIELD;
+  return field;
 }

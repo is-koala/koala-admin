@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { asRoleCode } from "@/lib/role-identity";
+
 import { koalaApi, koalaRequestNoData } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
@@ -89,7 +91,8 @@ export const staffMemberSchema = z.object({
   /** Kaba kuvvet kilidi. Geçmiş bir zaman "kilit düşmüş" demek. */
   lockedUntil: nullableInstant,
   createdAt: nullableInstant,
-  roles: z.array(z.string()),
+  /** Rol **kodları** — üyelik uçlarının adresi; UUID değil (`RoleCode`). */
+  roles: z.array(z.string().transform(asRoleCode)),
 });
 
 export type StaffMember = z.infer<typeof staffMemberSchema>;
@@ -267,6 +270,12 @@ export const STAFF_BACKEND_GAPS = [
     title: "Hesap kilidini elle açma ucu yok",
     detail:
       "lockedUntil listede görünüyor ama onu sıfırlayan ayrı bir uç yok. Kilidi düşüren tek yol parola sıfırlamak (resetPassword failedLoginAttempts ve lockedUntil'i temizler) ya da sürenin dolmasını beklemek.",
+  },
+  {
+    id: "no-membership-separation-enforcement",
+    title: "Görev ayrılığı üyelik yazımında da uygulanmıyor",
+    detail:
+      "ADR-0014 §Rol grafiği'nin 'OWNER dışında hiçbir rol hem trust hem finans dalını kapsayamaz' kuralı kişiler için de geçerli olmalı, ama StaffAuthorizationManager.grantRole yalnız 'sahip olmadığın izni veremezsin' kuralını denetliyor: bir kişiye hem TRUST_LEAD hem FINANCE_OFFICER vermek KABUL EDİLİR. Kuralın kâğıt üzerinde bozulmasının en kolay yolu bu — kimsenin rol grafiğine dokunması bile gerekmiyor. Eksik is-koala/koala-backend#133 olarak açıldı. Panel birleşimi ekranda teşhis olarak gösteriyor ve rol seçeneğini kapatmıyor: kapatsaydı aynı yazım curl ile geçerken ekran onu engellediğini sanırdı.",
   },
   {
     id: "roles-are-direct-only",

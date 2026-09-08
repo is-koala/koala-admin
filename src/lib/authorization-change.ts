@@ -11,6 +11,8 @@
  */
 
 export type AuthorizationChangeStatus =
+  /** Henüz gönderilmedi. Formun açıldığı andaki hâli. */
+  | "IDLE"
   /** Backend yaptı. */
   | "SUCCEEDED"
   /** Backend reddetti — 403, 409, 404, 400. Kendi mesajıyla görünür. */
@@ -42,12 +44,14 @@ export type AuthorizationChangeAction = (
 /**
  * Henüz hiçbir şey gönderilmemiş hâl.
  *
- * `status` `"BLOCKED"` ve `message` boş: form "hiçbir şey yapılmadı" ile
- * "panel reddetti" arasındaki farkı mesajın boşluğundan okuyor, çünkü dördüncü
- * bir durum eklemek her okuma yerinde bir dal daha demekti.
+ * Kendi durumu var. Eskiden `"BLOCKED"` + boş mesaj taşıyordu ve "hiçbir şey
+ * yapılmadı" ile "panel reddetti" farkı her okuma yerinde
+ * `state.message.length > 0` diye yeniden çıkarılıyordu: durumu okuyan her
+ * satır, mesajın boşluğunu da hatırlamak zorundaydı. Komşu `decision-state.ts`
+ * bunu bir `"idle"` durumuyla çözüyor ve kalıp ona uyduruldu.
  */
 export const IDLE_AUTHORIZATION_OUTCOME: AuthorizationChangeOutcome = {
-  status: "BLOCKED",
+  status: "IDLE",
   message: "",
   errorCode: null,
   requestId: null,

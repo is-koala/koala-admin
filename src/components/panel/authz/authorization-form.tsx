@@ -9,6 +9,7 @@ import {
   type AuthorizationChangeAction,
   type AuthorizationChangeOutcome,
 } from "@/lib/authorization-change";
+import type { RoleCode, RoleId } from "@/lib/role-identity";
 
 /**
  * Rol grafiğine ya da bir personel kaydına yapılan tek bir yazım, form olarak.
@@ -57,15 +58,39 @@ export interface AuthorizationField {
   readonly required?: boolean;
   readonly autoComplete?: string;
   readonly minLength?: number;
-  readonly placeholder?: string;
   /** `select` için. İlk seçilebilir seçenek varsayılan olur. */
   readonly options?: readonly AuthorizationFieldOption[];
+}
+
+/**
+ * Formun taşıdığı gizli girdiler — adı adına, tipi tipine.
+ *
+ * `Record<string, string>` idi ve bu, bu ekranın en pahalı sessiz hatasına
+ * kapı açıyordu: `{ roleId: role.code, roleCode: role.id }` yazmak hem
+ * `tsc`'den hem testlerin tamamından geçiyor, sonucu ancak backend'de
+ * gizemli bir 404 olarak görünüyordu. `RoleId` ile `RoleCode` markalı olduğu
+ * için o satır artık derlenmiyor.
+ *
+ * Alanların hepsi isteğe bağlı: hangi yazımın hangi alanı istediğini
+ * `AuthorizationChange` birleşimi zaten söylüyor ve eksiği
+ * `runAuthorizationChange` gönderimden önce reddediyor. Buradaki sözleşme
+ * "hangi alan zorunlu" değil, **"bu adın değeri hangi tip"**.
+ */
+export interface AuthorizationHiddenFields {
+  readonly roleId?: RoleId;
+  readonly roleCode?: RoleCode;
+  readonly includedRoleId?: RoleId;
+  readonly includedRoleCode?: RoleCode;
+  readonly permission?: string;
+  readonly staffId?: string;
+  readonly staffLabel?: string;
+  readonly active?: string;
 }
 
 export interface AuthorizationFormProps {
   action: AuthorizationChangeAction;
   /** Değiştirilen kaydın kimliği; gizli girdi olarak çizilir. */
-  hiddenFields: Readonly<Record<string, string>>;
+  hiddenFields: AuthorizationHiddenFields;
   submitLabel: string;
   /** Ne olacağı, gelecek zamanla, tek cümle. */
   consequence: ReactNode;
@@ -187,7 +212,6 @@ export function AuthorizationForm({
                 required={field.required}
                 minLength={field.minLength}
                 autoComplete={field.autoComplete}
-                placeholder={field.placeholder}
                 aria-describedby={describedBy}
                 aria-invalid={invalid}
               />
@@ -236,12 +260,10 @@ export function AuthorizationForm({
 
         {state.status === "SUCCEEDED" ? <Badge tone="success">Yapıldı</Badge> : null}
         {state.status === "REFUSED" ? <Badge tone="danger">Backend reddetti</Badge> : null}
-        {state.status === "BLOCKED" && state.message.length > 0 ? (
-          <Badge tone="warning">Gönderilmedi</Badge>
-        ) : null}
+        {state.status === "BLOCKED" ? <Badge tone="warning">Gönderilmedi</Badge> : null}
       </div>
 
-      {state.message.length === 0 ? null : (
+      {state.status === "IDLE" ? null : (
         <div
           role="status"
           className={cn(

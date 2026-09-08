@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
+import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { AuthorizationForm } from "@/components/panel/authz/authorization-form";
+import { SeparationBadge } from "@/components/panel/authz/separation";
 import {
   Badge,
   EmptyState,
@@ -14,17 +15,18 @@ import {
 } from "@/components/ui";
 import { EMPTY_VALUE, formatInteger } from "@/lib/format";
 import {
-  DUTY_BRANCH_LABELS,
   FINANCE_BRANCH_ROLES,
   TRUST_BRANCH_ROLES,
-  closureWithSelf,
+  closuresWithSelf,
   separationSentence,
   separationVerdict,
   separationVerdictAfterInclude,
   wouldCycle,
+  type RoleClosures,
   type RoleGraphNode,
   type SeparationVerdict,
 } from "@/lib/role-graph";
+import { roleOptionValue, type RoleCode } from "@/lib/role-identity";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import {
   ROLE_GRAPH_BACKEND_GAPS,
@@ -66,12 +68,15 @@ export const metadata: Metadata = { title: "Roller ve izinler" };
  *  3. **Etkili izin listesi backend'in kenarlarından türetiliyor, ve bu bir
  *     gösterim — yetkilendirme değil.** `GET /admin/roles` grafiğin tamamını
  *     tek cevapta veriyor; panel `StaffAuthorizationManager.graph()`'in kendi
- *     tanımını uyguluyor (kapanış üzerindeki doğrudan izinlerin birleşimi) ve
- *     `roles.test.tsx` bunu backend'in `effectivePermissions` cevabına karşı
- *     sabitliyor. Burada hesaplanan sayı kimseye bir kapı açmıyor: neye izin
- *     verileceğine hâlâ her istekte backend karar veriyor (ADR-0010, ADR-0014).
- *     Alternatif — rol başına `GET /admin/roles/{roleId}` — on rol için on
- *     istekti; gerekçe `src/server/api/staff-roles.ts`'te yazılı.
+ *     tanımını uyguluyor (kapanış üzerindeki doğrudan izinlerin birleşimi).
+ *     `roles.test.tsx` bunu `StaffRoleDetailDto`'nun `effectivePermissions` ve
+ *     `effectiveRoles` alanlarını taşıyan bir detay cevabına karşı ölçüyor:
+ *     panel o ucu **çağırmıyor** (test bunu istek sayısıyla da sabitliyor) ama
+ *     ürettiği listenin onunla aynı olması gerekiyor. Burada hesaplanan sayı
+ *     kimseye bir kapı açmıyor: neye izin verileceğine hâlâ her istekte backend
+ *     karar veriyor (ADR-0010, ADR-0014). Alternatif — rol başına
+ *     `GET /admin/roles/{roleId}` — on rol için on istekti; gerekçe
+ *     `src/server/api/staff-roles.ts`'te yazılı.
  *
  * ## Görev ayrılığı: gösteriliyor, uygulanmıyor
  *
@@ -139,6 +144,27 @@ async function RoleGraph() {
     includes: role.includes.map((included) => included.code),
   }));
 
+  /**
+   * Kapanışlar bir kez, sonra hiç.
+   *
+   * Aynı sorunun cevabı bu sayfada beş yerde lazım: tablodaki satır, rol
+   * detayı, etkili izin listesi, döngü kontrolü ve rozet. Hepsi bu haritadan
+   * okuyor — daha önce her biri grafiği yeniden geziyordu ve beş rol için bir
+   * render'da altmış bir kapanış hesaplanıyordu.
+   */
+  const closures = closuresWithSelf(graph);
+  const byCode = new Map(roles.map((role) => [role.code, role]));
+
+  const rows: RoleRow[] = roles.map((role) => {
+    const closure = closures.get(role.code) ?? [role.code];
+    return {
+      role,
+      closure,
+      verdict: separationVerdict(role.code, closure),
+      effective: effectivePermissionsIn(byCode, closure),
+    };
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <SeparationNotice />
@@ -161,94 +187,92 @@ async function RoleGraph() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {roles.map((role) => {
-                const closure = closureWithSelf(graph, role.code);
-                const verdict = separationVerdict(role.code, closure);
-                const effective = effectivePermissionsOf(role, roles);
-
-                return (
-                  <TableRow key={role.id}>
-                    <TableCell>
-                      <a href={`#rol-${role.code}`} className="text-brand hover:underline">
-                        {role.code}
-                      </a>
-                      <span className="block text-xs text-ink-muted">{role.name}</span>
-                    </TableCell>
-                    <TableCell>{formatInteger(role.permissions.length)}</TableCell>
-                    <TableCell>
-                      {role.includes.length === 0
-                        ? EMPTY_VALUE
-                        : role.includes.map((included) => included.code).join(", ")}
-                    </TableCell>
-                    <TableCell>{formatInteger(effective.length)}</TableCell>
-                    <TableCell>
-                      <SeparationBadge verdict={verdict} />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {rows.map(({ role, verdict, effective }) => (
+                <TableRow key={role.id}>
+                  <TableCell>
+                    <a href={`#rol-${role.code}`} className="text-brand hover:underline">
+                      {role.code}
+                    </a>
+                    <span className="block text-xs text-ink-muted">{role.name}</span>
+                  </TableCell>
+                  <TableCell>{formatInteger(role.permissions.length)}</TableCell>
+                  <TableCell>
+                    {role.includes.length === 0
+                      ? EMPTY_VALUE
+                      : role.includes.map((included) => included.code).join(", ")}
+                  </TableCell>
+                  <TableCell>{formatInteger(effective.length)}</TableCell>
+                  <TableCell>
+                    <SeparationBadge verdict={verdict} />
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
 
           <section className="flex flex-col gap-4">
             <h2 className="text-lg font-semibold">Rol detayları</h2>
-            {roles.map((role) => (
-              <RoleDetail key={role.id} role={role} roles={roles} graph={graph} catalog={catalog} />
+            {rows.map((row) => (
+              <RoleDetail
+                key={row.role.id}
+                row={row}
+                roles={roles}
+                graph={graph}
+                closures={closures}
+                catalog={catalog}
+              />
             ))}
           </section>
         </>
       )}
 
-      <AuditPointer />
+      <RoleAuditPointer />
       <BackendGaps />
     </div>
   );
 }
 
 /**
- * Etkili izinler — `GET /admin/roles`'un verdiği kenarlardan toplanmış.
+ * Bir rol satırı: rolün kendisi ve onun hakkında bir kez hesaplanmış her şey.
+ *
+ * Tablo ile detay bölümü aynı sayıları göstermek zorunda, ve ikisinin ayrı
+ * hesaplaması onların ayrışabileceği anlamına gelirdi.
+ */
+interface RoleRow {
+  readonly role: StaffRole;
+  /** Kapanış, rolün kendisi dâhil. */
+  readonly closure: readonly RoleCode[];
+  readonly verdict: SeparationVerdict;
+  readonly effective: readonly string[];
+}
+
+/**
+ * Etkili izinler — bir kapanış üzerindeki doğrudan izinlerin birleşimi.
  *
  * `StaffAuthorizationManager.graph()` ile **aynı** tanım: doğrudan olanlar ∪
  * ulaşılan her rolün doğrudan olanları. Backend bunu `effectivePermissions`
  * olarak hazır veriyor ama yalnız `GET /admin/roles/{roleId}`'de, yani rol
  * başına bir istekle; gerekçe `src/server/api/staff-roles.ts`'te, eşitliğin
- * kanıtı `roles.test.tsx`'te.
+ * ölçüsü `roles.test.tsx`'te — orada panelin türetmesi, o DTO'nun
+ * `effectivePermissions` alanını taşıyan bir cevapla karşılaştırılıyor.
+ *
+ * Kapanışı **çağıran** veriyor: grafiği burada yeniden gezmek, bir render'da
+ * aynı hesabı onlarca kez yapmak demekti.
  *
  * Bu bir yetkilendirme kararı değil, bir gösterim: kimseye bir kapı açmıyor,
  * yalnız operatörün az önce yaptığı değişikliğin sonucunu yazdırıyor. Yanlış
  * olsaydı sonucu yanlış bir sayı olurdu, fazladan bir yetki değil.
  */
-function effectivePermissionsOf(role: StaffRole, roles: readonly StaffRole[]): string[] {
-  const byCode = new Map(roles.map((entry) => [entry.code, entry]));
-  const graph: RoleGraphNode[] = roles.map((entry) => ({
-    code: entry.code,
-    includes: entry.includes.map((included) => included.code),
-  }));
-
+function effectivePermissionsIn(
+  byCode: ReadonlyMap<RoleCode, StaffRole>,
+  closure: readonly RoleCode[],
+): string[] {
   const permissions = new Set<string>();
-  for (const code of closureWithSelf(graph, role.code)) {
+  for (const code of closure) {
     for (const permission of byCode.get(code)?.permissions ?? []) permissions.add(permission);
   }
 
   return [...permissions].sort((a, b) => a.localeCompare(b, "tr"));
-}
-
-function SeparationBadge({ verdict }: { verdict: SeparationVerdict }) {
-  const only = verdict.branches.length === 1 ? verdict.branches[0] : undefined;
-
-  if (only !== undefined) {
-    return <Badge tone="neutral">Yalnız {DUTY_BRANCH_LABELS[only]}</Badge>;
-  }
-
-  if (verdict.branches.length === 0) {
-    return <Badge tone="neutral">Dal dışı</Badge>;
-  }
-
-  return verdict.exempt ? (
-    <Badge tone="brand">İki dal — yazılı istisna</Badge>
-  ) : (
-    <Badge tone="danger">İki dal — kural ihlali</Badge>
-  );
 }
 
 /**
@@ -287,20 +311,19 @@ function SeparationNotice() {
 }
 
 function RoleDetail({
-  role,
+  row: { role, closure, verdict, effective },
   roles,
   graph,
+  closures,
   catalog,
 }: {
-  role: StaffRole;
+  row: RoleRow;
   roles: readonly StaffRole[];
   graph: readonly RoleGraphNode[];
+  closures: RoleClosures;
   catalog: readonly StaffPermissionEntry[];
 }) {
-  const closure = closureWithSelf(graph, role.code);
-  const verdict = separationVerdict(role.code, closure);
   const sentence = separationSentence(role.code, verdict);
-  const effective = effectivePermissionsOf(role, roles);
   const inherited = effective.filter((permission) => !role.permissions.includes(permission));
 
   const grantable = catalog.filter((entry) => !role.permissions.includes(entry.code));
@@ -457,14 +480,19 @@ function RoleDetail({
                   type: "select",
                   required: true,
                   hint: "Döngü yaratacak roller seçilemez. İki dalı birleştirecek olanlar seçilebilir, çünkü backend onları kabul eder.",
-                  options: includable.map((candidate) => ({
-                    value: `${candidate.id}:${candidate.code}`,
-                    label: `${candidate.code} — ${candidate.name}`,
-                    disabledReason: wouldCycle(graph, role.code, candidate.code)
-                      ? "döngü yaratır, backend 409 döner"
-                      : undefined,
-                    note: includeNote(graph, role.code, candidate.code),
-                  })),
+                  options: includable.map((candidate) => {
+                    // Döngü sorusu bir kez soruluyor: cevabı hem seçeneği
+                    // kapatıyor hem de kapalı bir seçeneğe uyarı yazılmasını
+                    // engelliyor.
+                    const cycles = wouldCycle(closures, role.code, candidate.code);
+
+                    return {
+                      value: roleOptionValue(candidate),
+                      label: `${candidate.code} — ${candidate.name}`,
+                      disabledReason: cycles ? "döngü yaratır, backend 409 döner" : undefined,
+                      note: cycles ? undefined : includeNote(graph, role.code, candidate.code),
+                    };
+                  }),
                 },
               ]}
               disabled={includable.length === 0}
@@ -522,14 +550,18 @@ function noteForPermission(entry: StaffPermissionEntry): string | undefined {
   return undefined;
 }
 
-/** Bir kapsamanın görev ayrılığına ne yapacağı — yazılmadan önce. */
+/**
+ * Bir kapsamanın görev ayrılığına ne yapacağı — yazılmadan önce.
+ *
+ * Yalnız **seçilebilir** adaylar için çağrılıyor: döngü yaratan bir seçeneğin
+ * yanına ikinci bir uyarı yazmanın anlamı yok, ve döngü sorusunu burada tekrar
+ * sormak çağıranın bir satır önce aldığı cevabı ikinci kez hesaplamaktı.
+ */
 function includeNote(
   graph: readonly RoleGraphNode[],
-  parent: string,
-  child: string,
+  parent: RoleCode,
+  child: RoleCode,
 ): string | undefined {
-  if (wouldCycle(graph, parent, child)) return undefined;
-
   const after = separationVerdictAfterInclude(graph, parent, child);
   if (!after.violates) return undefined;
 
@@ -537,26 +569,17 @@ function includeNote(
 }
 
 /** Değişikliklerin nereye yazıldığı, aramanın nasıl yapıldığı. */
-function AuditPointer() {
+function RoleAuditPointer() {
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3">
-      <h2 className="text-sm font-semibold text-ink">Her değişiklik denetim kaydında</h2>
-      <p className="max-w-prose text-xs text-ink-muted">
-        koala-backend her <code className="font-mono">/admin/**</code> isteğini — kabul edileni de
-        reddedileni de — denetim kaydına yazıyor: kim, ne zaman, hangi izin, hangi kaynak. Rol
-        yazımları ayrıca <strong>öncesini ve sonrasını</strong> da damgalıyor (
-        <code className="font-mono">permissions=[…]; includes=[…]</code>).
-      </p>
-      <p className="text-xs text-ink-muted">
-        <Link
-          href={{ pathname: "/audit-log", query: { permission: "role.manage" } }}
-          className="text-brand hover:underline"
-        >
-          Rol grafiği değişikliklerini denetim kaydında aç
-        </Link>{" "}
-        — <code className="font-mono">audit.read</code> izni gerekir.
-      </p>
-    </section>
+    <AuditPointer
+      permission="role.manage"
+      linkLabel="Rol grafiği değişikliklerini denetim kaydında aç"
+    >
+      koala-backend her <code className="font-mono">/admin/**</code> isteğini — kabul edileni de
+      reddedileni de — denetim kaydına yazıyor: kim, ne zaman, hangi izin, hangi kaynak. Rol
+      yazımları ayrıca <strong>öncesini ve sonrasını</strong> da damgalıyor (
+      <code className="font-mono">permissions=[…]; includes=[…]</code>).
+    </AuditPointer>
   );
 }
 

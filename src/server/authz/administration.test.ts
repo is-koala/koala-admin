@@ -2,6 +2,8 @@ import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { adminMeSuccessBody } from "../../../test/fixtures/envelopes";
+import { asRoleCode, asRoleId } from "@/lib/role-identity";
+
 import { apiUrl, server } from "../../../test/msw";
 
 /**
@@ -36,8 +38,18 @@ vi.mock("@/server/auth/session", () => ({
 const { runAuthorizationChange } = await import("./administration");
 
 const ADMIN_ME = apiUrl("/admin/me");
-const ROLE_ID = "9a1c0f10-0003-4c00-8000-000000000008";
-const CHILD_ROLE_ID = "9a1c0f10-0003-4c00-8000-000000000009";
+/**
+ * Kimlik ve kod tip düzeyinde ayrı (`src/lib/role-identity.ts`); testin de
+ * hangisini nereye koyduğunu söylemesi gerekiyor. Bu iki dizeyi yer
+ * değiştirmek artık derlenmiyor — eskiden hem `tsc`'den hem bu dosyanın
+ * tamamından geçiyordu.
+ */
+const ROLE_ID = asRoleId("9a1c0f10-0003-4c00-8000-000000000008");
+const CHILD_ROLE_ID = asRoleId("9a1c0f10-0003-4c00-8000-000000000009");
+const TRUST_LEAD = asRoleCode("TRUST_LEAD");
+const FINANCE_OFFICER = asRoleCode("FINANCE_OFFICER");
+const SUPPORT_AGENT = asRoleCode("SUPPORT_AGENT");
+const OWNER = asRoleCode("OWNER");
 const STAFF_ID = "b7f4a2c1-0000-4c00-8000-000000000002";
 
 const GRANT_PERMISSION = apiUrl(`/admin/roles/${ROLE_ID}/permissions`);
@@ -123,14 +135,14 @@ function refusal(status: number, errorCode: string, message: string, extra = {})
 const GRANT_CATEGORY = {
   kind: "ROLE_PERMISSION_GRANT",
   roleId: ROLE_ID,
-  roleCode: "TRUST_LEAD",
+  roleCode: TRUST_LEAD,
   permission: "category.manage",
 } as const;
 
 const REVOKE_CATEGORY = {
   kind: "ROLE_PERMISSION_REVOKE",
   roleId: ROLE_ID,
-  roleCode: "TRUST_LEAD",
+  roleCode: TRUST_LEAD,
   permission: "category.manage",
 } as const;
 
@@ -171,16 +183,16 @@ describe("izin yoksa istek hiç yapılmıyor", () => {
       runAuthorizationChange({
         kind: "ROLE_INCLUDE_ADD",
         roleId: ROLE_ID,
-        roleCode: "TRUST_LEAD",
+        roleCode: TRUST_LEAD,
         includedRoleId: CHILD_ROLE_ID,
-        includedRoleCode: "FINANCE_OFFICER",
+        includedRoleCode: FINANCE_OFFICER,
       }),
       runAuthorizationChange({
         kind: "ROLE_INCLUDE_REMOVE",
         roleId: ROLE_ID,
-        roleCode: "TRUST_LEAD",
+        roleCode: TRUST_LEAD,
         includedRoleId: CHILD_ROLE_ID,
-        includedRoleCode: "FINANCE_OFFICER",
+        includedRoleCode: FINANCE_OFFICER,
       }),
     ]);
 
@@ -228,13 +240,13 @@ describe("izin yoksa istek hiç yapılmıyor", () => {
         kind: "STAFF_ROLE_GRANT",
         staffId: STAFF_ID,
         staffLabel: "Bir Personel",
-        roleCode: "OWNER",
+        roleCode: OWNER,
       }),
       runAuthorizationChange({
         kind: "STAFF_ROLE_REVOKE",
         staffId: STAFF_ID,
         staffLabel: "Bir Personel",
-        roleCode: "OWNER",
+        roleCode: OWNER,
       }),
       runAuthorizationChange({
         kind: "STAFF_PASSWORD_RESET",
@@ -285,7 +297,7 @@ describe("form eksikse izin bile sorulmuyor", () => {
     // stub'lanmadığı hâlde test geçiyorsa, izin de sorulmamış demektir.
     const grant = watch("post", GRANT_PERMISSION);
 
-    const outcome = await runAuthorizationChange({ ...GRANT_CATEGORY, roleId: "" });
+    const outcome = await runAuthorizationChange({ ...GRANT_CATEGORY, roleId: asRoleId("") });
 
     expect(grant.calls).toBe(0);
     expect(outcome.errorCode).toBe("PANEL_VALIDATION_FAILED");
@@ -375,9 +387,9 @@ describe("izin varsa istek gerçekten yapılıyor", () => {
     await runAuthorizationChange({
       kind: "ROLE_INCLUDE_ADD",
       roleId: ROLE_ID,
-      roleCode: "TRUST_LEAD",
+      roleCode: TRUST_LEAD,
       includedRoleId: CHILD_ROLE_ID,
-      includedRoleCode: "FINANCE_OFFICER",
+      includedRoleCode: FINANCE_OFFICER,
     });
 
     expect(include.calls).toBe(1);
@@ -399,7 +411,7 @@ describe("izin varsa istek gerçekten yapılıyor", () => {
       kind: "STAFF_ROLE_GRANT",
       staffId: STAFF_ID,
       staffLabel: "Bir Personel",
-      roleCode: "SUPPORT_AGENT",
+      roleCode: SUPPORT_AGENT,
     });
 
     expect(path).toBe(`/admin/staff/${STAFF_ID}/roles/SUPPORT_AGENT`);
@@ -453,9 +465,9 @@ describe("backend reddi bir hata kodu değil bir cümle olarak dönüyor", () =>
     const outcome = await runAuthorizationChange({
       kind: "ROLE_INCLUDE_ADD",
       roleId: ROLE_ID,
-      roleCode: "SUPPORT_AGENT",
+      roleCode: SUPPORT_AGENT,
       includedRoleId: CHILD_ROLE_ID,
-      includedRoleCode: "TRUST_LEAD",
+      includedRoleCode: TRUST_LEAD,
     });
 
     expect(outcome.status).toBe("REFUSED");
@@ -518,7 +530,7 @@ describe("backend reddi bir hata kodu değil bir cümle olarak dönüyor", () =>
       kind: "STAFF_ROLE_REVOKE",
       staffId: STAFF_ID,
       staffLabel: "Ben",
-      roleCode: "OWNER",
+      roleCode: OWNER,
     });
 
     expect(outcome.message).toContain("staff.manage + role.manage");
@@ -597,9 +609,9 @@ describe("backend reddi bir hata kodu değil bir cümle olarak dönüyor", () =>
     const outcome = await runAuthorizationChange({
       kind: "ROLE_INCLUDE_ADD",
       roleId: ROLE_ID,
-      roleCode: "TRUST_LEAD",
+      roleCode: TRUST_LEAD,
       includedRoleId: CHILD_ROLE_ID,
-      includedRoleCode: "FINANCE_OFFICER",
+      includedRoleCode: FINANCE_OFFICER,
     });
 
     expect(outcome.status).toBe("REFUSED");
@@ -609,28 +621,53 @@ describe("backend reddi bir hata kodu değil bir cümle olarak dönüyor", () =>
 });
 
 describe("görev ayrılığı burada bir kural değil", () => {
+  /**
+   * Buradaki iki test bir **eksikliği** sabitliyor: koala-backend ADR-0014'ün
+   * görev ayrılığı kuralını çalışma anında uygulamıyor, ve panel de onu taklit
+   * etmiyor. Panel burada dursaydı ekran yalan söylerdi — aynı yazım `curl`
+   * ile geçerken operatör onun engellendiğini sanırdı. Teşhis ekranda
+   * (`role-graph.ts`, `/roles` ve `/staff` uyarıları), kapıda değil.
+   *
+   * **Eksik `is-koala/koala-backend#133` olarak açıldı.** O issue merge
+   * edildiği gün bu iki iddia da yanlış olacak: backend yazımı reddedecek,
+   * `include.calls`/`grant.calls` yine 1 kalacak ama sonuç `REFUSED` olacak ve
+   * panelin ekrandaki "backend bunu kabul eder" cümlelerinin de değişmesi
+   * gerekecek. Bağ buraya yazılı ki o gün kimse bunu aramak zorunda kalmasın.
+   */
   it("iki dalı birleştiren kapsamayı gönderiyor, çünkü backend onu kabul ediyor", async () => {
-    /**
-     * Bu testin kanıtladığı şey bir eksiklik: koala-backend ADR-0014'ün görev
-     * ayrılığı kuralını çalışma anında uygulamıyor (`includeRole` yalnız
-     * döngüye ve grantability'ye bakıyor), ve panel de onu taklit etmiyor.
-     *
-     * Panel burada dursaydı ekran yalan söylerdi: aynı yazım `curl` ile
-     * geçerken operatör onun engellendiğini sanırdı. Teşhis ekranda —
-     * `role-graph.ts` ve `/roles` sayfasındaki uyarı — kapıda değil.
-     */
     stubMe(["role.manage"]);
     const include = watch("post", ADD_INCLUDE);
 
     const outcome = await runAuthorizationChange({
       kind: "ROLE_INCLUDE_ADD",
       roleId: ROLE_ID,
-      roleCode: "TRUST_LEAD",
+      roleCode: TRUST_LEAD,
       includedRoleId: CHILD_ROLE_ID,
-      includedRoleCode: "FINANCE_OFFICER",
+      includedRoleCode: FINANCE_OFFICER,
     });
 
     expect(include.calls).toBe(1);
+    expect(outcome.status).toBe("SUCCEEDED");
+  });
+
+  it("iki dalı birleştiren rol atamasını da gönderiyor", async () => {
+    /**
+     * Üyelik tarafı, ve kuralın insanın eliyle en kolay bozulduğu yer: bir
+     * kişiye TRUST_LEAD'in yanına FINANCE_OFFICER vermek. `grantRole` yalnız
+     * "sahip olmadığın izni veremezsin" kuralını denetliyor; birleşim
+     * kabul ediliyor.
+     */
+    stubMe(["staff.manage"]);
+    const grant = watch("post", STAFF_ROLE);
+
+    const outcome = await runAuthorizationChange({
+      kind: "STAFF_ROLE_GRANT",
+      staffId: STAFF_ID,
+      staffLabel: "Güven Lideri",
+      roleCode: FINANCE_OFFICER,
+    });
+
+    expect(grant.calls).toBe(1);
     expect(outcome.status).toBe("SUCCEEDED");
   });
 });

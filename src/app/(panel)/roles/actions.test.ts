@@ -148,16 +148,51 @@ describe("kapsama seçeneği iki bilgiyi birden taşıyor", () => {
   });
 
   it("çift bozuksa istek yapmıyor", async () => {
-    // Ayrıştırma hatası bir 400 olarak değil, bir form hatası olarak görünsün.
+    /**
+     * Ayrıştırma hatası bir 400 olarak değil, bir form hatası olarak görünsün.
+     *
+     * Test eskiden yalnız boş dizeyi deniyordu ve başlığının söylediği şeyi
+     * ölçmüyordu: iki noktası **olmayan** bir değer (`"COPUK"`) ayrıştırmadan
+     * geçiyor, istek gövdesi `{"includedRoleId":"COPUK"}` olarak gidiyor ve
+     * başarı cümlesi rolün adı olması gereken yerde boşlukla çiziliyordu —
+     * "TRUST_LEAD artık  rolünü kapsıyor". Bozuk çiftin her hâli burada.
+     *
+     * İzin bilerek veriliyor: durduran şeyin kapı değil ayrıştırma olduğu
+     * görünsün diye.
+     */
+    stubMe(["role.manage"]);
     const include = watch("post", apiUrl(`/admin/roles/${ROLE_ID}/includes`));
 
-    const outcome = await addRoleInclude(
+    const broken = ["", "COPUK", `${CHILD_ID}:`, ":FINANCE_OFFICER", `${CHILD_ID}:A:B`];
+
+    for (const value of broken) {
+      const outcome = await addRoleInclude(
+        IDLE_AUTHORIZATION_OUTCOME,
+        form({ roleId: ROLE_ID, roleCode: "TRUST_LEAD", includedRole: value }),
+      );
+
+      expect(include.calls, value).toBe(0);
+      expect(outcome.status, value).toBe("BLOCKED");
+      // Mesaj formdaki kontrolün adına asılıyor: `<select name="includedRole">`.
+      expect(outcome.field, value).toBe("includedRole");
+      // Ve hiçbir şey "yapıldı" diye anlatılmıyor.
+      expect(outcome.message, value).not.toContain("kapsıyor");
+    }
+  });
+
+  it("kodu boş gelen bir kaldırma isteğini de göndermiyor", async () => {
+    // Kod isteğe değil cevabın cümlesine gidiyor; boş bir kod, yapılan işin
+    // adının ekranda boşluk olması demek.
+    stubMe(["role.manage"]);
+    const exclude = watch("delete", apiUrl(`/admin/roles/${ROLE_ID}/includes/${CHILD_ID}`));
+
+    const outcome = await removeRoleInclude(
       IDLE_AUTHORIZATION_OUTCOME,
-      form({ roleId: ROLE_ID, roleCode: "TRUST_LEAD", includedRole: "" }),
+      form({ roleId: ROLE_ID, roleCode: "TRUST_LEAD", includedRoleId: CHILD_ID }),
     );
 
-    expect(include.calls).toBe(0);
-    expect(outcome.field).toBe("includedRoleId");
+    expect(exclude.calls).toBe(0);
+    expect(outcome.field).toBe("includedRole");
   });
 
   it("kapsamayı kaldırırken kimliği yola koyuyor", async () => {

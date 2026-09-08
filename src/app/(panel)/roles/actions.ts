@@ -1,6 +1,7 @@
 "use server";
 
 import type { AuthorizationChangeOutcome } from "@/lib/authorization-change";
+import { asRoleCode, asRoleId, parseRoleOptionValue } from "@/lib/role-identity";
 import { runAuthorizationChange } from "@/server/authz/administration";
 
 /**
@@ -22,8 +23,8 @@ export async function grantPermissionToRole(
 ): Promise<AuthorizationChangeOutcome> {
   return runAuthorizationChange({
     kind: "ROLE_PERMISSION_GRANT",
-    roleId: text(formData, "roleId"),
-    roleCode: text(formData, "roleCode"),
+    roleId: asRoleId(text(formData, "roleId")),
+    roleCode: asRoleCode(text(formData, "roleCode")),
     permission: text(formData, "permission"),
   });
 }
@@ -34,8 +35,8 @@ export async function revokePermissionFromRole(
 ): Promise<AuthorizationChangeOutcome> {
   return runAuthorizationChange({
     kind: "ROLE_PERMISSION_REVOKE",
-    roleId: text(formData, "roleId"),
-    roleCode: text(formData, "roleCode"),
+    roleId: asRoleId(text(formData, "roleId")),
+    roleCode: asRoleCode(text(formData, "roleCode")),
     permission: text(formData, "permission"),
   });
 }
@@ -47,17 +48,22 @@ export async function addRoleInclude(
   /**
    * Tek bir `<select>` iki bilgi taşıyor: backend kenarı **UUID** ile yazıyor,
    * operatör ise rolü **koduyla** tanıyor ve mesajlarda kod geçmesi gerekiyor.
-   * Seçenek değeri bu yüzden `uuid:KOD`; ayırıcı iki nokta, çünkü ne UUID ne de
-   * rol kodu onu içerebiliyor (`[0-9a-f-]` ve `[A-Z_]`).
+   * Çiftin biçimi, yazanı ve okuyanı `src/lib/role-identity.ts`'te yan yana.
+   *
+   * Bozuk bir çift iki boş dizeye düşüyor ve kapı onu gönderilmeden reddediyor.
+   * Eskiden yalnız ilk yarı okunuyordu: iki noktası olmayan bir değer
+   * (`"COPUK"`) istek olarak gidiyor, backend gizemli bir 404 döndürüyor ya da
+   * — kabul etseydi — başarı cümlesi rolün adı olması gereken yerde boşlukla
+   * çiziliyordu.
    */
-  const [includedRoleId = "", includedRoleCode = ""] = text(formData, "includedRole").split(":");
+  const included = parseRoleOptionValue(text(formData, "includedRole"));
 
   return runAuthorizationChange({
     kind: "ROLE_INCLUDE_ADD",
-    roleId: text(formData, "roleId"),
-    roleCode: text(formData, "roleCode"),
-    includedRoleId,
-    includedRoleCode,
+    roleId: asRoleId(text(formData, "roleId")),
+    roleCode: asRoleCode(text(formData, "roleCode")),
+    includedRoleId: included?.id ?? asRoleId(""),
+    includedRoleCode: included?.code ?? asRoleCode(""),
   });
 }
 
@@ -67,10 +73,10 @@ export async function removeRoleInclude(
 ): Promise<AuthorizationChangeOutcome> {
   return runAuthorizationChange({
     kind: "ROLE_INCLUDE_REMOVE",
-    roleId: text(formData, "roleId"),
-    roleCode: text(formData, "roleCode"),
-    includedRoleId: text(formData, "includedRoleId"),
-    includedRoleCode: text(formData, "includedRoleCode"),
+    roleId: asRoleId(text(formData, "roleId")),
+    roleCode: asRoleCode(text(formData, "roleCode")),
+    includedRoleId: asRoleId(text(formData, "includedRoleId")),
+    includedRoleCode: asRoleCode(text(formData, "includedRoleCode")),
   });
 }
 

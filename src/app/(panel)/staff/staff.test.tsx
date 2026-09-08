@@ -81,15 +81,62 @@ const MEMBERS = [
   },
 ];
 
+const SUPPORT_AGENT_ID = "9a1c0f10-0003-4c00-8000-000000000002";
+const MODERATOR_ID = "9a1c0f10-0003-4c00-8000-000000000005";
+const TRUST_LEAD_ID = "9a1c0f10-0003-4c00-8000-000000000008";
+const FINANCE_OFFICER_ID = "9a1c0f10-0003-4c00-8000-000000000009";
+
 const ROLE_ROWS = [
   {
-    id: "9a1c0f10-0003-4c00-8000-000000000002",
+    id: SUPPORT_AGENT_ID,
     code: "SUPPORT_AGENT",
     name: "Destek görevlisi",
     permissions: ["user.read"],
     includes: [],
   },
+  {
+    id: MODERATOR_ID,
+    code: "MODERATOR",
+    name: "Moderatör",
+    permissions: ["content.moderate"],
+    includes: [{ id: SUPPORT_AGENT_ID, code: "SUPPORT_AGENT", name: "Destek görevlisi" }],
+  },
+  {
+    id: TRUST_LEAD_ID,
+    code: "TRUST_LEAD",
+    name: "Güven ekibi lideri",
+    permissions: ["user.read_pii"],
+    includes: [{ id: MODERATOR_ID, code: "MODERATOR", name: "Moderatör" }],
+  },
+  {
+    id: FINANCE_OFFICER_ID,
+    code: "FINANCE_OFFICER",
+    name: "Finans yetkilisi",
+    permissions: ["payout.release"],
+    includes: [],
+  },
 ];
+
+/** Verilen personel listesini döndüren bir `GET /admin/staff` cevabı. */
+function staffPage(content: readonly unknown[]) {
+  return {
+    success: true,
+    message: "Personel listelendi.",
+    httpStatus: "200 OK",
+    path: "/admin/staff",
+    requestId: "rid-staff",
+    timeStamp: "2026-09-08T09:00:00.000000000Z",
+    data: {
+      content,
+      page: 0,
+      size: 20,
+      totalElements: content.length,
+      totalPages: 1,
+      first: true,
+      last: true,
+    },
+  };
+}
 
 function watchStaff(): { readonly staff: number; readonly roles: number } {
   const seen = { staff: 0, roles: 0 };
@@ -253,6 +300,125 @@ describe("liste, olduğu gibi", () => {
     const html = await render();
 
     expect(html).toContain("Yalnız doğrudan üyelikler");
+  });
+});
+
+describe("görev ayrılığı üyelik tarafında: gösteriliyor, uygulanmıyor", () => {
+  /**
+   * Kabul maddesi "görev ayrılığı ekranda görünür olsun" diyor ve kuralın
+   * insanın eliyle en kolay bozulduğu yer burası: kimsenin rol grafiğine
+   * dokunması gerekmiyor, bir kişiye iki dalın rollerini vermek yetiyor.
+   *
+   * koala-backend bunu reddetmiyor (`is-koala/koala-backend#133`), bu yüzden
+   * ekranın iddiası da bir red değil bir teşhis — ve seçenek kapatılmıyor.
+   * O issue merge edildiği gün buradaki "kapatılmıyor" iddiaları da,
+   * `administration.test.ts`'in "istek gönderiliyor" iddiası da güncellenmek
+   * zorunda kalacak.
+   */
+  function withRoles(roles: readonly string[]) {
+    return [{ ...MEMBERS[0], roles: [...roles] }];
+  }
+
+  function stubMembers(members: readonly unknown[]) {
+    server.use(
+      http.get(STAFF, () => HttpResponse.json(staffPage(members))),
+      http.get(ROLES, () =>
+        HttpResponse.json({
+          success: true,
+          message: "Personel rolleri listelendi.",
+          httpStatus: "200 OK",
+          path: "/admin/roles",
+          requestId: "rid-roles",
+          timeStamp: "2026-09-08T09:00:00.000000000Z",
+          data: ROLE_ROWS,
+        }),
+      ),
+    );
+  }
+
+  it("iki dalın rollerini taşıyan kişiyi ihlal olarak gösteriyor", async () => {
+    stubMe(["staff.read", "staff.manage", "role.manage"]);
+    stubMembers(withRoles(["TRUST_LEAD", "FINANCE_OFFICER"]));
+
+    const html = await render();
+
+    expect(html).toContain("İki dal — kural ihlali");
+    expect(html).toContain("ADR-0014 §Rol grafiği bu birleşimi OWNER dışında yasaklar");
+    expect(html).toContain("Backend bu birleşimi reddetmez");
+  });
+
+  it("tek dala değen bir kişiyi ihlal saymıyor", async () => {
+    stubMe(["staff.read", "staff.manage", "role.manage"]);
+    stubMembers(withRoles(["TRUST_LEAD"]));
+
+    const html = await render();
+
+    expect(html).not.toContain("İki dal — kural ihlali");
+    expect(html).toContain("Güven (moderasyon / uyuşmazlık)");
+  });
+
+  it("OWNER taşıyan kişiyi yazılı istisna olarak gösteriyor", async () => {
+    stubMe(["staff.read", "staff.manage", "role.manage"]);
+    stubMembers(withRoles(["OWNER"]));
+
+    const html = await render();
+
+    // OWNER rol listesinde yok; kapanış onu tanımıyor, yani iki dal da
+    // görünmüyor. Görünen tek şey rolün adı — teşhis sessizce "ihlal"
+    // uydurmuyor.
+    expect(html).not.toContain("İki dal — kural ihlali");
+  });
+
+  it("ihlali kuracak rol atamasını seçilebilir bırakıyor ama uyarısını yazıyor", async () => {
+    /**
+     * Seçenek **kapalı değil**: backend atamayı kabul ediyor ve panelin
+     * kapatması olmayan bir kapıyı varmış gibi göstermek olurdu.
+     *
+     * Kişi finans dalında (FINANCE_OFFICER) ve atanabilecek ilk rol MODERATOR,
+     * yani güven dalı. Uyarı seçili seçeneğe ait olduğu için sunucudan gelen
+     * HTML'de görünen not da onunki.
+     */
+    stubMe(["staff.read", "staff.manage", "role.manage"]);
+    stubMembers(withRoles(["SUPPORT_AGENT", "FINANCE_OFFICER"]));
+
+    const html = await render();
+
+    expect(html).toContain("Backend bu yazımı yine de KABUL EDER");
+    expect(html).toContain("hem güven hem finans dalına sokar");
+    // Seçenek gerçekten seçilebilir.
+    expect(html).not.toMatch(/<option value="MODERATOR"[^>]*disabled/);
+  });
+
+  it("rol grafiği okunamasa bile doğrudan rollerden teşhis koyuyor", async () => {
+    /**
+     * `staff.manage` taşıyıp `role.manage` taşımayan biri. `GET /admin/roles`
+     * 403 dönüyor, kapanış haritası boş kalıyor — ve teşhis kaybolmuyor:
+     * kişinin doğrudan taşıdığı iki dal hâlâ görünüyor. Kalıtımla gelen dallar
+     * görünmez oluyor ve bu, ek bir istek atmamanın bedeli.
+     */
+    stubMe(["staff.read", "staff.manage"]);
+    server.use(
+      http.get(STAFF, () =>
+        HttpResponse.json(staffPage(withRoles(["TRUST_LEAD", "FINANCE_OFFICER"]))),
+      ),
+      http.get(ROLES, () => new HttpResponse(null, { status: 403 })),
+    );
+
+    const html = await render();
+
+    expect(html).toContain("Rol listesi okunamadı");
+    expect(html).toContain("İki dal — kural ihlali");
+  });
+
+  it("kuralın uygulanmadığını listenin üstünde söylüyor", async () => {
+    stubMe(["staff.read"]);
+    watchStaff();
+
+    const html = await render();
+
+    expect(html).toContain("Görev ayrılığı burada da gösterilir, uygulanmaz.");
+    expect(html).toContain("Görev ayrılığı üyelik yazımında da uygulanmıyor");
+    expect(html).toContain("koala-backend#133");
   });
 });
 

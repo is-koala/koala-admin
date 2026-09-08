@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { AuthorizationForm } from "@/components/panel/authz/authorization-form";
+import { SeparationBadge } from "@/components/panel/authz/separation";
 import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
   Badge,
@@ -14,6 +16,19 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
+import {
+  FINANCE_BRANCH_ROLES,
+  TRUST_BRANCH_ROLES,
+  closuresWithSelf,
+  membershipClosure,
+  membershipSeparationSentence,
+  membershipSeparationVerdict,
+  membershipSeparationVerdictAfterGrant,
+  type RoleClosures,
+  type RoleGraphNode,
+  type SeparationVerdict,
+} from "@/lib/role-graph";
+import type { RoleCode } from "@/lib/role-identity";
 import {
   pageWindow,
   readPaging,
@@ -142,10 +157,17 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
     />
   );
 
+  /**
+   * Token bir kez okunuyor. `getKoalaAccessToken()` her çağrıda çerezi yeniden
+   * çözüyor ve iki okuma arasında değişmesi beklenen bir şey değil; iki kez
+   * sormak, aynı cevabı iki kez üretmekti.
+   */
+  const accessToken = await getKoalaAccessToken();
+
   let page;
   let roles: StaffRole[] = [];
   try {
-    page = await getStaffMembers(await getKoalaAccessToken(), { query, paging });
+    page = await getStaffMembers(accessToken, { query, paging });
   } catch (error) {
     return (
       <div className="flex flex-col gap-4">
@@ -170,7 +192,7 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
   let roleListFailed = false;
   if (canManage) {
     try {
-      roles = await getStaffRoles(await getKoalaAccessToken());
+      roles = await getStaffRoles(accessToken);
     } catch {
       roleListFailed = true;
     }
@@ -178,11 +200,31 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
 
   const members = page.content;
 
+  /**
+   * Görev ayrılığı teşhisi, üyelik tarafında.
+   *
+   * Rol grafiği okunabildiyse kapanışlar buradan geliyor; okunamadıysa harita
+   * boş kalıyor ve teşhis kişinin **doğrudan** rollerine iniyor. İkinci hâl
+   * eksik ama sessiz değil: `TRUST_LEAD` + `FINANCE_OFFICER` gibi elle kurulan
+   * birleşim grafik olmadan da görünüyor, yalnız kalıtımla gelen dallar
+   * görünmez oluyor.
+   *
+   * Ek bir istek yok: `GET /admin/roles` zaten yalnız atama formu için ve
+   * yalnız `staff.manage` varken isteniyor.
+   */
+  const graph: RoleGraphNode[] = roles.map((role) => ({
+    code: role.code,
+    includes: role.includes.map((included) => included.code),
+  }));
+  const closures = closuresWithSelf(graph);
+
   return (
     <div className="flex flex-col gap-6">
       {filters}
 
       <SearchForm query={query} paging={{ size: paging.size, sort: sortParam(paging.sort) }} />
+
+      <MembershipSeparationNotice />
 
       {canManage ? null : (
         <p className="rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3 text-sm text-ink-muted">
@@ -228,7 +270,12 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
                     {member.roles.length === 0 ? (
                       <span className="text-ink-muted">Rolsüz</span>
                     ) : (
-                      member.roles.join(", ")
+                      <>
+                        {member.roles.join(", ")}
+                        <span className="mt-1 block">
+                          <SeparationBadge verdict={membershipVerdictOf(closures, member.roles)} />
+                        </span>
+                      </>
                     )}
                   </TableCell>
                   <TableCell>
@@ -257,6 +304,7 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
                 key={member.id}
                 member={member}
                 roles={roles}
+                closures={closures}
                 roleListFailed={roleListFailed}
                 canManage={canManage}
                 isSelf={context.staff?.staffId === member.id}
@@ -267,8 +315,48 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
       )}
 
       {canManage ? <CreateStaffSection /> : null}
-      <AuditPointer />
+      <StaffAuditPointer />
       <BackendGaps />
+    </div>
+  );
+}
+
+/**
+ * Bir kişinin taşıdığı rollerin görev ayrılığı teşhisi.
+ *
+ * Rol grafiğindeki hesabın aynısı, girdisi bir rolün kapanışı yerine kişinin
+ * rollerinin birleşik kapanışı. Kapı değil: backend bu birleşimi kabul ediyor
+ * (`STAFF_BACKEND_GAPS` → `no-membership-separation-enforcement`).
+ */
+function membershipVerdictOf(closures: RoleClosures, held: readonly RoleCode[]): SeparationVerdict {
+  return membershipSeparationVerdict(membershipClosure(closures, held));
+}
+
+/**
+ * Kuralın üyelik tarafındaki durumu, listenin hemen üstünde.
+ *
+ * `/roles` ekranındaki kutunun kardeşi ve aynı sebeple burada: rozet bir
+ * **teşhis**, bir red değil. Operatörün "kural ihlali" rozetini görüp
+ * backend'in o atamayı durduracağını sanması, kuralın olmadığını hiç
+ * bilmemekten daha kötü olurdu — ve bu ekran, kuralın insanın eliyle en kolay
+ * bozulduğu yer: kimsenin rol grafiğine dokunması gerekmiyor.
+ */
+function MembershipSeparationNotice() {
+  return (
+    <div className="rounded-lg border border-warning/30 bg-warning-soft px-4 py-3">
+      <p className="text-sm font-semibold text-warning">
+        Görev ayrılığı burada da gösterilir, uygulanmaz.
+      </p>
+      <p className="max-w-prose text-sm text-ink">
+        ADR-0014 §Rol grafiği&apos;nin kuralı — güven dalı ({TRUST_BRANCH_ROLES.join(", ")}) ile
+        finans dalı ({FINANCE_BRANCH_ROLES.join(", ")}) OWNER dışında birleşemez — bir{" "}
+        <strong>kişide</strong> de bozulabilir: iki dalın rollerini yan yana taşımak yeter.
+        koala-backend bunu reddetmiyor;{" "}
+        <code className="font-mono">StaffAuthorizationManager.grantRole</code> yalnız &quot;sahip
+        olmadığın izni veremezsin&quot; kuralını denetliyor. Rozetler bu yüzden bir teşhis, ve rol
+        atama seçenekleri <strong>kapatılmıyor</strong>: kapatsaydı aynı yazım{" "}
+        <code className="font-mono">curl</code> ile geçerken ekran onu engellediğini sanırdı.
+      </p>
     </div>
   );
 }
@@ -332,12 +420,14 @@ function StatusBadges({ member }: { member: StaffMember }) {
 function StaffDetail({
   member,
   roles,
+  closures,
   roleListFailed,
   canManage,
   isSelf,
 }: {
   member: StaffMember;
   roles: readonly StaffRole[];
+  closures: RoleClosures;
   roleListFailed: boolean;
   canManage: boolean;
   isSelf: boolean;
@@ -345,14 +435,19 @@ function StaffDetail({
   const grantable = roles.filter((role) => !member.roles.includes(role.code));
   const lock = staffLockState(member);
 
+  const label = member.displayName ?? member.email;
+  const verdict = membershipVerdictOf(closures, member.roles);
+  const separation = membershipSeparationSentence(label, verdict);
+
   return (
     <details
       id={`personel-${member.id}`}
       className="rounded-lg border border-border-subtle bg-surface px-4 py-3"
     >
       <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-ink">
-        <span>{member.displayName ?? member.email}</span>
+        <span>{label}</span>
         <StatusBadges member={member} />
+        {member.roles.length === 0 ? null : <SeparationBadge verdict={verdict} />}
         {isSelf ? <Badge tone="brand">Bu sizsiniz</Badge> : null}
       </summary>
 
@@ -379,6 +474,20 @@ function StaffDetail({
               </Link>{" "}
               bakın.
             </span>
+            {separation === null ? null : (
+              <p
+                className={
+                  verdict.violates
+                    ? "mt-2 max-w-prose rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-ink"
+                    : "mt-2 max-w-prose rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 text-sm text-ink"
+                }
+              >
+                {separation}
+                {verdict.violates
+                  ? " Backend bu birleşimi reddetmez; rolü geri almak bu ekranda elle yapılır."
+                  : null}
+              </p>
+            )}
           </dd>
 
           <dt className="text-sm text-ink-muted">Oluşturulma</dt>
@@ -453,9 +562,16 @@ function StaffDetail({
                       type: "select",
                       required: true,
                       hint: "Üyelik uçları rolü koduyla adresler (UUID ile değil).",
+                      /**
+                       * Seçenekler **kapatılmıyor**, yalnız ne yapacakları
+                       * yazılıyor: backend iki dalı birleştiren atamayı kabul
+                       * ediyor (`is-koala/koala-backend#133`) ve panelin burada
+                       * durması, olmayan bir kapıyı varmış gibi çizmek olurdu.
+                       */
                       options: grantable.map((role) => ({
                         value: role.code,
                         label: `${role.code} — ${role.name}`,
+                        note: grantNote(closures, member.roles, role.code, label),
                       })),
                     },
                   ]}
@@ -571,27 +687,31 @@ function CreateStaffSection() {
   );
 }
 
-function AuditPointer() {
+/** Bir rol atamasının görev ayrılığına ne yapacağı — yazılmadan önce. */
+function grantNote(
+  closures: RoleClosures,
+  held: readonly RoleCode[],
+  granted: RoleCode,
+  label: string,
+): string | undefined {
+  const after = membershipSeparationVerdictAfterGrant(closures, held, granted);
+  if (!after.violates) return undefined;
+
+  return `Bu atama ${label} kişisini hem güven hem finans dalına sokar; ADR-0014 §Rol grafiği bunu OWNER dışında yasaklar. Backend bu yazımı yine de KABUL EDER — kural üyelik tarafında da çalışma anında uygulanmıyor.`;
+}
+
+function StaffAuditPointer() {
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3">
-      <h2 className="text-sm font-semibold text-ink">Her değişiklik denetim kaydında</h2>
-      <p className="max-w-prose text-xs text-ink-muted">
-        Personel oluşturma, devre dışı bırakma, rol atama ve parola atama — hepsi kim, ne zaman,
-        hangi izin ve hangi kaynak bilgisiyle kayda giriyor; üyelik yazımları ayrıca öncesini ve
-        sonrasını damgalıyor (<code className="font-mono">active=…; roles=[…]</code>). ADR-0010 bu
-        kaydın dış bir yönetim konsolunda <em>tutulamadığını</em> açıkça kayıp yazmıştı; ADR-0014
-        onu geri kazandırdı.
-      </p>
-      <p className="text-xs text-ink-muted">
-        <Link
-          href={{ pathname: "/audit-log", query: { permission: "staff.manage" } }}
-          className="text-brand hover:underline"
-        >
-          Personel değişikliklerini denetim kaydında aç
-        </Link>{" "}
-        — <code className="font-mono">audit.read</code> izni gerekir.
-      </p>
-    </section>
+    <AuditPointer
+      permission="staff.manage"
+      linkLabel="Personel değişikliklerini denetim kaydında aç"
+    >
+      Personel oluşturma, devre dışı bırakma, rol atama ve parola atama — hepsi kim, ne zaman, hangi
+      izin ve hangi kaynak bilgisiyle kayda giriyor; üyelik yazımları ayrıca öncesini ve sonrasını
+      damgalıyor (<code className="font-mono">active=…; roles=[…]</code>). ADR-0010 bu kaydın dış
+      bir yönetim konsolunda <em>tutulamadığını</em> açıkça kayıp yazmıştı; ADR-0014 onu geri
+      kazandırdı.
+    </AuditPointer>
   );
 }
 

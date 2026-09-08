@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { asRoleCode, asRoleId } from "@/lib/role-identity";
 import { PERMISSION_SENSITIVITIES } from "@/server/authz/permissions";
 
 import { koalaApi, koalaRequestNoData } from "./koala";
@@ -45,10 +46,18 @@ import { koalaApi, koalaRequestNoData } from "./koala";
 export const ROLES_PATH = "/admin/roles";
 export const PERMISSIONS_PATH = "/admin/permissions";
 
-/** `StaffRoleRefDto` — bir rolü adlandırmaya yetecek kadarı. */
+/**
+ * `StaffRoleRefDto` — bir rolü adlandırmaya yetecek kadarı.
+ *
+ * `id` ve `code` tel üstünde iki dize ama iki ayrı şey: biri rol grafiği
+ * uçlarının adresi, öteki üyelik uçlarınınki ve operatörün tanıdığı ad. İkisi
+ * de `string` kaldığı sürece yer değiştirmeleri derlemeden geçiyordu; markayı
+ * takan tek yer burası — telin ayrıştırıldığı yer (`src/lib/role-identity.ts`).
+ * `transform` çalışma anında birim işlev: doğrulanan şey yine bir dize.
+ */
 const roleRefSchema = z.object({
-  id: z.string(),
-  code: z.string(),
+  id: z.string().transform(asRoleId),
+  code: z.string().transform(asRoleCode),
   name: z.string(),
 });
 
@@ -67,8 +76,8 @@ export type StaffRoleRef = z.infer<typeof roleRefSchema>;
  * bu sayfa satırı yine çizmeli, bilmediği bir ad yüzünden tamamen boşalmamalı.
  */
 export const staffRoleSchema = z.object({
-  id: z.string(),
-  code: z.string(),
+  id: z.string().transform(asRoleId),
+  code: z.string().transform(asRoleCode),
   name: z.string(),
   permissions: z.array(z.string()),
   includes: z.array(roleRefSchema),
@@ -88,9 +97,12 @@ export type StaffRole = z.infer<typeof staffRoleSchema>;
  *
  * Alternatif on rol için on istekti. Türetme `src/lib/role-graph.ts`'te ve
  * `graph()`'in tanımıyla aynı: kapanış (kendisi dâhil) üzerindeki doğrudan
- * izinlerin birleşimi. `roles.test.tsx` bu eşitliği backend'in kendi
- * `effectivePermissions` cevabına karşı sabitliyor — panel kendi tanımını
- * uydurmuyor, backend'inkini uyguluyor ve bunu bir testle kanıtlıyor.
+ * izinlerin birleşimi. `roles.test.tsx` bu eşitliği ölçüyor ve **neye karşı**
+ * ölçtüğü şu: `StaffRoleDetailDto`'nun `effectivePermissions` alanını taşıyan
+ * bir MSW cevabı kuruluyor, panel o ucu çağırmıyor (test bunu istek sayısıyla
+ * da sabitliyor) ve ekranda çıkan liste o cevapla karşılaştırılıyor. Ölçülen
+ * şey panelin türetmesinin DTO'nun tanımıyla aynı sonucu vermesi; fixture
+ * sözleşmenin bir kopyası, canlı bir backend değil.
  *
  * Sözleşme değişirse — sözgelimi backend bir gün "etkili"yi başka türlü
  * tanımlarsa — o test kırmızıya döner ve doğru cevap bu ucu çağırmaya dönmek
@@ -228,7 +240,7 @@ export const ROLE_GRAPH_BACKEND_GAPS = [
     id: "no-separation-enforcement",
     title: "Görev ayrılığı kuralı çalışma anında uygulanmıyor",
     detail:
-      "ADR-0014 §Rol grafiği 'OWNER dışında hiçbir rol hem trust hem finans dalını kapsayamaz' diyor, ama koala-backend'in src/main'inde bu kuralı uygulayan tek satır yok: StaffAuthorizationManager.includeRole yalnız döngüyü ve 'sahip olmadığın izni veremezsin' kuralını denetliyor. Kural yalnız StaffRoleGraphSeedTest'te yaşıyor ve o test seed XML dosyasını okuyor — ne veritabanını ne de bir isteği. Yani iki dalı birleştiren bir kapsama backend tarafından KABUL EDİLİR. Panel bunu ekranda teşhis olarak gösterir ve istemcide reddetmez; olmayan bir kapıyı varmış gibi çizmek, kuralın var olduğu yanılgısını sürdürürdü.",
+      "ADR-0014 §Rol grafiği 'OWNER dışında hiçbir rol hem trust hem finans dalını kapsayamaz' diyor, ama koala-backend'in src/main'inde bu kuralı uygulayan tek satır yok: StaffAuthorizationManager.includeRole yalnız döngüyü ve 'sahip olmadığın izni veremezsin' kuralını denetliyor. Kural yalnız StaffRoleGraphSeedTest'te yaşıyor ve o test seed XML dosyasını okuyor — ne veritabanını ne de bir isteği. Yani iki dalı birleştiren bir kapsama backend tarafından KABUL EDİLİR. Eksik is-koala/koala-backend#133 olarak açıldı. Panel bunu ekranda teşhis olarak gösterir ve istemcide reddetmez; olmayan bir kapıyı varmış gibi çizmek, kuralın var olduğu yanılgısını sürdürürdü.",
   },
   {
     id: "no-role-lifecycle",

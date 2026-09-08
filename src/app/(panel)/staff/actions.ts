@@ -1,6 +1,7 @@
 "use server";
 
 import type { AuthorizationChangeOutcome } from "@/lib/authorization-change";
+import { asRoleCode } from "@/lib/role-identity";
 import { runAuthorizationChange } from "@/server/authz/administration";
 
 /**
@@ -52,7 +53,7 @@ export async function grantRoleToStaff(
     kind: "STAFF_ROLE_GRANT",
     staffId: text(formData, "staffId"),
     staffLabel: text(formData, "staffLabel"),
-    roleCode: text(formData, "roleCode"),
+    roleCode: asRoleCode(text(formData, "roleCode")),
   });
 }
 
@@ -64,7 +65,7 @@ export async function revokeRoleFromStaff(
     kind: "STAFF_ROLE_REVOKE",
     staffId: text(formData, "staffId"),
     staffLabel: text(formData, "staffLabel"),
-    roleCode: text(formData, "roleCode"),
+    roleCode: asRoleCode(text(formData, "roleCode")),
   });
 }
 

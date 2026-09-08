@@ -1,18 +1,21 @@
+import type { RoleCode } from "./role-identity";
+
 /**
  * Rol grafiğini okumak: kapanış, döngü ve görev ayrılığı.
  *
- * Import'suz ve saf. Hem Server Component'ler hem `"use client"` formları bu
- * modülü okuyor, bu yüzden içine giren her şey tarayıcı paketine de girer —
- * burada yalnız veri ve aritmetik var.
+ * Saf, ve tek import'u **tip düzeyinde**: `RoleCode` derlemeden sonra ortadan
+ * kalkıyor, yani buradan tarayıcı paketine giden bir satır yok. Hem Server
+ * Component'ler hem `"use client"` formları bu modülü okuyor ve içine giren her
+ * şey tarayıcı paketine de girerdi — burada yalnız veri ve aritmetik var.
  *
  * ## Bu modülün yetkisi ne kadar
  *
  * Hiç. Grafiği **çözen** yer `StaffAuthorizationManager`, ve panel onun
  * cevabını (`effectiveRoles`, `effectivePermissions`) olduğu gibi gösteriyor.
  * Buradaki hesaplar yalnız **bir yazımın öncesinde** çalışıyor: operatör bir
- * kapsama eklemeden önce sonucunun ne olacağını görebilsin diye. Yazımın
- * kabul edilip edilmeyeceğine backend karar verir ve reddi ekranda onun
- * cümlesiyle görünür.
+ * kapsama eklemeden ya da bir rol atamadan önce sonucunun ne olacağını
+ * görebilsin diye. Yazımın kabul edilip edilmeyeceğine backend karar verir ve
+ * reddi ekranda onun cümlesiyle görünür.
  *
  * Ayrım önemli, çünkü iki kuralın backend'deki durumu **aynı değil**:
  *
@@ -27,13 +30,21 @@
  *    *gösterebilir*, **engelleyemez**; engelliyormuş gibi yapmak da yanlış
  *    olurdu, çünkü backend o yazımı kabul edecek. {@link separationVerdict}
  *    bu yüzden bir "red" değil bir **teşhis** döndürüyor.
+ *
+ * ## Kural iki yerde bozulabiliyor, teşhis de iki yerde
+ *
+ * Bir rolün iki dalı kapsaması ({@link separationVerdictAfterInclude}) kuralın
+ * yazılı hâli, ama insanın eliyle en kolay kurulan birleşim o değil: bir
+ * **kişiye** hem `TRUST_LEAD` hem `FINANCE_OFFICER` vermek. Sonuç aynı yetki
+ * birleşimi, ve backend onu da reddetmiyor. {@link membershipSeparationVerdict}
+ * aynı teşhisi üyelik tarafına taşıyor.
  */
 
 /** Bir rol düğümü — `GET /admin/roles`'un tek istekte verdiği kadarı. */
 export interface RoleGraphNode {
-  readonly code: string;
+  readonly code: RoleCode;
   /** Bu rolün doğrudan kapsadığı rollerin kodları. */
-  readonly includes: readonly string[];
+  readonly includes: readonly RoleCode[];
 }
 
 /**
@@ -44,6 +55,9 @@ export interface RoleGraphNode {
  * kendisi Liquibase seed'iyle geliyor. Yeni bir rol eklendiği gün bu iki küme
  * de elle güncellenmek zorunda — backend tarafındaki test de aynı kısıtla
  * yaşıyor ve bu, kuralın zayıf tarafı olarak burada yazılı dursun.
+ *
+ * Tipleri `RoleCode` değil `string`: bunlar bir adres değil, karşılaştırılan
+ * bir liste. Markalamak, listeye bakan her satıra bir dönüşüm eklerdi.
  */
 export const TRUST_BRANCH_ROLES: readonly string[] = ["MODERATOR", "DISPUTE_HANDLER", "TRUST_LEAD"];
 
@@ -60,8 +74,12 @@ export const DUTY_BRANCH_LABELS: Record<DutyBranch, string> = {
 };
 
 /** Grafiği koda göre indeksler; aşağıdaki gezinmelerin hepsi bunun üzerinde. */
-function indexOf(graph: readonly RoleGraphNode[]): Map<string, readonly string[]> {
+function indexOf(graph: readonly RoleGraphNode[]): Map<string, readonly RoleCode[]> {
   return new Map(graph.map((node) => [node.code, node.includes]));
+}
+
+function sorted(codes: Iterable<RoleCode>): RoleCode[] {
+  return [...codes].sort((a, b) => a.localeCompare(b, "tr"));
 }
 
 /**
@@ -74,15 +92,15 @@ function indexOf(graph: readonly RoleGraphNode[]): Map<string, readonly string[]
  */
 export function closureWithSelf(
   graph: readonly RoleGraphNode[],
-  root: string,
-  extraEdge?: { readonly from: string; readonly to: string },
-): string[] {
+  root: RoleCode,
+  extraEdge?: { readonly from: RoleCode; readonly to: RoleCode },
+): RoleCode[] {
   const edges = indexOf(graph);
-  const reached = new Set<string>([root]);
+  const reached = new Set<RoleCode>([root]);
   let frontier = [root];
 
   while (frontier.length > 0) {
-    const next: string[] = [];
+    const next: RoleCode[] = [];
 
     for (const code of frontier) {
       const children = [...(edges.get(code) ?? [])];
@@ -100,7 +118,23 @@ export function closureWithSelf(
     frontier = next;
   }
 
-  return [...reached].sort((a, b) => a.localeCompare(b, "tr"));
+  return sorted(reached);
+}
+
+/** Her rolün kapanışı, koda göre. */
+export type RoleClosures = ReadonlyMap<RoleCode, readonly RoleCode[]>;
+
+/**
+ * Grafiğin bütün kapanışları — rol başına **bir** gezinti.
+ *
+ * Bir ekran aynı kapanışı defalarca soruyor: tablodaki satır, rol detayı,
+ * etkili izin listesi ve her kapsama adayının döngü kontrolü. Hepsi tek bir
+ * cevabı paylaşsın diye kapanışlar bir kez burada çıkarılıyor;
+ * {@link wouldCycle} de grafiği değil bu haritayı alıyor, yani "bir kez hesapla"
+ * bir disiplin değil imzanın kendisi.
+ */
+export function closuresWithSelf(graph: readonly RoleGraphNode[]): RoleClosures {
+  return new Map(graph.map((node) => [node.code, closureWithSelf(graph, node.code)]));
 }
 
 /**
@@ -109,13 +143,14 @@ export function closureWithSelf(
  * `includeRole`'ün koşulunun aynısı: kendini kapsamak, ya da `child`'ın
  * kapanışının `parent`'ı içermesi. Backend bunu 409 ile reddediyor; bu
  * fonksiyon yalnız o reddi **önceden görünür** kılıyor.
+ *
+ * Yön önemli ve tek yönlü: `parent`'ın `child`'a **zaten** ulaşıyor olması bir
+ * döngü değildir. `TRUST_LEAD → SUPPORT_AGENT` böyle bir kenar (TRUST_LEAD ona
+ * MODERATOR üzerinden zaten ulaşıyor) ve backend onu kabul ediyor — burada
+ * `true` dönmek, açık bir kapıyı ekranda kapatmak olurdu.
  */
-export function wouldCycle(
-  graph: readonly RoleGraphNode[],
-  parent: string,
-  child: string,
-): boolean {
-  return parent === child || closureWithSelf(graph, child).includes(parent);
+export function wouldCycle(closures: RoleClosures, parent: RoleCode, child: RoleCode): boolean {
+  return parent === child || (closures.get(child) ?? [child]).includes(parent);
 }
 
 export interface SeparationVerdict {
@@ -127,6 +162,13 @@ export interface SeparationVerdict {
   readonly violates: boolean;
 }
 
+function branchesOf(closure: readonly RoleCode[]): DutyBranch[] {
+  const branches: DutyBranch[] = [];
+  if (closure.some((code) => TRUST_BRANCH_ROLES.includes(code))) branches.push("TRUST");
+  if (closure.some((code) => FINANCE_BRANCH_ROLES.includes(code))) branches.push("FINANCE");
+  return branches;
+}
+
 /**
  * Bir rolün (ya da yazılmamış bir kenarın sonucunun) görev ayrılığı teşhisi.
  *
@@ -134,11 +176,8 @@ export interface SeparationVerdict {
  * bir isteği durdurmak **değil** — backend o isteği kabul edecek ve panelin
  * onu durdurması, var olmayan bir kuralı varmış gibi göstermek olurdu.
  */
-export function separationVerdict(role: string, closure: readonly string[]): SeparationVerdict {
-  const branches: DutyBranch[] = [];
-  if (closure.some((code) => TRUST_BRANCH_ROLES.includes(code))) branches.push("TRUST");
-  if (closure.some((code) => FINANCE_BRANCH_ROLES.includes(code))) branches.push("FINANCE");
-
+export function separationVerdict(role: RoleCode, closure: readonly RoleCode[]): SeparationVerdict {
+  const branches = branchesOf(closure);
   const exempt = SEPARATION_EXEMPT_ROLES.includes(role);
 
   return { branches, exempt, violates: branches.length === 2 && !exempt };
@@ -147,7 +186,7 @@ export function separationVerdict(role: string, closure: readonly string[]): Sep
 /** `separationVerdict`, grafiği kendisi gezerek. */
 export function separationVerdictOf(
   graph: readonly RoleGraphNode[],
-  role: string,
+  role: RoleCode,
 ): SeparationVerdict {
   return separationVerdict(role, closureWithSelf(graph, role));
 }
@@ -161,14 +200,14 @@ export function separationVerdictOf(
  */
 export function separationVerdictAfterInclude(
   graph: readonly RoleGraphNode[],
-  parent: string,
-  child: string,
+  parent: RoleCode,
+  child: RoleCode,
 ): SeparationVerdict {
   return separationVerdict(parent, closureWithSelf(graph, parent, { from: parent, to: child }));
 }
 
 /** Teşhisi bir cümleye çevirir; `null` "söylenecek bir şey yok" demek. */
-export function separationSentence(role: string, verdict: SeparationVerdict): string | null {
+export function separationSentence(role: RoleCode, verdict: SeparationVerdict): string | null {
   if (verdict.branches.length < 2) return null;
 
   if (verdict.exempt) {
@@ -176,4 +215,73 @@ export function separationSentence(role: string, verdict: SeparationVerdict): st
   }
 
   return `${role} hem güven dalını (${TRUST_BRANCH_ROLES.join(", ")}) hem finans dalını (${FINANCE_BRANCH_ROLES.join(", ")}) kapsıyor. ADR-0014 §Rol grafiği bunu OWNER dışında yasaklar.`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Üyelik tarafı: aynı kural, insanın eliyle en kolay kurulan hâli             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Bir kişinin taşıdığı rollerin **birleşik** kapanışı.
+ *
+ * `StaffMemberDto.roles` yalnız doğrudan üyelikleri veriyor; kişinin gerçekte
+ * neye ulaştığı, o rollerin kapanışlarının birleşimi — `/admin/me`'nin `roles`
+ * alanının verdiği şeyin aynısı.
+ *
+ * Grafikte tanınmayan bir rol yalnız kendisine ulaşır. Bu, grafiğin hiç
+ * okunamadığı durumu da kapsıyor: boş bir harita ile teşhis **doğrudan**
+ * rollere iner, yani `TRUST_LEAD` + `FINANCE_OFFICER` birleşimi grafik
+ * olmadan da görülür; yalnız kalıtımla gelen dallar görünmez olur.
+ */
+export function membershipClosure(closures: RoleClosures, held: readonly RoleCode[]): RoleCode[] {
+  const reached = new Set<RoleCode>();
+  for (const role of held) {
+    for (const code of closures.get(role) ?? [role]) reached.add(code);
+  }
+
+  return sorted(reached);
+}
+
+/**
+ * Bir kişinin rollerinin görev ayrılığı teşhisi.
+ *
+ * Rol tarafındaki {@link separationVerdict}'ten tek farkı istisnanın nereden
+ * okunduğu: orada sorulan "bu rol OWNER mı", burada "bu kişi OWNER'a ulaşıyor
+ * mu". Bir kişiye OWNER verilmişse iki dalı kapsaması ADR-0014'ün yazılı
+ * istisnası; iki ayrı dal rolünü yan yana taşıması değil.
+ */
+export function membershipSeparationVerdict(closure: readonly RoleCode[]): SeparationVerdict {
+  const branches = branchesOf(closure);
+  const exempt = closure.some((code) => SEPARATION_EXEMPT_ROLES.includes(code));
+
+  return { branches, exempt, violates: branches.length === 2 && !exempt };
+}
+
+/** Bir rol atansaydı üyelik tarafında görev ayrılığı ne derdi? */
+export function membershipSeparationVerdictAfterGrant(
+  closures: RoleClosures,
+  held: readonly RoleCode[],
+  granted: RoleCode,
+): SeparationVerdict {
+  return membershipSeparationVerdict(membershipClosure(closures, [...held, granted]));
+}
+
+/**
+ * Üyelik teşhisini bir cümleye çevirir; `null` "söylenecek bir şey yok" demek.
+ *
+ * Rol tarafındaki cümleden ayrı yazılı, çünkü söylediği şey ayrı: orada bir
+ * rolün tanımı kuralı bozuyor, burada iki ayrı rolün **aynı kişide
+ * buluşması**. Kural aynı, ihlali kuran el farklı.
+ */
+export function membershipSeparationSentence(
+  label: string,
+  verdict: SeparationVerdict,
+): string | null {
+  if (verdict.branches.length < 2) return null;
+
+  if (verdict.exempt) {
+    return `${label} her iki dala da OWNER üzerinden ulaşıyor. ADR-0014 kuralın tek yazılı istisnası olarak OWNER'ı bırakır.`;
+  }
+
+  return `${label} taşıdığı rollerle hem güven dalına (${TRUST_BRANCH_ROLES.join(", ")}) hem finans dalına (${FINANCE_BRANCH_ROLES.join(", ")}) ulaşıyor. ADR-0014 §Rol grafiği bu birleşimi OWNER dışında yasaklar; backend üyelik yazımında da bu kuralı uygulamıyor, yani bu bir teşhis, bir red değil.`;
 }

@@ -122,8 +122,55 @@ const PERMISSION_ROWS = [
   { code: "staff.read", mutating: false, sensitivity: "PERSONAL_DATA" },
 ];
 
-function watchGraph(): { readonly roles: number; readonly permissions: number } {
-  const seen = { roles: 0, permissions: 0 };
+/**
+ * `GET /admin/roles/{roleId}` — panelin **çağırmadığı** uç.
+ *
+ * `StaffRoleDetailDto`'nun liste DTO'suna eklediği iki alan burada:
+ * `effectiveRoles` (kapanış, rolün kendisi **hariç**) ve `effectivePermissions`
+ * (doğrudan olanlar ∪ ulaşılan her rolün doğrudan olanları). Panel bu ucu
+ * çağırmıyor — on rol on istek demekti — ve aşağıdaki test, türettiği şeyin
+ * tam olarak bu cevap olduğunu ölçüyor.
+ *
+ * Yani karşılaştırılan şey artık testin içinde elle yazılmış bir tablo değil,
+ * DTO'nun kendi biçimindeki bir cevap. Fixture yine bir kopya — sözleşmenin
+ * kopyası — ama panelin türetmesiyle **aynı yerden** gelmiyor: biri grafiği
+ * geziyor, öteki cevabın alanını okuyor.
+ */
+const ROLE_DETAILS: Record<string, { effectiveRoles: string[]; effectivePermissions: string[] }> = {
+  [SUPPORT_AGENT_ID]: { effectiveRoles: [], effectivePermissions: ["user.read"] },
+  [MODERATOR_ID]: {
+    effectiveRoles: ["SUPPORT_AGENT"],
+    effectivePermissions: ["content.moderate", "user.read"],
+  },
+  [TRUST_LEAD_ID]: {
+    effectiveRoles: ["MODERATOR", "SUPPORT_AGENT"],
+    effectivePermissions: ["user.read_pii", "content.moderate", "user.read"],
+  },
+  [FINANCE_OFFICER_ID]: {
+    effectiveRoles: [],
+    effectivePermissions: ["payout.release", "payment.refund"],
+  },
+  [OWNER_ID]: {
+    effectiveRoles: ["TRUST_LEAD", "FINANCE_OFFICER", "MODERATOR", "SUPPORT_AGENT"],
+    effectivePermissions: [
+      "role.manage",
+      "staff.manage",
+      "staff.read",
+      "user.read_pii",
+      "content.moderate",
+      "user.read",
+      "payout.release",
+      "payment.refund",
+    ],
+  },
+};
+
+function watchGraph(): {
+  readonly roles: number;
+  readonly permissions: number;
+  readonly details: number;
+} {
+  const seen = { roles: 0, permissions: 0, details: 0 };
 
   server.use(
     http.get(ROLES, () => {
@@ -134,9 +181,38 @@ function watchGraph(): { readonly roles: number; readonly permissions: number } 
       seen.permissions += 1;
       return HttpResponse.json(envelope("/admin/permissions", PERMISSION_ROWS));
     }),
+    http.get(`${ROLES}/:roleId`, ({ params }) => {
+      seen.details += 1;
+      const roleId = String(params.roleId);
+      const row = ROLE_ROWS.find((entry) => entry.id === roleId);
+      const detail = ROLE_DETAILS[roleId];
+
+      if (row === undefined || detail === undefined) {
+        return new HttpResponse(null, { status: 404 });
+      }
+
+      return HttpResponse.json(envelope(`/admin/roles/${roleId}`, { ...row, ...detail }));
+    }),
   );
 
   return seen;
+}
+
+/** Backend'in detay cevabı, testin kendi ağzından sorulmuş hâliyle. */
+async function backendDetail(
+  roleId: string,
+): Promise<{ effectiveRoles: string[]; effectivePermissions: string[] }> {
+  const response = await fetch(apiUrl(`/admin/roles/${roleId}`));
+  const body = (await response.json()) as {
+    data: { effectiveRoles: string[]; effectivePermissions: string[] };
+  };
+
+  return body.data;
+}
+
+/** Bir rolün `<details>` bloğu — ekranın o role ait bütün söyledikleri. */
+function detailBlock(html: string, code: string): string {
+  return html.split(`id="rol-${code}"`)[1]?.split("</details>")[0] ?? "";
 }
 
 const render = () => renderServerComponent(<RolesPage />);
@@ -221,54 +297,60 @@ describe("DAG ekranda", () => {
     /**
      * Panel `GET /admin/roles/{roleId}`'yi çağırmıyor: liste cevabı grafiğin
      * tamamını verdiği için birleşim panelde kuruluyor. Bu testin işi o
-     * kestirmenin **doğru** olduğunu sabitlemek.
+     * kestirmenin **doğru** olduğunu ölçmek — ve neye karşı ölçtüğü belli
+     * olsun diye detay ucu gerçekten kuruluyor: `ROLE_DETAILS` `StaffRoleDetail
+     * Dto`'nun iki alanını taşıyor, test onları ucun kendisinden okuyor ve
+     * ekranda çıkanla karşılaştırıyor.
      *
-     * `EXPECTED` aşağıda elle değil, `StaffAuthorizationManager.graph()`'in
-     * tanımına göre yazıldı: rolün doğrudan izinleri ∪ ulaştığı her rolün
-     * doğrudan izinleri. Backend o tanımı değiştirirse bu test kırmızıya döner
-     * ve doğru cevap detay ucunu çağırmaya dönmek olur.
+     * İki iddia birden: panel o ucu çağırmıyor (istek sayısı), ve çağırmadan
+     * ürettiği şey onun cevabıyla aynı.
      */
-    const EXPECTED: Record<string, string[]> = {
-      SUPPORT_AGENT: ["user.read"],
-      MODERATOR: ["content.moderate", "user.read"],
-      TRUST_LEAD: ["content.moderate", "user.read", "user.read_pii"],
-      FINANCE_OFFICER: ["payment.refund", "payout.release"],
-      OWNER: [
-        "content.moderate",
-        "payment.refund",
-        "payout.release",
-        "role.manage",
-        "staff.manage",
-        "staff.read",
-        "user.read",
-        "user.read_pii",
-      ],
-    };
-
     stubMe(["role.manage"]);
-    watchGraph();
+    const graph = watchGraph();
 
     const html = await render();
 
-    for (const [code, permissions] of Object.entries(EXPECTED)) {
+    // Kestirmenin sebebi: on rol için on istek. Çizim sırasında detay ucuna
+    // tek bir çağrı bile gitmemeli.
+    expect(graph.details).toBe(0);
+
+    for (const row of ROLE_ROWS) {
+      const detail = await backendDetail(row.id);
+      const block = detailBlock(html, row.code);
+
       // Rolün kendi `<details>` bloğunun "Etkili izinler" bölümü. Her izin bir
       // rozet ve her rozet "(doğrudan)" ya da "(kalıtım)" ile bitiyor, yani
       // rozetleri saymak listenin uzunluğunu ölçüyor: fazladan bir izin de
       // eksik bir izin de bu sayıyı kaydırır.
-      const block = html.split(`id="rol-${code}"`)[1]?.split("</details>")[0] ?? "";
       const effective = block.split("Etkili izinler")[1] ?? "";
       const badges = (effective.match(/\((?:doğrudan|kalıtım)\)/g) ?? []).length;
 
-      expect(badges, `${code} etkili izin sayısı`).toBe(permissions.length);
+      expect(badges, `${row.code} etkili izin sayısı`).toBe(detail.effectivePermissions.length);
 
-      for (const permission of permissions) {
-        expect(effective, `${code} → ${permission}`).toContain(`>${permission}</span>`);
+      for (const permission of detail.effectivePermissions) {
+        expect(effective, `${row.code} → ${permission}`).toContain(`>${permission}</span>`);
       }
+
+      /**
+       * Kapanış da aynı cevaptan ölçülüyor. Tek fark tanımda: backend'in
+       * `effectiveRoles`'ü rolün kendisini **dışarıda** bırakıyor, panelin
+       * gösterdiği küme onu içeriyor (`closureWithSelf`) — çünkü "bu rol hangi
+       * dalları kapsıyor" sorusu kendisini de sayar.
+       */
+      const closure = [...detail.effectiveRoles, row.code].sort((a, b) => a.localeCompare(b, "tr"));
+
+      expect(block, `${row.code} kapanışı`).toContain(closure.join(", "));
     }
   });
 });
 
-describe("döngü: reddedileceği belli olan seçenek kapalı", () => {
+describe("döngü: reddedileceği belli olan seçenek kapalı, ötekiler açık", () => {
+  /** Bir rolün kapsama `<select>`'indeki tek bir seçeneğin `<option>` etiketi. */
+  function optionFor(html: string, parent: string, child: string): string {
+    const block = detailBlock(html, parent);
+    return block.match(new RegExp(`<option value="[^"]*:${child}"[^>]*>`))?.[0] ?? "";
+  }
+
   it("SUPPORT_AGENT'ın TRUST_LEAD'i kapsamasını seçilemez yapıyor ve sebebini yazıyor", async () => {
     // Backend bunu 409 ile reddediyor. Panel reddi üretmiyor, yalnız önceden
     // görünür kılıyor.
@@ -278,6 +360,33 @@ describe("döngü: reddedileceği belli olan seçenek kapalı", () => {
     const html = await render();
 
     expect(html).toContain("döngü yaratır, backend 409 döner");
+    expect(optionFor(html, "SUPPORT_AGENT", "TRUST_LEAD")).toContain("disabled");
+  });
+
+  it("zaten ulaşılan bir rolü kapsama seçeneğini kapatmıyor", async () => {
+    /**
+     * Kuralın öteki yönü, ve ölçülmeyen yönü buydu: `wouldCycle`'a
+     * `|| closureWithSelf(graph, parent).includes(child)` eklemek gerçek
+     * döngüleri koruyup **meşru** seçenekleri kapatıyor, ve 516 testin hepsi
+     * yeşil kalıyordu.
+     *
+     * OWNER, SUPPORT_AGENT'a TRUST_LEAD → MODERATOR üzerinden zaten ulaşıyor.
+     * Doğrudan kenarı yazmak bir döngü değil; backend onu kabul ediyor. Panelin
+     * seçeneği kapatması, açık bir kapıyı sessizce kapatmak olurdu — operatör
+     * kapalı bir seçeneğin neden kapalı olduğunu sorgulamaz.
+     */
+    stubMe(["role.manage"]);
+    watchGraph();
+
+    const html = await render();
+
+    const option = optionFor(html, "OWNER", "SUPPORT_AGENT");
+
+    expect(option).not.toBe("");
+    expect(option).not.toContain("disabled");
+    expect(detailBlock(html, "OWNER")).not.toContain(
+      "SUPPORT_AGENT — Destek görevlisi — döngü yaratır",
+    );
   });
 });
 
