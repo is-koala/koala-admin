@@ -21,7 +21,8 @@
  * endpoint to. The issue body for koala-admin#5 listed twelve; #14 added
  * `content.moderate`, `badge.manage`, `settings.manage` and `user.role.manage`.
  * Sonraki dalgalar üç tane daha ekledi ve panel bunları bilmiyordu:
- * `user.deletion.manage`, `bank.account.verify` ve `staff.read`. Bugün ondokuz.
+ * `user.deletion.manage`, `bank.account.verify` ve `staff.read`. Banka
+ * mutabakatı da `payout.reconcile` ile ayrı bir finans kapısıdır. Bugün yirmi.
  *
  * Eksik kalan bir ad, "izin verilmiş gibi görünmek" değil, **adlandırılamamak**
  * demekti: `partitionPermissions` onu `unknownPermissions`'a atıyor, yani o izne
@@ -113,6 +114,12 @@ const CATALOGUE = [
     mutating: true,
     sensitivity: "FINANCIAL",
     label: "Escrow'dan ödeme serbest bırak",
+  },
+  {
+    name: "payout.reconcile",
+    mutating: true,
+    sensitivity: "FINANCIAL",
+    label: "Hakedişi banka ekstresiyle mutabık kıl",
   },
   {
     name: "payment.refund",

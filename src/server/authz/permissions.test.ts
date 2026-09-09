@@ -22,6 +22,7 @@ const EXPECTED = [
   "finance.read",
   "payment.read",
   "payment.refund",
+  "payout.reconcile",
   "payout.release",
   "role.manage",
   "settings.manage",
@@ -34,7 +35,7 @@ const EXPECTED = [
 ];
 
 describe("the permission catalogue", () => {
-  it("names the nineteen permissions koala-backend defines, and no others", () => {
+  it("names the twenty permissions koala-backend defines, and no others", () => {
     expect([...PERMISSIONS].sort()).toEqual(EXPECTED);
   });
 
@@ -50,6 +51,11 @@ describe("the permission catalogue", () => {
     expect(byName.get("payout.release")).toMatchObject({
       mutating: true,
       sensitivity: "FINANCIAL",
+    });
+    expect(byName.get("payout.reconcile")).toMatchObject({
+      mutating: true,
+      sensitivity: "FINANCIAL",
+      label: "Hakedişi banka ekstresiyle mutabık kıl",
     });
     expect(byName.get("payment.refund")).toMatchObject({
       mutating: true,
@@ -102,7 +108,7 @@ describe("the permission catalogue", () => {
   });
 
   it("refuses names it does not know", () => {
-    // A backend that grows a twentieth permission must not be able to widen
+    // A backend that grows a twenty-first permission must not be able to widen
     // the panel's vocabulary by simply naming it in a response.
     expect(isPermission("category.manage")).toBe(true);
     expect(isPermission("category.mange")).toBe(false);

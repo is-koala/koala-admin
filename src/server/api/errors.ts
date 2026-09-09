@@ -11,6 +11,8 @@ export interface KoalaApiErrorInit {
   resourceId?: string | null;
   path?: string | null;
   method?: string | null;
+  /** True only when the upstream body matched Koala's complete ErrorResult contract. */
+  hasContractEnvelope?: boolean;
   cause?: unknown;
 }
 
@@ -36,6 +38,8 @@ export class KoalaApiError extends Error {
   readonly resourceId: string | null;
   readonly path: string | null;
   readonly method: string | null;
+  /** Distinguishes an ErrorResult from fields salvaged out of proxy or malformed bodies. */
+  readonly hasContractEnvelope: boolean;
 
   constructor(init: KoalaApiErrorInit) {
     super(init.message, init.cause === undefined ? undefined : { cause: init.cause });
@@ -48,6 +52,7 @@ export class KoalaApiError extends Error {
     this.resourceId = init.resourceId ?? null;
     this.path = init.path ?? null;
     this.method = init.method ?? null;
+    this.hasContractEnvelope = init.hasContractEnvelope ?? false;
   }
 
   /** True when re-authenticating could plausibly fix the call. */
