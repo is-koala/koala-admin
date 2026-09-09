@@ -54,6 +54,8 @@ export interface DecisionFormProps {
   submitLabel: string;
   /** Shortest note the form will submit. The action enforces the same number. */
   minNoteLength?: number;
+  /** Longest note the backend accepts. The action must enforce the same number. */
+  maxNoteLength?: number;
   /**
    * What the operator has to do *next*, outside this form — a follow-up the
    * panel cannot perform. Rendered under the summary rather than hidden,
@@ -78,6 +80,7 @@ export function DecisionForm({
   noteHint,
   submitLabel,
   minNoteLength = DEFAULT_MIN_NOTE_LENGTH,
+  maxNoteLength,
   followUp,
   idPrefix,
   disabled = false,
@@ -157,6 +160,7 @@ export function DecisionForm({
           id={noteId}
           name="note"
           rows={3}
+          maxLength={maxNoteLength}
           value={note}
           onChange={(event) => setNote(event.target.value)}
           aria-invalid={showNoteError}

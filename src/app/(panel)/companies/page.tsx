@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 
-import { DecisionForm, QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
+import {
+  DecisionForm,
+  QueueFilters,
+  QueueLoadFailure,
+  QueuePager,
+  type DecisionOption,
+} from "@/components/panel/queue";
 import {
   Badge,
   EmptyState,
@@ -11,21 +17,24 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
-import { EMPTY_VALUE, formatInteger } from "@/lib/format";
+import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
 import {
-  APPROVAL_MIN_NOTE_LENGTH,
-  COMPANY_BACKEND_GAPS,
+  COMPANY_DECISION_MAX_NOTE_LENGTH,
+  COMPANY_DECISION_MIN_NOTE_LENGTH,
+  COMPANY_APPROVAL_STATUSES,
   COMPANY_PAGING,
-  companyContactRoleLabel,
+  companyApprovalStatusLabel,
   companyTypeLabel,
-  contactDisplayName,
   getCompanies,
-  type Company,
+  safeUserDisplayName,
+  type CompanyApprovalStatus,
+  type CompanyReview,
 } from "@/server/api/companies";
 import {
   pageWindow,
   readEnumParam,
   readPaging,
+  readParam,
   sortParam,
   type SearchParams,
 } from "@/server/api/paging";
@@ -33,31 +42,10 @@ import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
-import { submitCompanyApproval } from "./actions";
+import { submitCompanyDecision } from "./actions";
 
 export const metadata: Metadata = { title: "Şirket onayları" };
 
-/**
- * The screen that ends a dead end.
- *
- * A company is created unapproved and cannot post a job until somebody
- * approves it, and until now nobody could: `POST /admin/companies/{id}/approve`
- * existed with no operator in front of it, so the entire company branch of the
- * employer flow stopped at `PENDING`.
- *
- * What this screen can and cannot do is decided by `AdminController`, and it
- * says so rather than filling the gaps in:
- *
- *  - **Approval is the only move.** There is no rejection endpoint, no
- *    un-approve, no "ask for documents". The decision form offers one option
- *    and the screen states the absence in words.
- *  - **The note goes nowhere on the backend.** The approve endpoint takes no
- *    body. The panel still requires a written reason — approval is
- *    irreversible — and says out loud where it does and does not end up.
- *  - **No notification is sent.** `CompanyManager.approveCompany` flips a
- *    boolean and logs; it never calls `notificationService`. An operator who
- *    assumes the owner was told would be wrong, so the screen tells them.
- */
 export default async function CompaniesPage({
   searchParams,
 }: {
@@ -70,9 +58,10 @@ export default async function CompaniesPage({
       <header className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Şirket onay kuyruğu</h1>
         <p className="max-w-prose text-sm text-ink-muted">
-          Onay bekleyen şirket başvuruları. Onaylanana kadar şirket ilan yayınlayamaz.{" "}
-          <code className="font-mono">company.approve</code> izni gerektirir; karar backend&apos;in
-          denetim kaydına yazılır (koala-backend#15).
+          Şirket başvurularını ara, incele, onayla ya da gerekçesiyle reddet. Liste ve kararlar
+          yalnız sunucuda Koala API&apos;sine gider;{" "}
+          <code className="font-mono">company.approve</code> izni hem panelde hem backend&apos;de
+          yeniden denetlenir.
         </p>
       </header>
 
@@ -83,9 +72,6 @@ export default async function CompaniesPage({
   );
 }
 
-/** The two views `@RequestParam boolean approved` can produce, named in Turkish. */
-const VIEWS = ["bekleyen", "onayli"] as const;
-
 const SORT_OPTIONS = [
   { value: "createdAt,desc", label: "En yeni önce" },
   { value: "createdAt,asc", label: "En eski önce" },
@@ -94,27 +80,41 @@ const SORT_OPTIONS = [
 ];
 
 async function CompanyQueue({ params }: { params: SearchParams }) {
-  const view = readEnumParam(params, "onay", VIEWS, "bekleyen");
-  const approved = view === "onayli";
+  const status = readEnumParam<CompanyApprovalStatus>(
+    params,
+    "durum",
+    COMPANY_APPROVAL_STATUSES,
+    "PENDING",
+  );
   const paging = readPaging(params, COMPANY_PAGING);
+  const rawQuery = readParam(params, "ara");
+  const query = rawQuery?.trim() || null;
+  const rawDecisionResult = readParam(params, "sonuc");
+  const decisionResult =
+    rawDecisionResult === "approved" || rawDecisionResult === "rejected" ? rawDecisionResult : null;
 
   const viewState = {
-    onay: view,
+    durum: status,
+    ...(query === null ? {} : { ara: query }),
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
   };
+  const returnTo = `/companies?${new URLSearchParams({
+    ...viewState,
+    sayfa: String(paging.page),
+  }).toString()}`;
 
   const filters = (
     <QueueFilters
       filters={[
         {
-          name: "onay",
-          label: "Görünüm",
-          value: view,
-          options: [
-            { value: "bekleyen", label: "Onay bekleyenler" },
-            { value: "onayli", label: "Onaylanmışlar" },
-          ],
+          name: "durum",
+          label: "Durum",
+          value: status,
+          options: COMPANY_APPROVAL_STATUSES.map((value) => ({
+            value,
+            label: companyApprovalStatusLabel(value),
+          })),
         },
         {
           name: "sirala",
@@ -123,13 +123,11 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
           options: SORT_OPTIONS,
         },
       ]}
-      carry={{ boyut: String(paging.size) }}
+      carry={{ boyut: String(paging.size), ...(query === null ? {} : { ara: query }) }}
       notice={
         <>
-          Görünüm ve sıralama sunucuya gider; gelen sayfa panelde süzülmez.{" "}
-          <strong>Ada ya da vergi numarasına göre arama yok</strong> —{" "}
-          <code className="font-mono">GET /admin/companies</code> tek süzgeç olarak{" "}
-          <code className="font-mono">approved</code> alıyor.
+          Durum, arama ve sıralama backend&apos;e gider; gelen sayfa tarayıcıda yeniden süzülmez.
+          Arama şirket adı ve vergi numarası üzerinde çalışır.
         </>
       }
     />
@@ -137,17 +135,19 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
 
   let page;
   try {
-    page = await getCompanies(await getKoalaAccessToken(), { approved, paging });
+    page = await getCompanies(await getKoalaAccessToken(), { status, query, paging });
   } catch (error) {
     return (
       <div className="flex flex-col gap-4">
         {filters}
+        <CompanySearch query={query} state={viewState} />
+        {decisionResult === null ? null : <DecisionSuccess result={decisionResult} />}
         <QueueLoadFailure
           subject="Şirket kuyruğu"
           permission="company.approve"
           failure={classifyQueueFailure(error)}
         />
-        <BackendGaps />
+        <ReviewContractNotice />
       </div>
     );
   }
@@ -157,16 +157,21 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
   return (
     <div className="flex flex-col gap-6">
       {filters}
-
-      <NoRejectionNotice />
+      <CompanySearch query={query} state={viewState} />
+      {decisionResult === null ? null : <DecisionSuccess result={decisionResult} />}
+      <DecisionDeliveryNotice />
 
       {companies.length === 0 ? (
         <EmptyState
-          title={approved ? "Onaylanmış şirket yok." : "Onay bekleyen şirket yok. Kuyruk temiz."}
+          title={
+            query === null
+              ? `${companyApprovalStatusLabel(status)} durumunda şirket yok.`
+              : "Aramayla eşleşen şirket yok."
+          }
           description={
-            approved
-              ? "Bu görünüm yalnızca onaylanmış şirketleri listeler."
-              : "Yeni bir başvuru geldiğinde burada görünür."
+            query === null
+              ? "Başka bir karar durumu seçebilir ya da kuyruğu daha sonra yenileyebilirsiniz."
+              : "Arama şirket adı ve vergi numarası üzerinde sunucuda çalışır."
           }
         />
       ) : (
@@ -177,7 +182,8 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
                 <TableHeaderCell>Şirket</TableHeaderCell>
                 <TableHeaderCell>Tür</TableHeaderCell>
                 <TableHeaderCell>Vergi no</TableHeaderCell>
-                <TableHeaderCell>Yetkililer</TableHeaderCell>
+                <TableHeaderCell>Oluşturan</TableHeaderCell>
+                <TableHeaderCell>Başvuru zamanı</TableHeaderCell>
                 <TableHeaderCell>Durum</TableHeaderCell>
                 <TableHeaderCell>Detay</TableHeaderCell>
               </TableRow>
@@ -190,17 +196,10 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
                   <TableCell>
                     <span className="font-mono text-xs">{company.taxNumber ?? EMPTY_VALUE}</span>
                   </TableCell>
+                  <TableCell>{safeUserDisplayName(company.createdBy) ?? EMPTY_VALUE}</TableCell>
+                  <TableCell>{formatDateTime(company.createdAt)}</TableCell>
                   <TableCell>
-                    {company.companyContacts.length === 0
-                      ? EMPTY_VALUE
-                      : formatInteger(company.companyContacts.length)}
-                  </TableCell>
-                  <TableCell>
-                    {company.approved ? (
-                      <Badge tone="success">Onaylı</Badge>
-                    ) : (
-                      <Badge tone="warning">Onay bekliyor</Badge>
-                    )}
+                    <ApprovalStatusBadge status={company.approvalStatus} />
                   </TableCell>
                   <TableCell>
                     <a href={`#sirket-${company.id}`} className="text-brand hover:underline">
@@ -212,47 +211,76 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
             </TableBody>
           </Table>
 
-          <QueuePager window={pageWindow(page)} state={viewState} unit="şirket" />
-
           <section className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold">Başvuru detayları ve onay</h2>
+            <h2 className="text-lg font-semibold">Başvuru detayları ve karar</h2>
             {companies.map((company) => (
-              <CompanyDetail key={company.id} company={company} />
+              <CompanyDetail key={company.id} company={company} returnTo={returnTo} />
             ))}
           </section>
         </>
       )}
 
-      <BackendGaps />
+      <QueuePager window={pageWindow(page)} state={viewState} unit="şirket" />
+
+      <ReviewContractNotice />
     </div>
   );
 }
 
-/**
- * Stated once, above the queue, rather than only inside each decision form.
- *
- * An operator opening an application that should clearly be refused needs to
- * find out immediately that there is nothing they can do about it here — not
- * after reading the whole record and looking for a button.
- */
-function NoRejectionNotice() {
+function DecisionSuccess({ result }: { result: "approved" | "rejected" }) {
   return (
-    <div className="rounded-lg border border-warning/30 bg-warning-soft px-4 py-3">
-      <p className="text-sm font-semibold text-warning">Bu kuyrukta ret yolu yok.</p>
-      <p className="max-w-prose text-sm text-ink">
-        koala-backend yalnızca{" "}
-        <code className="font-mono">POST /admin/companies/&#123;companyId&#125;/approve</code> ucunu
-        veriyor; reddetme, onayı geri alma ya da eksik belge isteme ucu bulunmuyor. Reddedilmesi
-        gereken bir başvuru kuyrukta kalmaya devam eder. Panel bunun için bir düğme uydurmuyor —
-        eksik olan backend&apos;dedir.
-      </p>
-    </div>
+    <p role="status" className="rounded-md bg-success-soft px-3 py-2 text-sm text-success">
+      {result === "approved" ? "Onay" : "Ret"} kararı backend tarafından kaydedildi. Liste yeniden
+      yüklendi.
+    </p>
   );
 }
 
-function CompanyDetail({ company }: { company: Company }) {
-  const address = company.address;
-  const contacts = company.companyContacts;
+function CompanySearch({
+  query,
+  state,
+}: {
+  query: string | null;
+  state: Readonly<Record<string, string>>;
+}) {
+  return (
+    <form className="flex flex-wrap items-end gap-3" method="get">
+      {Object.entries(state)
+        .filter(([name]) => name !== "ara")
+        .map(([name, value]) => (
+          <input key={name} type="hidden" name={name} value={value} />
+        ))}
+      <input type="hidden" name="sayfa" value="0" />
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label htmlFor="sirket-ara" className="text-sm font-medium text-ink">
+          Şirket adı ya da vergi numarası ara
+        </label>
+        <input
+          id="sirket-ara"
+          name="ara"
+          type="search"
+          defaultValue={query ?? ""}
+          placeholder="ör. Koala Kahve veya 1234567890"
+          className="w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-subtle"
+        />
+      </div>
+      <button
+        type="submit"
+        className="rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
+      >
+        Ara
+      </button>
+    </form>
+  );
+}
+
+function ApprovalStatusBadge({ status }: { status: string }) {
+  const tone = status === "APPROVED" ? "success" : status === "REJECTED" ? "danger" : "warning";
+  return <Badge tone={tone}>{companyApprovalStatusLabel(status)}</Badge>;
+}
+
+function CompanyDetail({ company, returnTo }: { company: CompanyReview; returnTo: string }) {
+  const creator = company.createdBy;
 
   return (
     <details
@@ -261,11 +289,7 @@ function CompanyDetail({ company }: { company: Company }) {
     >
       <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-ink">
         <span>{company.name ?? EMPTY_VALUE}</span>
-        {company.approved ? (
-          <Badge tone="success">Onaylı</Badge>
-        ) : (
-          <Badge tone="warning">Onay bekliyor</Badge>
-        )}
+        <ApprovalStatusBadge status={company.approvalStatus} />
         <span className="font-mono text-xs text-ink-subtle">{company.id.slice(0, 8)}</span>
       </summary>
 
@@ -289,135 +313,111 @@ function CompanyDetail({ company }: { company: Company }) {
           <dt className="text-sm text-ink-muted">Telefon</dt>
           <dd className="text-sm">{company.phoneNumber ?? EMPTY_VALUE}</dd>
 
-          <dt className="text-sm text-ink-muted">Web sitesi</dt>
-          <dd className="text-sm break-all">{company.website ?? EMPTY_VALUE}</dd>
-
-          <dt className="text-sm text-ink-muted">Adres</dt>
+          <dt className="text-sm text-ink-muted">Oluşturan</dt>
           <dd className="text-sm">
-            {address === null
-              ? EMPTY_VALUE
-              : (address.displayAddress ??
-                [address.districtName, address.cityName, address.countryName]
-                  .filter(Boolean)
-                  .join(", ") ??
-                EMPTY_VALUE)}
+            {safeUserDisplayName(creator) ?? EMPTY_VALUE}
+            {creator?.username ? (
+              <span className="text-ink-muted"> · @{creator.username}</span>
+            ) : null}
           </dd>
 
-          <dt className="text-sm text-ink-muted">Tanım</dt>
-          <dd className="text-sm whitespace-pre-wrap">{company.description ?? EMPTY_VALUE}</dd>
+          <dt className="text-sm text-ink-muted">Başvuru zamanı</dt>
+          <dd className="text-sm">{formatDateTime(company.createdAt)}</dd>
 
-          <dt className="text-sm text-ink-muted">Yetkili kişiler</dt>
-          <dd className="flex flex-col gap-1 text-sm">
-            {contacts.length === 0 ? "Kayıtlı yetkili yok." : null}
-            {contacts.map((contact) => (
-              <span key={contact.id} className="flex flex-wrap items-center gap-2">
-                <span>{contactDisplayName(contact) ?? EMPTY_VALUE}</span>
-                <Badge>{companyContactRoleLabel(contact.role) ?? EMPTY_VALUE}</Badge>
-              </span>
-            ))}
+          <dt className="text-sm text-ink-muted">Karar durumu</dt>
+          <dd>
+            <ApprovalStatusBadge status={company.approvalStatus} />
           </dd>
 
-          <dt className="text-sm text-ink-muted">Başvuru tarihi ve başvuran</dt>
-          <dd className="text-sm text-ink-muted">
-            Backend döndürmüyor. <code className="font-mono">Company</code> kaydında{" "}
-            <code className="font-mono">created_at</code> ve{" "}
-            <code className="font-mono">created_by_id</code> var,{" "}
-            <code className="font-mono">CompanyDto</code> ikisini de taşımıyor. Yukarıdaki yetkili
-            kişiler, başvuruyu açan kişi ile aynı olmak zorunda değildir.
-          </dd>
+          <dt className="text-sm text-ink-muted">Karar zamanı</dt>
+          <dd className="text-sm">{formatDateTime(company.approvalDecidedAt)}</dd>
 
-          <dt className="text-sm text-ink-muted">Belgeler / galeri</dt>
-          <dd className="flex flex-col gap-1 text-sm">
-            {company.images.length === 0 ? (
-              <span className="text-ink-muted">
-                Görsel yok. Backend&apos;de belge için ayrı bir alan da yok — burada görülenler
-                şirketin galeri görselleridir.
-              </span>
-            ) : (
-              company.images.map((image) => (
-                <a
-                  key={image.id}
-                  href={image.url ?? "#"}
-                  className="break-all text-brand hover:underline"
-                  rel="noreferrer noopener"
-                  target="_blank"
-                >
-                  {image.caption ?? image.url ?? image.id}
-                </a>
-              ))
-            )}
-          </dd>
+          <dt className="text-sm text-ink-muted">Kaydedilmiş karar gerekçesi</dt>
+          <dd className="text-sm whitespace-pre-wrap">{company.approvalNote ?? EMPTY_VALUE}</dd>
         </dl>
 
-        <DecisionForm
-          action={submitCompanyApproval}
-          hiddenFields={{ companyId: company.id }}
-          options={[
-            {
-              value: "APPROVE",
-              label: "Şirketi onayla",
-              consequence:
-                "Şirket onaylanır ve ilan yayınlayabilir hale gelir. Onayı geri alan bir uç yok, bu yüzden karar kalıcıdır.",
-              irreversible: true,
-            },
-          ]}
-          legend="Karar"
-          noteLabel="Onay gerekçesi"
-          noteHint={`En az ${APPROVAL_MIN_NOTE_LENGTH} karakter. Hangi belgeye ya da bilgiye bakarak onayladığınızı yazın.`}
-          submitLabel="Şirketi onayla"
-          minNoteLength={APPROVAL_MIN_NOTE_LENGTH}
-          idPrefix={`sirket-${company.id}`}
-          disabled={company.approved}
-          disabledReason="Bu şirket zaten onaylı. Backend onaylı bir şirketi tekrar onaylamıyor (409) ve onayı geri alan bir uç yok."
-          followUp={<ApprovalFollowUp />}
-        />
+        <CompanyDecision company={company} returnTo={returnTo} />
       </div>
     </details>
   );
 }
 
-/** The three things that do not happen automatically, said before the click. */
-function ApprovalFollowUp() {
+function CompanyDecision({ company, returnTo }: { company: CompanyReview; returnTo: string }) {
+  const options: DecisionOption[] = [
+    {
+      value: "APPROVE",
+      label: "Şirketi onayla",
+      consequence:
+        company.approvalStatus === "REJECTED"
+          ? "Şirket APPROVED durumuna geçer; önceki ret gerekçesinin yerini bu onay gerekçesi alır."
+          : "Şirket APPROVED durumuna geçer ve karar gerekçesi kaydedilir.",
+      irreversible: true,
+    },
+  ];
+
+  if (company.approvalStatus === "PENDING") {
+    options.push({
+      value: "REJECT",
+      label: "Şirketi reddet",
+      consequence:
+        "Şirket REJECTED durumuna geçer ve bekleyenler kuyruğundan çıkar; gerekçesi kaydedilir.",
+      tone: "danger",
+    });
+  }
+
+  const canDecide = company.approvalStatus === "PENDING" || company.approvalStatus === "REJECTED";
+  const disabledReason =
+    company.approvalStatus === "APPROVED"
+      ? "Bu şirket onaylı. Backend onayı geri almaya veya onaylı şirketi reddetmeye izin vermez."
+      : "Backend bu karar durumundan yeni bir geçiş tanımlamıyor.";
+
   return (
-    <div className="flex flex-col gap-1">
-      <p className="font-medium text-ink">Onaydan sonra:</p>
-      <ul className="list-disc pl-5">
-        <li>
-          <strong>Gerekçeniz backend&apos;e gitmez.</strong> Onay ucu gövde kabul etmiyor; gerekçe
-          panelin sunucu günlüğüne düşer. Kalıcı kayıt koala-backend#15 ile gelecek.
-        </li>
-        <li>
-          <strong>Şirket sahibine bildirim gitmez.</strong>{" "}
-          <code className="font-mono">CompanyManager.approveCompany</code> yalnızca onay alanını
-          değiştirip log yazıyor; bildirim servisi çağrılmıyor. Haber vermek gerekiyorsa panel
-          dışından yapın.
-        </li>
-        <li>
-          <strong>Karar geri alınamaz.</strong> Onayı kaldıran bir uç yok.
-        </li>
-      </ul>
+    <DecisionForm
+      action={submitCompanyDecision}
+      hiddenFields={{ companyId: company.id, returnTo }}
+      options={options}
+      legend="Karar"
+      noteLabel="Karar gerekçesi"
+      noteHint={`${COMPANY_DECISION_MIN_NOTE_LENGTH}-${COMPANY_DECISION_MAX_NOTE_LENGTH} karakter. Gerekçe backend'de karar kaydıyla birlikte saklanır.`}
+      submitLabel="Kararı kaydet"
+      minNoteLength={COMPANY_DECISION_MIN_NOTE_LENGTH}
+      maxNoteLength={COMPANY_DECISION_MAX_NOTE_LENGTH}
+      idPrefix={`sirket-${company.id}`}
+      disabled={!canDecide}
+      disabledReason={disabledReason}
+      followUp={<DecisionPersistenceNotice compact />}
+    />
+  );
+}
+
+function DecisionPersistenceNotice({ compact = false }: { compact?: boolean }) {
+  return (
+    <p className={compact ? undefined : "max-w-prose text-sm text-ink"}>
+      Gerekçe şirket kararında saklanır. Backend, varsa şirketin ADMIN yetkilileri için uygulama
+      içi, e-posta ve push bildirimlerini göndermeyi dener. Kuyruk yanıtı teslim veya denetim kaydı
+      sonucunu taşımadığı için panel bunların tamamlandığını iddia etmez.
+    </p>
+  );
+}
+
+function DecisionDeliveryNotice() {
+  return (
+    <div className="rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3">
+      <p className="text-sm font-semibold text-ink">Karar kaydı ve bildirim</p>
+      <DecisionPersistenceNotice />
     </div>
   );
 }
 
-function BackendGaps() {
+function ReviewContractNotice() {
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3">
-      <h2 className="text-sm font-semibold text-ink">
-        Backend&apos;in veremedikleri ({formatInteger(COMPANY_BACKEND_GAPS.length)})
-      </h2>
+    <section className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3">
+      <h2 className="text-sm font-semibold text-ink">İnceleme verisinin sınırı</h2>
       <p className="max-w-prose text-xs text-ink-muted">
-        koala-admin#8&apos;in istediği ama <code className="font-mono">AdminController</code>
-        &apos;ın bugün karşılayamadığı alanlar. Panel bunları taklit etmiyor.
+        Bu kuyruk yalnız <code className="font-mono">CompanyReviewDto</code> alanlarını gösterir.
+        Adres, galeri, şirket kişileri veya belge koleksiyonu bu sözleşmede yoktur; panel tam şirket
+        kaydını ya da kullanıcı varlığını istemciye taşımaz.
       </p>
-      <dl className="flex flex-col gap-2">
-        {COMPANY_BACKEND_GAPS.map((gap) => (
-          <div key={gap.id} className="flex flex-col">
-            <dt className="text-sm font-medium text-ink">{gap.title}</dt>
-            <dd className="max-w-prose text-xs text-ink-muted">{gap.detail}</dd>
-          </div>
-        ))}
-      </dl>
     </section>
   );
 }
