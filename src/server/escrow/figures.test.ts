@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { EscrowSummary } from "@/server/api/escrow";
+import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment";
 
 import {
   escrowFigure,
@@ -20,75 +20,33 @@ import {
  * a float on the way.
  */
 
-const SUMMARY: EscrowSummary = {
-  id: "assignment-1",
-  status: "COMPLETED",
-  paymentStatus: "HELD_IN_ESCROW",
-  currency: "TRY",
-  workerPayout: "1240.50",
-  commissionAmount: "137.83",
-  commissionRate: "0.1000",
-  totalCharged: "1378.33",
-  workHours: 8,
-  jobTitle: "Garsonluk",
-  worker: {
-    id: "w-1",
-    firstName: "Ayşe",
-    lastName: "Yılmaz",
-    username: "ayse",
-    profilePictureUrl: null,
-  },
-  employer: {
-    id: "e-1",
-    firstName: "Mehmet",
-    lastName: "Demir",
-    username: "mehmet",
-    profilePictureUrl: null,
-  },
-  companyName: "Koala Kafe",
-  settledPayment: {
-    id: "p-1",
-    currency: "TRY",
-    totalCharged: "1378.33",
-    workerPayout: "1240.50",
-    commissionAmount: "137.83",
-    commissionRate: "0.1000",
-    completedAt: "2026-09-01T10:00:00Z",
-  },
-};
+const SUMMARY = adminAssignmentFixture({ id: "assignment-1", jobId: "job-1" });
 
 describe("which figure moves", () => {
-  it("pays the worker jobAssignment.workerPayout, the field PayoutManager reads", () => {
+  it("pays the worker amount from the backend's pricing snapshot", () => {
     const figure = escrowFigure(SUMMARY, "WORKER");
 
     expect(figure.amount).toBe("1240.50");
     expect(figure.partyName).toBe("Ayşe Yılmaz");
     expect(figure.partyRole).toBe("İşçi");
-    expect(figure.source).toBe("jobAssignment.workerPayout");
+    expect(figure.source).toBe("pricing.workerPayout");
   });
 
-  it("refunds the settled payment's total, not the assignment's snapshot", () => {
-    // They agree here; the point is which one is read. When they disagree, the
-    // one that moves is the payment's, so that is the one shown.
-    const drifted: EscrowSummary = {
-      ...SUMMARY,
-      totalCharged: "9999.99",
-      settledPayment: { ...SUMMARY.settledPayment!, totalCharged: "1378.33" },
-    };
-
-    const figure = escrowFigure(drifted, "EMPLOYER");
+  it("refunds the employer total from the backend's pricing snapshot", () => {
+    const figure = escrowFigure(SUMMARY, "EMPLOYER");
 
     expect(figure.amount).toBe("1378.33");
     expect(figure.partyName).toBe("Mehmet Demir · Koala Kafe");
     expect(figure.partyRole).toBe("İşveren");
   });
 
-  it("returns null rather than a substitute when there is no settled payment", () => {
-    const figure = escrowFigure({ ...SUMMARY, settledPayment: null }, "EMPLOYER");
+  it("does not substitute the worker amount for the employer total", () => {
+    const figure = escrowFigure(
+      { ...SUMMARY, pricing: { ...SUMMARY.pricing, employerTotal: "1378.34" } },
+      "EMPLOYER",
+    );
 
-    // Null is the signal to withhold the operation. Falling back to
-    // `assignment.totalCharged` here would be the panel inventing the figure.
-    expect(figure.amount).toBeNull();
+    expect(figure.amount).toBe("1378.34");
   });
 });
 
@@ -104,17 +62,9 @@ describe("what the backend would accept", () => {
     });
   });
 
-  it("refuses a release when the backend supplied no worker payout", () => {
-    const availability = releaseAvailability({ ...SUMMARY, workerPayout: null });
-
-    expect(availability.allowed).toBe(false);
-    expect(availability.reason).toContain("Tutarı bilmeden");
-  });
-
   it("allows a refund from escrow regardless of assignment status, like canRefund", () => {
     expect(refundAvailability({ ...SUMMARY, status: "IN_PROGRESS" }).allowed).toBe(true);
     expect(refundAvailability({ ...SUMMARY, paymentStatus: "REFUNDED" }).allowed).toBe(false);
-    expect(refundAvailability({ ...SUMMARY, settledPayment: null }).allowed).toBe(false);
   });
 });
 

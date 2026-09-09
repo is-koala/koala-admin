@@ -22,9 +22,8 @@ export interface EscrowFigure {
   /** "İşçi" / "İşveren", for the sentence next to the amount. */
   readonly partyRole: string;
   /**
-   * The server's figure, verbatim — a number or a decimal string, exactly as it
-   * arrived. `null` means the backend did not supply one, which is the signal
-   * for the caller to withhold the operation rather than to guess.
+   * The server's decimal string, verbatim. `null` is retained as the caller's
+   * fail-closed signal even though the current pricing DTO requires the field.
    */
   readonly amount: Money | null;
   readonly currency: string;
@@ -33,9 +32,9 @@ export interface EscrowFigure {
 }
 
 /**
- * `PayoutManager.releaseToWorker` sets `payout.setAmount(assignment.getWorkerPayout())`
- * and `PayoutManager.refundEmployer` refunds `payment.getTotalCharged()` of the
- * latest SUCCEEDED attempt. Those two lines are the whole of this function.
+ * `AdminAssignmentDto.pricing` is the backend-authored snapshot shown to the
+ * operator. The panel selects the worker or employer side without recomputing
+ * either figure.
  */
 export function escrowFigure(summary: EscrowSummary, direction: EscrowDirection): EscrowFigure {
   if (direction === "WORKER") {
@@ -43,13 +42,11 @@ export function escrowFigure(summary: EscrowSummary, direction: EscrowDirection)
       direction,
       partyName: safeUserName(summary.worker),
       partyRole: "İşçi",
-      amount: summary.workerPayout,
-      currency: summary.currency,
-      source: "jobAssignment.workerPayout",
+      amount: summary.pricing.workerPayout,
+      currency: summary.pricing.currency,
+      source: "pricing.workerPayout",
     };
   }
-
-  const payment = summary.settledPayment;
 
   return {
     direction,
@@ -58,12 +55,9 @@ export function escrowFigure(summary: EscrowSummary, direction: EscrowDirection)
         ? `${safeUserName(summary.employer)} · ${summary.companyName}`
         : safeUserName(summary.employer),
     partyRole: "İşveren",
-    // The *payment's* total, not the assignment's: it is the row the backend
-    // reads. They are written together at collection time and should agree, but
-    // when they do not, the one that moves is this one.
-    amount: payment === null ? null : payment.totalCharged,
-    currency: payment === null ? summary.currency : payment.currency,
-    source: "payment.totalCharged (son SUCCEEDED tahsilat)",
+    amount: summary.pricing.employerTotal,
+    currency: summary.pricing.currency,
+    source: "pricing.employerTotal",
   };
 }
 
@@ -98,31 +92,15 @@ export function releaseAvailability(summary: EscrowSummary): EscrowAvailability 
     };
   }
 
-  if (summary.workerPayout === null) {
-    return {
-      allowed: false,
-      reason:
-        "Backend bu atama için bir işçi ödemesi tutarı vermedi. Tutarı bilmeden çıkış teklif edilmez.",
-    };
-  }
-
   return { allowed: true, reason: null };
 }
 
-/** `PaymentStateMachine.canRefund`: money in escrow, and a settled payment to refund. */
+/** `PaymentStateMachine.canRefund`: money in escrow. */
 export function refundAvailability(summary: EscrowSummary): EscrowAvailability {
   if (summary.paymentStatus !== "HELD_IN_ESCROW") {
     return {
       allowed: false,
       reason: `Para emanette değil (ödeme durumu: ${summary.paymentStatus}). İşçiye çıkmış ya da iade edilmiş para tekrar iade edilemez.`,
-    };
-  }
-
-  if (summary.settledPayment === null || summary.settledPayment.totalCharged === null) {
-    return {
-      allowed: false,
-      reason:
-        "Bu atama için tahsil edilmiş bir ödeme kaydı yok; iade edilecek bir tutar da yok (backend: {payout.no.settled.payment}).",
     };
   }
 

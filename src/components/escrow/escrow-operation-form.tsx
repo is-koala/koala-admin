@@ -4,7 +4,12 @@ import { useActionState, useEffect, useId, useRef, useState } from "react";
 
 import { Badge, Dialog, FormField, SelectInput } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { ESCROW_FIELD, INITIAL_ESCROW_FORM_STATE, type EscrowFormAction } from "@/lib/escrow-form";
+import {
+  ESCROW_FIELD,
+  INITIAL_ESCROW_FORM_STATE,
+  escrowReasonMaxLength,
+  type EscrowFormAction,
+} from "@/lib/escrow-form";
 
 /**
  * The only way a person moves money in this panel.
@@ -174,7 +179,11 @@ export function EscrowOperationForm({
               onChange={(event) => setSelected(event.target.value)}
             >
               {choices.map((entry) => (
-                <option key={entry.resolution} value={entry.resolution}>
+                <option
+                  key={entry.resolution}
+                  value={entry.resolution}
+                  disabled={entry.unavailableReason !== null}
+                >
                   {entry.label}
                   {entry.movement === null ? "" : ` — ${entry.movement.amountText}`}
                 </option>
@@ -201,7 +210,7 @@ export function EscrowOperationForm({
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={3}
-            maxLength={2000}
+            maxLength={escrowReasonMaxLength(kind)}
             className="w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-subtle"
             placeholder="Ne oldu ve neden bu karar verildi?"
           />
