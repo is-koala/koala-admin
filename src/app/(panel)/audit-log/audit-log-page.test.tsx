@@ -105,7 +105,7 @@ describe("the filters a person typed go to the backend", () => {
     const seen = watchAuditLog();
 
     await renderPage({
-      action: "job-category.delete",
+      action: "job.category.delete",
       permission: "category.manage",
       resourceType: "job-category",
       resourceId: "9a1c0f10-0001-4c00-8000-000000000005",
@@ -114,7 +114,7 @@ describe("the filters a person typed go to the backend", () => {
     });
 
     const query = seen[0]?.searchParams;
-    expect(query?.get("action")).toBe("job-category.delete");
+    expect(query?.get("action")).toBe("job.category.delete");
     expect(query?.get("permission")).toBe("category.manage");
     expect(query?.get("resourceType")).toBe("job-category");
     expect(query?.get("resourceId")).toBe("9a1c0f10-0001-4c00-8000-000000000005");
@@ -147,6 +147,7 @@ describe("the filters a person typed go to the backend", () => {
     expect(form).toContain('method="get"');
     expect(form).toContain('action="/audit-log"');
     expect(html).toContain('value="Katalog Editörü"');
+    expect(html).toContain('placeholder="job.category.create"');
   });
 
   it("keeps the active filters on the pager, so page two is still filtered", async () => {
@@ -210,7 +211,7 @@ describe("what the table shows", () => {
 
     const html = await renderPage({});
 
-    expect(html).toContain("job-category.create");
+    expect(html).toContain("job.category.create");
     expect(html).toContain("Katalog Editörü");
     expect(html).toContain("category.manage");
     expect(html).toContain("İzin verildi");

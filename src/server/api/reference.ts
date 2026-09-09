@@ -36,8 +36,8 @@ export function getJobCategories(): Promise<JobCategory[]> {
   return koalaApi.get({
     path: "/reference/job-categories",
     schema: jobCategoryListSchema,
-    // Reference data is small and the panel edits it (issue #6); never serve a
-    // stale list to an operator who just changed it.
+    // Reference data is small and the panel manages the same catalogue; never
+    // serve a stale list to an operator who just changed it.
     cache: "no-store",
   });
 }
