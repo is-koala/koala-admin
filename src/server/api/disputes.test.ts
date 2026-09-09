@@ -7,7 +7,9 @@ import {
   ACTIVE_DISPUTE_STATUSES,
   DISPUTES_PATH,
   DISPUTE_RESOLUTION_SPECS,
+  disputeEvidencePath,
   disputeResolvePath,
+  getDisputeEvidence,
   getDisputes,
   isDisputeResolution,
   resolveDispute,
@@ -94,6 +96,69 @@ describe("the queue endpoint", () => {
     expect(isKoalaApiError(error)).toBe(true);
     if (!isKoalaApiError(error)) throw new Error("unreachable");
     expect(error.errorCode).toBe("RESPONSE_SCHEMA_MISMATCH");
+  });
+});
+
+describe("the evidence metadata endpoint", () => {
+  it("loads the selected dispute's safe metadata without exposing a storage address", async () => {
+    let authorization: string | null = null;
+    const path = disputeEvidencePath(DISPUTE_ID);
+
+    server.use(
+      http.get(apiUrl(path), ({ request }) => {
+        authorization = request.headers.get("authorization");
+        return HttpResponse.json({
+          success: true,
+          message: "Kanıtlar listelendi.",
+          httpStatus: "200 OK",
+          path,
+          requestId: "rid-evidence",
+          timeStamp: "2026-09-06T09:00:00.000000000Z",
+          data: [
+            {
+              id: "e1000000-0000-4c00-8000-000000000001",
+              disputeId: DISPUTE_ID,
+              uploadedBy: {
+                id: "w-1",
+                firstName: "Ayşe",
+                lastName: "Yılmaz",
+                username: "ayse",
+              },
+              uploaderSide: "WORKER",
+              fileName: "vardiya kanıtı.png",
+              contentType: "image/png",
+              fileSize: 1536,
+              checksumSha256: "a".repeat(64),
+              createdAt: "2026-09-05T08:15:00.000000000Z",
+              storageKey: "files/dispute-evidence/secret.png",
+            },
+          ],
+        });
+      }),
+    );
+
+    const evidence = await getDisputeEvidence("ACCESS-TOKEN", DISPUTE_ID);
+
+    expect(authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(evidence).toEqual([
+      {
+        id: "e1000000-0000-4c00-8000-000000000001",
+        disputeId: DISPUTE_ID,
+        uploadedBy: {
+          id: "w-1",
+          firstName: "Ayşe",
+          lastName: "Yılmaz",
+          username: "ayse",
+          profilePictureUrl: null,
+        },
+        uploaderSide: "WORKER",
+        fileName: "vardiya kanıtı.png",
+        contentType: "image/png",
+        fileSize: 1536,
+        checksumSha256: "a".repeat(64),
+        createdAt: "2026-09-05T08:15:00.000000000Z",
+      },
+    ]);
   });
 });
 

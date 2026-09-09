@@ -40,6 +40,13 @@ const serverEnvSchema = z.object({
     .default(15_000),
 
   /**
+   * Origins the evidence-download BFF may server-follow after the backend
+   * returns a signed redirect. Empty is fail-closed and still supports the
+   * local-storage 200 stream contract.
+   */
+  EVIDENCE_DOWNLOAD_ALLOWED_ORIGINS: originAllowlist(),
+
+  /**
    * The panel's own public origin.
    *
    * One job left, and it is not cosmetic: it decides whether the session cookie
@@ -136,4 +143,50 @@ function absoluteUrl(options: { required: string; localhostOnlyHttp?: boolean })
       )
       .transform((value) => value.replace(/\/+$/, ""))
   );
+}
+
+function originAllowlist() {
+  const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]", "host.docker.internal"];
+
+  return z
+    .string()
+    .default("")
+    .transform((value, context) => {
+      const origins: string[] = [];
+
+      for (const candidate of value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean)) {
+        if (!URL.canParse(candidate)) {
+          context.addIssue({
+            code: "custom",
+            message: `${candidate}: geçerli bir mutlak URL olmalı`,
+          });
+          return z.NEVER;
+        }
+
+        const url = new URL(candidate);
+        const isSecure = url.protocol === "https:";
+        const isLocalHttp = url.protocol === "http:" && LOCAL_HOSTS.includes(url.hostname);
+        if (
+          (!isSecure && !isLocalHttp) ||
+          url.username.length > 0 ||
+          url.password.length > 0 ||
+          url.pathname !== "/" ||
+          url.search.length > 0 ||
+          url.hash.length > 0
+        ) {
+          context.addIssue({
+            code: "custom",
+            message: `${candidate}: yalnız güvenli origin (şema + host + opsiyonel port) olmalı`,
+          });
+          return z.NEVER;
+        }
+
+        origins.push(url.origin);
+      }
+
+      return [...new Set(origins)];
+    });
 }

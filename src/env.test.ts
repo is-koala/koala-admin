@@ -23,6 +23,33 @@ describe("parseServerEnv", () => {
     expect(env.KOALA_API_BASE_URL).toBe("https://api.iskoala.com");
   });
 
+  it("parses signed-download origins as a strict server-side allowlist", () => {
+    const parsed = parseServerEnv({
+      ...COMPLETE,
+      EVIDENCE_DOWNLOAD_ALLOWED_ORIGINS:
+        "https://bucket.s3.eu-central-1.amazonaws.com, https://minio.example.com:9443/",
+    });
+
+    expect(parsed.EVIDENCE_DOWNLOAD_ALLOWED_ORIGINS).toEqual([
+      "https://bucket.s3.eu-central-1.amazonaws.com",
+      "https://minio.example.com:9443",
+    ]);
+    expect(parseServerEnv({ ...COMPLETE }).EVIDENCE_DOWNLOAD_ALLOWED_ORIGINS).toEqual([]);
+
+    expect(() =>
+      parseServerEnv({
+        ...COMPLETE,
+        EVIDENCE_DOWNLOAD_ALLOWED_ORIGINS: "http://storage.example.com",
+      }),
+    ).toThrow(/yalnız güvenli origin/);
+    expect(() =>
+      parseServerEnv({
+        ...COMPLETE,
+        EVIDENCE_DOWNLOAD_ALLOWED_ORIGINS: "https://storage.example.com/private",
+      }),
+    ).toThrow(/yalnız güvenli origin/);
+  });
+
   it("refuses to start when a required variable is missing", () => {
     // The failure the issue cares about: the app must stop, not half-boot and
     // then fetch "undefined/reference/job-categories".

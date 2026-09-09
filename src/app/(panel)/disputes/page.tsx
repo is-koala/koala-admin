@@ -20,12 +20,20 @@ import {
   TableRow,
   type BadgeTone,
 } from "@/components/ui";
-import { formatCurrency, formatDateTime, formatInteger, formatPercent } from "@/lib/format";
+import {
+  formatCurrency,
+  formatDateTime,
+  formatInteger,
+  formatNumber,
+  formatPercent,
+} from "@/lib/format";
 import {
   ACTIVE_DISPUTE_STATUSES,
   DISPUTE_RESOLUTION_SPECS,
+  getDisputeEvidence,
   getDisputes,
   type Dispute,
+  type DisputeEvidence,
   type DisputeStatus,
 } from "@/server/api/disputes";
 import { getEscrowSummary, type EscrowSummary } from "@/server/api/escrow";
@@ -57,11 +65,12 @@ export const metadata: Metadata = { title: "Uyuşmazlıklar" };
  *
  * ## Why one route and not `/disputes/[id]`
  *
- * There is no `GET /admin/disputes/{id}`. The controller has exactly two
- * handlers: the paged list and the resolve. A detail *route* would have to page
- * through the list to find its own record, so the detail is a panel on this
- * page instead, selected by `?uyusmazlik=`, rendered from the list response the
- * queue already fetched. Deep-linkable, and no invented endpoint.
+ * There is no `GET /admin/disputes/{id}` that returns one dispute record; the
+ * evidence sub-resource does not provide dispute details. A detail *route*
+ * would have to page through the list to find its own record, so the detail is
+ * a panel on this page instead, selected by `?uyusmazlik=`, rendered from the
+ * list response the queue already fetched. Deep-linkable, and no invented
+ * endpoint.
  *
  * ## Where the money numbers come from
  *
@@ -224,6 +233,9 @@ interface SummaryFailure {
 
 type SummaryEntry = { ok: true; summary: EscrowSummary } | { ok: false; failure: SummaryFailure };
 
+type EvidenceResult =
+  { ok: true; evidence: DisputeEvidence[] } | { ok: false; failure: SummaryFailure };
+
 /**
  * One escrow read per dispute on the page, in parallel.
  *
@@ -275,6 +287,25 @@ async function loadSummaries(
   return byAssignment;
 }
 
+async function loadEvidence(accessToken: string, disputeId: string): Promise<EvidenceResult> {
+  try {
+    return { ok: true, evidence: await getDisputeEvidence(accessToken, disputeId) };
+  } catch (error) {
+    return {
+      ok: false,
+      failure: {
+        message: isKoalaApiError(error)
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Bilinmeyen bir hata oluştu.",
+        errorCode: isKoalaApiError(error) ? error.errorCode : "UNEXPECTED",
+        requestId: isKoalaApiError(error) ? error.requestId : null,
+      },
+    };
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* The workspace                                                               */
 /* -------------------------------------------------------------------------- */
@@ -303,10 +334,13 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
     );
   }
 
-  const summaries = await loadSummaries(accessToken, queue.disputes);
   const visible =
     filter === "ALL" ? queue.disputes : queue.disputes.filter((d) => d.status === filter);
   const selected = queue.disputes.find((dispute) => dispute.id === selectedId) ?? null;
+  const [summaries, evidence] = await Promise.all([
+    loadSummaries(accessToken, queue.disputes),
+    selected === null ? Promise.resolve(null) : loadEvidence(accessToken, selected.id),
+  ]);
 
   const everySummaryFailed =
     queue.disputes.length > 0 && [...summaries.values()].every((entry) => !entry.ok);
@@ -430,6 +464,7 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
         <DisputeDetail
           dispute={selected}
           entry={summaries.get(selected.jobAssignmentId)}
+          evidence={evidence}
           canRelease={context.has("payout.release")}
           canRefund={context.has("payment.refund")}
         />
@@ -447,11 +482,12 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
 interface DetailProps {
   dispute: Dispute;
   entry: SummaryEntry | undefined;
+  evidence: EvidenceResult | null;
   canRelease: boolean;
   canRefund: boolean;
 }
 
-function DisputeDetail({ dispute, entry, canRelease, canRefund }: DetailProps) {
+function DisputeDetail({ dispute, entry, evidence, canRelease, canRefund }: DetailProps) {
   const summary = entry !== undefined && entry.ok ? entry.summary : null;
   const failure = entry !== undefined && !entry.ok ? entry.failure : null;
 
@@ -594,18 +630,14 @@ function DisputeDetail({ dispute, entry, canRelease, canRefund }: DetailProps) {
           </div>
 
           <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
-            <h3 className="text-sm font-semibold">Açılış gerekçesi ve kanıt</h3>
+            <h3 className="text-sm font-semibold">Açılış gerekçesi</h3>
             <p className="text-sm whitespace-pre-wrap text-ink">{dispute.reason}</p>
-            <p className="text-xs text-ink-subtle">
-              Backend&apos;in uyuşmazlık kaydında mesaj dizisi ya da dosya eki yoktur:{" "}
-              <code className="font-mono">entities/Dispute.java</code> tek bir{" "}
-              <code className="font-mono">reason</code> alanı taşır. Ekranda gösterilecek başka
-              kanıt olmadığı için burada uydurulmuş bir mesaj listesi de yok.
-            </p>
             {dispute.resolutionNote === null ? null : (
               <p className="text-sm text-ink-muted">Karar notu: {dispute.resolutionNote}</p>
             )}
           </div>
+
+          <EvidencePanel dispute={dispute} evidence={evidence} />
         </div>
       </div>
 
@@ -709,6 +741,65 @@ function DisputeDetail({ dispute, entry, canRelease, canRefund }: DetailProps) {
   );
 }
 
+function EvidencePanel({
+  dispute,
+  evidence,
+}: {
+  dispute: Dispute;
+  evidence: EvidenceResult | null;
+}) {
+  return (
+    <section
+      className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4"
+      aria-labelledby="dispute-evidence-heading"
+    >
+      <h3 id="dispute-evidence-heading" className="text-sm font-semibold">
+        Kanıt dosyaları
+      </h3>
+      {evidence === null ? (
+        <p className="text-sm text-ink-muted">Kanıt dosyaları okunamadı.</p>
+      ) : !evidence.ok ? (
+        <ErrorState
+          title="Kanıt dosyaları yüklenemedi."
+          description={`${evidence.failure.message} Uyuşmazlık kuyruğu ve karar kontrolleri kullanılabilir durumda.`}
+          errorCode={evidence.failure.errorCode}
+          requestId={evidence.failure.requestId}
+        />
+      ) : evidence.evidence.length === 0 ? (
+        <div className="flex flex-col gap-1 text-sm text-ink-muted">
+          <p>Bu uyuşmazlığa kanıt dosyası eklenmemiş.</p>
+          <p>Kanıt olmadan da karar vermeye devam edebilirsiniz.</p>
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {evidence.evidence.map((file) => (
+            <li
+              key={file.id}
+              className="flex flex-col gap-2 rounded-md border border-border-subtle bg-surface-sunken p-3 text-sm"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <span className="font-medium break-all">{file.fileName}</span>
+                <a
+                  href={disputeEvidenceDownloadPath(dispute.id, file.id)}
+                  className="font-medium text-brand hover:underline"
+                >
+                  İndir
+                </a>
+              </div>
+              <dl className="grid gap-1 text-xs text-ink-muted sm:grid-cols-2">
+                <Row label="Tür" value={file.contentType} />
+                <Row label="Boyut" value={formatFileSize(file.fileSize)} />
+                <Row label="Yükleyen" value={evidenceUploader(file)} />
+                <Row label="Yükleme" value={formatDateTime(file.createdAt)} />
+              </dl>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -716,6 +807,23 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
       <dd className="text-right">{value}</dd>
     </div>
   );
+}
+
+function disputeEvidenceDownloadPath(disputeId: string, evidenceId: string): string {
+  return `/api/disputes/${encodeURIComponent(disputeId)}/evidence/${encodeURIComponent(evidenceId)}/download`;
+}
+
+function evidenceUploader(file: DisputeEvidence): string {
+  const side = file.uploaderSide === "WORKER" ? "İşçi" : "İşveren";
+  return `${side} · ${safeUserName(file.uploadedBy)}`;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${formatInteger(bytes)} B`;
+  if (bytes < 1024 * 1024) {
+    return `${formatNumber(bytes / 1024, { maximumFractionDigits: 1 })} KB`;
+  }
+  return `${formatNumber(bytes / (1024 * 1024), { maximumFractionDigits: 1 })} MB`;
 }
 
 /* -------------------------------------------------------------------------- */
