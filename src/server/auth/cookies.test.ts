@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { parseServerEnv } from "@/env";
+
 import {
   buildSessionCookie,
   decodeStaffSession,
@@ -47,6 +49,19 @@ describe("buildSessionCookie", () => {
     expect(cookie.options.secure).toBe(false);
     expect(cookie.options.httpOnly).toBe(true);
     expect(cookie.options.sameSite).toBe("lax");
+  });
+
+  it("stays Secure after an accepted HTTPS origin is canonicalised", () => {
+    const parsed = parseServerEnv({
+      KOALA_API_BASE_URL: "http://localhost:8080",
+      ADMIN_PUBLIC_ORIGIN: "  HTTPS://ADMIN.ISKOALA.COM:8443/  ",
+    });
+
+    expect(parsed.ADMIN_PUBLIC_ORIGIN).toBe("https://admin.iskoala.com:8443");
+    expect(buildSessionCookie(parsed.ADMIN_PUBLIC_ORIGIN)).toMatchObject({
+      name: "__Secure-koala_admin_session",
+      options: { secure: true },
+    });
   });
 });
 
