@@ -45,6 +45,30 @@ const PASSWORD = apiUrl("/admin/auth/password");
 const REFRESH = apiUrl("/admin/auth/refresh");
 
 const HOUR = 60 * 60 * 1000;
+const ACCESS_TOKEN_SENTINEL = "ACCESS-FROM-BACKEND";
+const REFRESH_TOKEN_SENTINEL = "REFRESH-FROM-BACKEND";
+
+const hostileCallbacks = [
+  ["absolute URL", "https://evil.example/absolute"],
+  ["scheme-relative URL", "//evil.example/scheme-relative"],
+  ["literal backslash", "/\\evil.example/literal-backslash"],
+  ["percent-encoded backslash", "/%5Cevil.example/encoded-backslash"],
+  ["double-encoded backslash", "/%255Cevil.example/double-encoded-backslash"],
+  ["literal control", "/\n/evil.example/literal-control"],
+  ["percent-encoded control", "/%0A/evil.example/encoded-control"],
+  ["double-encoded control", "/%250A/evil.example/double-encoded-control"],
+  ["literal C1 next-line control", "/\u0085/evil.example/literal-c1-next-line"],
+  ["literal C1 application control", "/\u009F/evil.example/literal-c1-application"],
+  ["percent-encoded C1 next-line control", "/%C2%85/evil.example/encoded-c1-next-line"],
+  ["percent-encoded C1 application control", "/%C2%9F/evil.example/encoded-c1-application"],
+  ["double-encoded C1 next-line control", "/%25C2%2585/evil.example/double-encoded-c1-next-line"],
+  [
+    "double-encoded C1 application control",
+    "/%25C2%259F/evil.example/double-encoded-c1-application",
+  ],
+  ["percent-encoded scheme-relative URL", "/%2Fevil.example/encoded-scheme-relative"],
+  ["double-encoded scheme-relative URL", "/%252Fevil.example/double-encoded-scheme-relative"],
+] as const;
 
 function session(overrides: Partial<StaffSession> = {}): StaffSession {
   return {
@@ -77,6 +101,12 @@ function form(entries: Record<string, string>): FormData {
   return data;
 }
 
+function capturedLogs(): string {
+  return [...vi.mocked(console.error).mock.calls, ...vi.mocked(console.warn).mock.calls]
+    .flat()
+    .join(" ");
+}
+
 function loginEnvelope(overrides: Record<string, unknown> = {}) {
   return {
     success: true,
@@ -86,8 +116,8 @@ function loginEnvelope(overrides: Record<string, unknown> = {}) {
     requestId: "rid-login",
     timeStamp: "2026-09-08T09:00:00.000000000Z",
     data: {
-      accessToken: "ACCESS-FROM-BACKEND",
-      refreshToken: "REFRESH-FROM-BACKEND",
+      accessToken: ACCESS_TOKEN_SENTINEL,
+      refreshToken: REFRESH_TOKEN_SENTINEL,
       accessExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
       refreshExpiresAt: new Date(Date.now() + 12 * HOUR).toISOString(),
       mustChangePassword: false,
@@ -175,15 +205,191 @@ describe("signing in", () => {
     expect(destination).not.toContain("/audit-log");
   });
 
-  it("refuses an absolute callbackUrl instead of turning the form into an open redirect", async () => {
+  it("falls back without reflecting hostile callback URLs into the redirect or logs", async () => {
     server.use(http.post(LOGIN, () => HttpResponse.json(loginEnvelope())));
 
-    for (const hostile of ["https://evil.example/", "//evil.example/"]) {
+    for (const [label, hostile] of hostileCallbacks) {
       const destination = await destinationOf(
         signInWithPassword(hostile, form({ email: "o@iskoala.com", password: "gizli" })),
       );
 
-      expect(destination, hostile).not.toContain("evil.example");
+      expect(destination, label).toMatch(/^NEXT_REDIRECT;(?:push|replace);\/;30[378];$/);
+      expect(destination, label).not.toContain("evil.example");
+
+      const session = decodeStaffSession(written.at(-1)?.value);
+      expect(session?.accessToken, label).toBe(ACCESS_TOKEN_SENTINEL);
+      expect(session?.refreshToken, label).toBe(REFRESH_TOKEN_SENTINEL);
+
+      const externallyVisible = `${destination}\n${capturedLogs()}`;
+      expect(externallyVisible, label).not.toContain("evil.example");
+      expect(externallyVisible, label).not.toContain(ACCESS_TOKEN_SENTINEL);
+      expect(externallyVisible, label).not.toContain(REFRESH_TOKEN_SENTINEL);
+    }
+  });
+
+  it("rejects encoded backslashes and controls after the real URL parsing boundary", async () => {
+    server.use(http.post(LOGIN, () => HttpResponse.json(loginEnvelope())));
+
+    const urlBoundaryCases = [
+      ["encoded on the wire", "/%5Cevil.example/wire-encoded", "/\\evil.example/wire-encoded"],
+      [
+        "double-encoded on the wire",
+        "/%255Cevil.example/wire-double",
+        "/%5Cevil.example/wire-double",
+      ],
+      [
+        "double-encoded at the action boundary",
+        "/%25255Cevil.example/action-double",
+        "/%255Cevil.example/action-double",
+      ],
+      [
+        "literal C1 next-line on the wire",
+        "/\u0085/evil.example/wire-literal-c1-next-line",
+        "/\u0085/evil.example/wire-literal-c1-next-line",
+      ],
+      [
+        "encoded C1 next-line on the wire",
+        "/%C2%85/evil.example/wire-encoded-c1-next-line",
+        "/\u0085/evil.example/wire-encoded-c1-next-line",
+      ],
+      [
+        "double-encoded C1 next-line on the wire",
+        "/%25C2%2585/evil.example/wire-double-c1-next-line",
+        "/%C2%85/evil.example/wire-double-c1-next-line",
+      ],
+      [
+        "double-encoded C1 next-line at the action boundary",
+        "/%2525C2%252585/evil.example/action-double-c1-next-line",
+        "/%25C2%2585/evil.example/action-double-c1-next-line",
+      ],
+      [
+        "literal C1 application control on the wire",
+        "/\u009F/evil.example/wire-literal-c1-application",
+        "/\u009F/evil.example/wire-literal-c1-application",
+      ],
+      [
+        "encoded C1 application control on the wire",
+        "/%C2%9F/evil.example/wire-encoded-c1-application",
+        "/\u009F/evil.example/wire-encoded-c1-application",
+      ],
+      [
+        "double-encoded C1 application control on the wire",
+        "/%25C2%259F/evil.example/wire-double-c1-application",
+        "/%C2%9F/evil.example/wire-double-c1-application",
+      ],
+      [
+        "double-encoded C1 application control at the action boundary",
+        "/%2525C2%25259F/evil.example/action-double-c1-application",
+        "/%25C2%259F/evil.example/action-double-c1-application",
+      ],
+    ] as const;
+
+    for (const [label, wireCallback, actionCallback] of urlBoundaryCases) {
+      const signInUrl = new URL(`https://admin.iskoala.com/giris?callbackUrl=${wireCallback}`);
+      const parsedCallback = signInUrl.searchParams.get("callbackUrl") ?? undefined;
+
+      expect(parsedCallback, label).toBe(actionCallback);
+
+      const destination = await destinationOf(
+        signInWithPassword(parsedCallback, form({ email: "o@iskoala.com", password: "gizli" })),
+      );
+
+      expect(destination, label).toMatch(/^NEXT_REDIRECT;(?:push|replace);\/;30[378];$/);
+      expect(destination, label).not.toContain("evil.example");
+    }
+  });
+
+  it("does not reflect hostile callbacks across sign-in failure paths", async () => {
+    let validationBackendCalls = 0;
+
+    const failurePaths = [
+      {
+        label: "action validation",
+        errorCode: "MISSING_FIELDS",
+        formData: () => form({ email: "", password: "gizli" }),
+        arrange: () =>
+          server.use(
+            http.post(LOGIN, () => {
+              validationBackendCalls += 1;
+              return HttpResponse.json(loginEnvelope());
+            }),
+          ),
+        expectsFailureLog: false,
+      },
+      {
+        label: "backend 401",
+        errorCode: "INVALID_CREDENTIALS",
+        formData: () => form({ email: "o@iskoala.com", password: "gizli" }),
+        arrange: () =>
+          server.use(
+            http.post(LOGIN, () =>
+              refusal(401, "STAFF_LOGIN_FAILED", "INVALID_CREDENTIALS", "/admin/auth/login"),
+            ),
+          ),
+        expectsFailureLog: true,
+      },
+      {
+        label: "transport failure",
+        errorCode: "BACKEND_UNREACHABLE",
+        formData: () => form({ email: "o@iskoala.com", password: "gizli" }),
+        arrange: () => server.use(http.post(LOGIN, () => HttpResponse.error())),
+        expectsFailureLog: true,
+      },
+    ] as const;
+
+    for (const failurePath of failurePaths) {
+      failurePath.arrange();
+
+      for (const [callbackLabel, hostile] of hostileCallbacks) {
+        vi.mocked(console.error).mockClear();
+        vi.mocked(console.warn).mockClear();
+
+        const destination = await destinationOf(
+          signInWithPassword(hostile, failurePath.formData()),
+        );
+        const logs = capturedLogs();
+        const assertionLabel = `${failurePath.label}: ${callbackLabel}`;
+
+        expect(hostile, assertionLabel).toContain("evil.example");
+        expect(destination, assertionLabel).toMatch(
+          new RegExp(
+            `^NEXT_REDIRECT;(?:push|replace);/giris\\?hata=${failurePath.errorCode};30[378];$`,
+          ),
+        );
+        expect(destination, assertionLabel).not.toContain("callbackUrl");
+        expect(destination, assertionLabel).not.toContain("evil.example");
+        expect(logs, assertionLabel).not.toContain("evil.example");
+
+        if (failurePath.expectsFailureLog) {
+          expect(logs, assertionLabel).toContain("[koala-api]");
+          expect(logs, assertionLabel).toContain("path=/admin/auth/login");
+        } else {
+          expect(logs, assertionLabel).toBe("");
+        }
+      }
+    }
+
+    expect(validationBackendCalls).toBe(0);
+  });
+
+  it("preserves canonical same-origin paths together with their query and hash", async () => {
+    server.use(http.post(LOGIN, () => HttpResponse.json(loginEnvelope())));
+
+    const safeCallbacks = [
+      "/",
+      "/audit-log?permission=payout.release#entry-42",
+      "/disputes?durum=OPEN&uyusmazlik=d1000000-0000-4c00-8000-000000000001#kanitlar",
+      "/audit-log?actor=owner%40iskoala.com&note=guvenli%20deger#ayrinti",
+      "/companies?name=İş%20Ortağı#özeti",
+      "/companies?name=%C4%B0%C5%9F%20Orta%C4%9F%C4%B1#%C3%B6zeti",
+    ] as const;
+
+    for (const safe of safeCallbacks) {
+      const destination = await destinationOf(
+        signInWithPassword(safe, form({ email: "o@iskoala.com", password: "gizli" })),
+      );
+
+      expect(destination, safe).toContain(`;${safe};307;`);
     }
   });
 
