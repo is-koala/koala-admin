@@ -148,6 +148,21 @@ export const disputeSchema = z.object({
 
 export type Dispute = z.infer<typeof disputeSchema>;
 
+/** Staff list contract: `core/dtos/dispute/response/StaffDisputeEvidenceDto.java`. */
+export const disputeEvidenceSchema = z.object({
+  id: z.string(),
+  disputeId: z.string(),
+  uploadedBy: safeUserSchema,
+  uploaderSide: z.enum(["WORKER", "EMPLOYER"]),
+  fileName: z.string(),
+  contentType: z.string(),
+  fileSize: z.number().int().nonnegative(),
+  checksumSha256: z.string(),
+  createdAt: z.string(),
+});
+
+export type DisputeEvidence = z.infer<typeof disputeEvidenceSchema>;
+
 export interface DisputeQuery {
   /** Zero-based, like `PageDto`. */
   page?: number;
@@ -171,6 +186,22 @@ export function getDisputes(
     path: DISPUTES_PATH,
     schema: pageDtoSchema(disputeSchema),
     query: { page: query.page ?? 0, size: query.size ?? 50 },
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+export function disputeEvidencePath(disputeId: string): string {
+  return `${DISPUTES_PATH}/${encodeURIComponent(disputeId)}/evidence`;
+}
+
+export function getDisputeEvidence(
+  accessToken: string,
+  disputeId: string,
+): Promise<DisputeEvidence[]> {
+  return koalaApi.get({
+    path: disputeEvidencePath(disputeId),
+    schema: z.array(disputeEvidenceSchema),
     accessToken,
     cache: "no-store",
   });

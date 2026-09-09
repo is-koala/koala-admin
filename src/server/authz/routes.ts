@@ -212,6 +212,12 @@ export const ROUTE_HANDLERS = [
     ungatedReason:
       "Yük dengeleyici çerezsiz çağırır ve yalnız 'ayaktayım' der; hiçbir iş verisi taşımaz.",
   },
+  {
+    path: "/api/disputes/[disputeId]/evidence/[evidenceId]/download",
+    title: "Uyuşmazlık kanıtı indir",
+    access: "permission",
+    permission: "dispute.resolve",
+  },
 ] as const satisfies readonly (RouteIdentity & RouteGate)[];
 
 export type RouteHandlerEntry = (typeof ROUTE_HANDLERS)[number];

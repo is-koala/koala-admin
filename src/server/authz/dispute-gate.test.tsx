@@ -40,6 +40,8 @@ const DISPUTE = "d1000000-0000-4c00-8000-000000000001";
 const ADMIN_ME = apiUrl("/admin/me");
 const DISPUTES = apiUrl("/admin/disputes");
 const SUMMARY = apiUrl(`/admin/job-assignments/${ASSIGNMENT}`);
+const EVIDENCE = apiUrl(`/admin/disputes/${DISPUTE}/evidence`);
+const EVIDENCE_ID = "e1000000-0000-4c00-8000-000000000001";
 
 const TRUST_LEAD = ["dispute.resolve", "payout.release", "payment.refund"];
 const CATALOG_EDITOR = ["category.manage"];
@@ -172,6 +174,76 @@ const summaryOk = () =>
     data: SUMMARY_BODY,
   });
 
+const evidenceOk = () =>
+  HttpResponse.json({
+    success: true,
+    message: "Kanıtlar listelendi.",
+    httpStatus: "200 OK",
+    path: `/admin/disputes/${DISPUTE}/evidence`,
+    requestId: "rid-evidence",
+    timeStamp: "2026-09-06T09:00:00.000000000Z",
+    data: [
+      {
+        id: EVIDENCE_ID,
+        disputeId: DISPUTE,
+        uploadedBy: {
+          id: "w-1",
+          firstName: "Ayşe",
+          lastName: "Yılmaz",
+          username: "ayse",
+          profilePictureUrl: null,
+        },
+        uploaderSide: "WORKER",
+        fileName: "vardiya kanıtı.png",
+        contentType: "image/png",
+        fileSize: 1536,
+        checksumSha256: "a".repeat(64),
+        createdAt: "2026-09-05T08:15:00.000000000Z",
+      },
+    ],
+  });
+
+const emptyEvidence = () =>
+  HttpResponse.json({
+    success: true,
+    message: "Kanıtlar listelendi.",
+    httpStatus: "200 OK",
+    path: `/admin/disputes/${DISPUTE}/evidence`,
+    requestId: "rid-evidence-empty",
+    timeStamp: "2026-09-06T09:00:00.000000000Z",
+    data: [],
+  });
+
+const evidenceFailed = () =>
+  HttpResponse.json(
+    {
+      success: false,
+      message: "Kanıt deposuna ulaşılamadı.",
+      httpStatus: "503 SERVICE_UNAVAILABLE",
+      errorCode: "EVIDENCE_STORAGE_UNAVAILABLE",
+      errorCategory: "UPSTREAM_FAILED",
+      requestId: "rid-evidence-failed",
+      path: `/admin/disputes/${DISPUTE}/evidence`,
+      timeStamp: "2026-09-06T09:00:00.000000000Z",
+    },
+    { status: 503 },
+  );
+
+function watchEvidence(respond: () => Response = evidenceOk) {
+  let calls = 0;
+  server.use(
+    http.get(EVIDENCE, () => {
+      calls += 1;
+      return respond();
+    }),
+  );
+  return {
+    get calls() {
+      return calls;
+    },
+  };
+}
+
 const summaryForbidden = () =>
   HttpResponse.json(
     {
@@ -205,12 +277,14 @@ describe("a CATALOG_EDITOR typing /disputes by hand", () => {
     stubMe(CATALOG_EDITOR, ["CATALOG_EDITOR"]);
     const disputes = watchDisputes();
     const summary = watchSummary();
+    const evidence = watchEvidence();
 
     const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
 
     // The claim, stated as numbers.
     expect(disputes.calls).toBe(0);
     expect(summary.calls).toBe(0);
+    expect(evidence.calls).toBe(0);
 
     expect(html).toContain("403 — Bu sayfa için yetkiniz yok");
     expect(html).toContain("Anlaşmazlıkları çöz");
@@ -226,10 +300,12 @@ describe("a TRUST_LEAD on the queue", () => {
     stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
     const disputes = watchDisputes();
     watchSummary();
+    const evidence = watchEvidence();
 
     const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
 
     expect(disputes.calls).toBe(1);
+    expect(evidence.calls).toBe(0);
     expect(html).toContain("Etkin uyuşmazlıklar");
     expect(html).toContain("Ayşe Yılmaz");
     expect(html).toContain(ASSIGNMENT);
@@ -279,6 +355,7 @@ describe("the selected dispute", () => {
     stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
     watchDisputes();
     watchSummary();
+    const evidence = watchEvidence();
 
     const html = await renderServerComponent(
       <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
@@ -294,15 +371,57 @@ describe("the selected dispute", () => {
     expect(html).toContain("₺137,83");
     expect(html).toContain("₺1.378,33");
     expect(html).toContain("%10");
-    // The opening reason is the evidence the backend actually holds.
+    expect(evidence.calls).toBe(1);
     expect(html).toContain("vardiyayı tamamladım");
-    expect(html).toContain("mesaj dizisi ya da dosya eki yoktur");
+    expect(html).toContain("vardiya kanıtı.png");
+    expect(html).toContain("image/png");
+    expect(html).toContain("1,5 KB");
+    expect(html).toContain("İşçi · Ayşe Yılmaz");
+    expect(html).toContain("05.09.2026 11:15");
+    expect(html).toContain(`/api/disputes/${DISPUTE}/evidence/${EVIDENCE_ID}/download`);
+    expect(html).not.toContain("koala-backend.test");
+  });
+
+  it("keeps the queue and decision controls usable when no evidence was attached", async () => {
+    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    watchDisputes();
+    watchSummary();
+    watchEvidence(emptyEvidence);
+
+    const html = await renderServerComponent(
+      <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
+    );
+
+    expect(html).toContain("Etkin uyuşmazlıklar");
+    expect(html).toContain("Bu uyuşmazlığa kanıt dosyası eklenmemiş.");
+    expect(html).toContain("Kanıt olmadan da karar vermeye devam edebilirsiniz.");
+    expect(html).toContain("Kararı gözden geçir");
+  });
+
+  it("contains an evidence failure inside its panel and keeps the rest of the dispute usable", async () => {
+    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    watchDisputes();
+    watchSummary();
+    watchEvidence(evidenceFailed);
+
+    const html = await renderServerComponent(
+      <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
+    );
+
+    expect(html).toContain("Etkin uyuşmazlıklar");
+    expect(html).toContain("₺1.378,33");
+    expect(html).toContain("Kararı gözden geçir");
+    expect(html).toContain("Kanıt dosyaları yüklenemedi.");
+    expect(html).toContain("EVIDENCE_STORAGE_UNAVAILABLE");
+    expect(html).toContain("rid-evidence-failed");
+    expect(html).not.toContain("Uyuşmazlık kuyruğu yüklenemedi.");
   });
 
   it("arms the resolution form and both escrow operations", async () => {
     stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
     watchDisputes();
     watchSummary();
+    watchEvidence();
 
     const html = await renderServerComponent(
       <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
@@ -321,6 +440,7 @@ describe("the selected dispute", () => {
     stubMe(["dispute.resolve"], ["DISPUTE_HANDLER"]);
     watchDisputes();
     watchSummary();
+    watchEvidence();
 
     const html = await renderServerComponent(
       <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
@@ -338,6 +458,7 @@ describe("when the panel cannot read the amount", () => {
     stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
     watchDisputes();
     const summary = watchSummary(summaryForbidden);
+    watchEvidence();
 
     const html = await renderServerComponent(
       <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
@@ -350,6 +471,7 @@ describe("when the panel cannot read the amount", () => {
     // money and stays available.
     expect(html).toContain("Uyuşmazlık detayı");
     expect(html).toContain("Reddet (emanete dokunma)");
+    expect(html).toContain("İşçi · Ayşe Yılmaz");
     // And the two money triggers are rendered disabled, with the reason.
     expect(html).toContain("Emanet özeti okunamadı");
     expect(html).toContain('data-testid="escrow-disabled-reason"');

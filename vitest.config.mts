@@ -47,6 +47,7 @@ const env = {
   // Plain http, so `buildSessionCookie` produces the non-`__Secure-` name the
   // cookie tests assert on — the same shape local development runs with.
   ADMIN_PUBLIC_ORIGIN: "http://localhost:3000",
+  EVIDENCE_DOWNLOAD_ALLOWED_ORIGINS: "https://storage.koala.test",
 };
 
 export default defineConfig({
