@@ -63,7 +63,7 @@ export function AuditLogFilterForm({ filters, page }: AuditLogFilterFormProps) {
               id={id}
               name="action"
               defaultValue={filters.action ?? ""}
-              placeholder="job-category.create"
+              placeholder="job.category.create"
             />
           )}
         </FormField>
