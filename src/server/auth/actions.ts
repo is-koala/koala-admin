@@ -195,14 +195,72 @@ function toPasswordFailure(error: unknown): PasswordChangeFailureCode {
  *
  * Dönüş tipindeki dönüştürme `typedRoutes` yüzünden: değer derleme anında değil
  * çalışma anında doğrulanıyor, yani tip sistemi onu bir rota olarak tanıyamaz.
- * Dönüştürmenin güvenli olmasını sağlayan şey tam olarak yukarıdaki üç koşul —
+ * Dönüştürmenin güvenli olmasını sağlayan şey aşağıdaki aynı-origin denetimi —
  * bu yüzden dönüştürme, doğrulamanın yapıldığı yerde duruyor ve çağrı yerlerine
  * dağılmıyor.
  */
 function safeCallbackUrl(candidate: string | undefined): Parameters<typeof redirect>[0] {
-  if (candidate === undefined || !candidate.startsWith("/") || candidate.startsWith("//")) {
+  if (candidate === undefined || !isCanonicalSameOriginPath(candidate)) {
     return "/";
   }
 
   return candidate as Parameters<typeof redirect>[0];
+}
+
+/**
+ * Yönlendirme hedefini gerçek panel adresine ihtiyaç duymadan WHATWG kurallarıyla
+ * çözmek için kullanılan nötr origin. Burada yalnız çözülen origin'in aynı kalıp
+ * kalmadığı soruluyor; hostun kendisi hiçbir yanıta yazılmıyor.
+ */
+const CALLBACK_VALIDATION_ORIGIN = "https://callback.koala.invalid";
+
+/** Ham değer ve URL sorgusunun çözebileceği iki kodlama katmanı. */
+const CALLBACK_SECURITY_LAYERS = 3;
+
+const UNSAFE_CALLBACK_CHARACTER = /[\\\u0000-\u001f\u007f-\u009f]/;
+
+function isCanonicalSameOriginPath(candidate: string): boolean {
+  let inspected = candidate;
+
+  for (let layer = 0; layer < CALLBACK_SECURITY_LAYERS; layer += 1) {
+    if (!isSafeCallbackLayer(inspected)) return false;
+
+    const decoded = decodePercentEncodedLayer(inspected);
+    if (decoded === null) return false;
+    if (decoded === inspected) return true;
+    inspected = decoded;
+  }
+
+  // Daha fazla kodlama katmanını kabul etmek doğrulama işini sınırsızlaştırır;
+  // kanonik olmayan böyle bir hedef güvenli varsayılmak yerine reddedilir.
+  return false;
+}
+
+function isSafeCallbackLayer(candidate: string): boolean {
+  if (
+    !candidate.startsWith("/") ||
+    candidate.startsWith("//") ||
+    UNSAFE_CALLBACK_CHARACTER.test(candidate)
+  ) {
+    return false;
+  }
+
+  try {
+    return new URL(candidate, CALLBACK_VALIDATION_ORIGIN).origin === CALLBACK_VALIDATION_ORIGIN;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Bir percent-encoding katmanını yalnız denetim kopyasında açar. Böylece `%25`
+ * arkasındaki ASCII saldırıları ve UTF-8 ile kodlanmış C1 kontrolleri görünür
+ * olur; doğrulama başarılıysa çağırana yine özgün query/hash değeri döner.
+ */
+function decodePercentEncodedLayer(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
 }
