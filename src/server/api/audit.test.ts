@@ -54,7 +54,7 @@ describe("filters go to the server, one query parameter each", () => {
 
     await fetchWith({
       actor: "Katalog Editörü",
-      action: "job-category.create",
+      action: "job.category.create",
       permission: "category.manage",
       resourceType: "job-category",
       resourceId: "9a1c0f10-0001-4c00-8000-000000000009",
@@ -66,7 +66,7 @@ describe("filters go to the server, one query parameter each", () => {
 
     const query = seen.url?.searchParams;
     expect(query?.get("actor")).toBe("Katalog Editörü");
-    expect(query?.get("action")).toBe("job-category.create");
+    expect(query?.get("action")).toBe("job.category.create");
     expect(query?.get("permission")).toBe("category.manage");
     expect(query?.get("resourceType")).toBe("job-category");
     expect(query?.get("resourceId")).toBe("9a1c0f10-0001-4c00-8000-000000000009");

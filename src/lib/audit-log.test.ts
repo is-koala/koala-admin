@@ -22,7 +22,7 @@ import {
 
 const ALL_FILTERS = {
   actor: "Katalog Editörü",
-  action: "job-category.create",
+  action: "job.category.create",
   permission: "category.manage",
   resourceType: "job-category",
   resourceId: "9a1c0f10-0001-4c00-8000-000000000009",
@@ -90,7 +90,7 @@ describe("auditLogQuery", () => {
     const query = auditLogQuery(parseAuditLogRequest({ ...ALL_FILTERS, page: "2" }));
 
     expect(query.actor).toBe("Katalog Editörü");
-    expect(query.action).toBe("job-category.create");
+    expect(query.action).toBe("job.category.create");
     expect(query.permission).toBe("category.manage");
     expect(query.resourceType).toBe("job-category");
     expect(query.resourceId).toBe("9a1c0f10-0001-4c00-8000-000000000009");
@@ -128,7 +128,7 @@ describe("hasDetailRecord", () => {
     actorStaffId: "s1",
     actorDisplayName: "Personel",
     permission: "category.manage",
-    action: "job-category.create",
+    action: "job.category.create",
     resourceType: "job-category",
     resourceId: "r1",
     allowed: true,
