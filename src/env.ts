@@ -2,6 +2,35 @@ import "server-only";
 
 import { z } from "zod";
 
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]", "host.docker.internal"];
+
+type HttpOriginPolicy = "allow" | "local-only";
+
+type StrictRootOriginResult =
+  | { readonly ok: true; readonly origin: string }
+  | {
+      readonly ok: false;
+      readonly reason:
+        | "control-character"
+        | "invalid-url"
+        | "protocol"
+        | "credentials"
+        | "root-syntax"
+        | "insecure-http";
+    };
+
+const ROOT_ORIGIN_ERROR_MESSAGES: Record<
+  Exclude<StrictRootOriginResult, { ok: true }>["reason"],
+  string
+> = {
+  "control-character": "TAB, CR ya da LF içermemeli",
+  "invalid-url": "geçerli bir mutlak URL olmalı",
+  protocol: "http ya da https olmalı",
+  credentials: "kullanıcı adı ya da parola içermemeli",
+  "root-syntax": "yalnız kök origin (şema + host + opsiyonel port) olmalı",
+  "insecure-http": "localhost dışında https olmalı",
+};
+
 /**
  * Server-side environment contract.
  *
@@ -27,9 +56,12 @@ const serverEnvSchema = z.object({
   // than zod's "expected string, received undefined" — the person hitting this
   // is usually setting the project up for the first time.
   //
-  // No `localhostOnlyHttp`: the backend is reached server-to-server, often over
+  // `httpPolicy: "allow"`: the backend is reached server-to-server, often over
   // a private network, so plain http is a deployment choice rather than a leak.
-  KOALA_API_BASE_URL: absoluteUrl({ required: "zorunlu (.env.local içinde tanımlayın)" }),
+  KOALA_API_BASE_URL: canonicalRootOrigin({
+    required: "zorunlu (.env.local içinde tanımlayın)",
+    httpPolicy: "allow",
+  }),
 
   /** Hard ceiling for a single backend round trip, in milliseconds. */
   KOALA_API_TIMEOUT_MS: z.coerce
@@ -60,9 +92,9 @@ const serverEnvSchema = z.object({
    * more: ADR-0014 dropped the identity provider and the panel signs people in
    * itself.
    */
-  ADMIN_PUBLIC_ORIGIN: absoluteUrl({
+  ADMIN_PUBLIC_ORIGIN: canonicalRootOrigin({
     required: "zorunlu (panelin dış adresi, ör. http://localhost:3000)",
-    localhostOnlyHttp: true,
+    httpPolicy: "local-only",
   }),
 
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -108,46 +140,69 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
 export const env: ServerEnv = parseServerEnv(process.env);
 
 /**
- * An absolute `http(s)` URL with any trailing slash removed, so callers can
- * always append a leading-slash path.
+ * A root `http(s)` origin in canonical form: lower-case scheme/host, no
+ * credentials, path, query, fragment or trailing slash, and a non-default port
+ * retained. Callers can therefore append a leading-slash path without URL
+ * components from configuration changing that path.
  *
- * `localhostOnlyHttp` marks a variable addressing something that must be behind
- * TLS in production but is plain HTTP during development — today only the
- * panel's own origin. Plain HTTP anywhere but localhost would put the session
- * cookie, and with it a staff access token, on the wire in the clear, so it is
- * rejected rather than merely discouraged.
+ * `httpPolicy: "local-only"` marks a variable addressing something that must be
+ * behind TLS in production but is plain HTTP during development — today only
+ * the panel's own origin. Plain HTTP anywhere but localhost would put the
+ * session cookie, and with it a staff access token, on the wire in the clear,
+ * so it is rejected rather than merely discouraged.
  */
-function absoluteUrl(options: { required: string; localhostOnlyHttp?: boolean }) {
-  const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]", "host.docker.internal"];
+function canonicalRootOrigin(options: { required: string; httpPolicy: HttpOriginPolicy }) {
+  return z
+    .string({ error: options.required })
+    .min(1, "boş olamaz")
+    .transform((value, context) => {
+      const result = parseStrictRootOrigin(value, options.httpPolicy);
+      if (!result.ok) {
+        context.addIssue({ code: "custom", message: ROOT_ORIGIN_ERROR_MESSAGES[result.reason] });
+        return z.NEVER;
+      }
+      return result.origin;
+    });
+}
 
-  return (
-    z
-      .string({ error: options.required })
-      .min(1, "boş olamaz")
-      // `abort` so the checks below never run `new URL` on a string that already
-      // failed to parse.
-      .refine((value) => URL.canParse(value), {
-        error: "geçerli bir mutlak URL olmalı",
-        abort: true,
-      })
-      .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), {
-        error: "http ya da https olmalı",
-        abort: true,
-      })
-      .refine(
-        (value) =>
-          options.localhostOnlyHttp !== true ||
-          new URL(value).protocol === "https:" ||
-          LOCAL_HOSTS.includes(new URL(value).hostname),
-        "localhost dışında https olmalı",
-      )
-      .transform((value) => value.replace(/\/+$/, ""))
-  );
+function parseStrictRootOrigin(
+  value: string,
+  httpPolicy: HttpOriginPolicy,
+): StrictRootOriginResult {
+  const trimmed = value.trim();
+  if (/[\t\r\n]/.test(trimmed)) return { ok: false, reason: "control-character" };
+  if (!URL.canParse(trimmed)) return { ok: false, reason: "invalid-url" };
+
+  const url = new URL(trimmed);
+  if (!["http:", "https:"].includes(url.protocol)) return { ok: false, reason: "protocol" };
+
+  const schemeEnd = trimmed.indexOf("://");
+  if (schemeEnd < 0) return { ok: false, reason: "root-syntax" };
+
+  const authorityAndSuffix = trimmed.slice(schemeEnd + 3);
+  const suffixStart = authorityAndSuffix.search(/[\\/?#]/);
+  const authority = suffixStart < 0 ? authorityAndSuffix : authorityAndSuffix.slice(0, suffixStart);
+
+  if (authority.includes("@") || url.username.length > 0 || url.password.length > 0) {
+    return { ok: false, reason: "credentials" };
+  }
+  if (authority.endsWith(":")) return { ok: false, reason: "root-syntax" };
+
+  const suffix = suffixStart < 0 ? "" : authorityAndSuffix.slice(suffixStart);
+  if (suffix !== "" && suffix !== "/") return { ok: false, reason: "root-syntax" };
+
+  if (
+    httpPolicy === "local-only" &&
+    url.protocol === "http:" &&
+    !LOCAL_HOSTS.includes(url.hostname)
+  ) {
+    return { ok: false, reason: "insecure-http" };
+  }
+
+  return { ok: true, origin: url.origin };
 }
 
 function originAllowlist() {
-  const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]", "host.docker.internal"];
-
   return z
     .string()
     .default("")
@@ -158,33 +213,19 @@ function originAllowlist() {
         .split(",")
         .map((entry) => entry.trim())
         .filter(Boolean)) {
-        if (!URL.canParse(candidate)) {
+        const result = parseStrictRootOrigin(candidate, "local-only");
+        if (!result.ok) {
           context.addIssue({
             code: "custom",
-            message: `${candidate}: geçerli bir mutlak URL olmalı`,
+            message:
+              result.reason === "invalid-url"
+                ? "geçerli bir mutlak URL olmalı"
+                : "yalnız güvenli origin (şema + host + opsiyonel port) olmalı",
           });
           return z.NEVER;
         }
 
-        const url = new URL(candidate);
-        const isSecure = url.protocol === "https:";
-        const isLocalHttp = url.protocol === "http:" && LOCAL_HOSTS.includes(url.hostname);
-        if (
-          (!isSecure && !isLocalHttp) ||
-          url.username.length > 0 ||
-          url.password.length > 0 ||
-          url.pathname !== "/" ||
-          url.search.length > 0 ||
-          url.hash.length > 0
-        ) {
-          context.addIssue({
-            code: "custom",
-            message: `${candidate}: yalnız güvenli origin (şema + host + opsiyonel port) olmalı`,
-          });
-          return z.NEVER;
-        }
-
-        origins.push(url.origin);
+        origins.push(result.origin);
       }
 
       return [...new Set(origins)];
