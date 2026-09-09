@@ -54,7 +54,7 @@ export interface AuditEntry {
   readonly actorDisplayName: string;
   /** The permission the interceptor checked, e.g. `category.manage`. */
   readonly permission: string;
-  /** What was attempted, e.g. `job-category.create`. */
+  /** What was attempted, e.g. `job.category.create`. */
   readonly action: string;
   readonly resourceType: string;
   readonly resourceId: string;
