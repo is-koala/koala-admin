@@ -40,6 +40,7 @@ import { getEscrowSummary, type EscrowSummary } from "@/server/api/escrow";
 import { isKoalaApiError } from "@/server/api/errors";
 import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
+import type { Permission } from "@/server/authz/permissions";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { submitEscrowOperation } from "@/server/escrow/actions";
@@ -131,21 +132,14 @@ const PAYMENT_STATUS_TONES: Record<string, BadgeTone> = {
 /** Bounded on purpose — see `loadSummaries`. */
 const QUEUE_PAGE_SIZE = 25;
 
-/**
- * The escalation the backend leaves open, said out loud.
- *
- * `POST /admin/disputes/{id}/resolve` is annotated
- * `@RequiresPermission(StaffPermission.DISPUTE_RESOLVE)` and nothing else, and
- * `dispute.resolve` is `PermissionSensitivity.NORMAL` — yet
- * `DisputeManager.resolveDispute` releases escrow or refunds an employer
- * depending on the decision. So a dispute handler holding neither
- * `payout.release` nor `payment.refund` can still move money through this form.
- * The panel does not invent a stricter rule than the backend enforces (that
- * would lock out someone the backend allows); it names the consequence instead,
- * here on the page and again inside the confirmation.
- */
-const RESOLVE_ESCALATION_NOTICE =
-  "Bu uç yalnız dispute.resolve izniyle korunuyor (hassasiyet: NORMAL); buna rağmen RELEASE_TO_WORKER ve REFUND_EMPLOYER gerçek para hareketi yapar. payout.release ya da payment.refund izniniz olmasa da bu karar parayı taşır.";
+/** Derived from the same variant contract the Server Action enforces. */
+const RESOLVE_PERMISSION_NOTICE = DISPUTE_RESOLUTION_SPECS.map((spec) => {
+  const permissions = [
+    "dispute.resolve",
+    ...(spec.financialPermission === null ? [] : ["payment.read", spec.financialPermission]),
+  ];
+  return `${spec.resolution} için ${permissions.join(" ve ")}`;
+}).join("; ");
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -160,8 +154,9 @@ export default async function DisputesPage({ searchParams }: PageProps) {
         <h1 className="text-2xl font-semibold">Uyuşmazlıklar ve emanet</h1>
         <p className="max-w-prose text-sm text-ink-muted">
           Açık uyuşmazlıkları çözer ve emanetteki parayı işçiye çıkarır ya da işverene iade eder.{" "}
-          <code className="font-mono">dispute.resolve</code> izni gerektirir; iki para işlemi ayrıca{" "}
-          <code className="font-mono">payout.release</code> ve{" "}
+          <code className="font-mono">dispute.resolve</code> izni gerektirir. Para taşıyan her yol
+          ayrıca <code className="font-mono">payment.read</code> ile birlikte yönüne göre{" "}
+          <code className="font-mono">payout.release</code> ya da{" "}
           <code className="font-mono">payment.refund</code> ister.
         </p>
       </header>
@@ -337,17 +332,28 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
   const visible =
     filter === "ALL" ? queue.disputes : queue.disputes.filter((d) => d.status === filter);
   const selected = queue.disputes.find((dispute) => dispute.id === selectedId) ?? null;
+  const canReadSummaries = context.has("payment.read");
   const [summaries, evidence] = await Promise.all([
-    loadSummaries(accessToken, queue.disputes),
+    canReadSummaries
+      ? loadSummaries(accessToken, queue.disputes)
+      : Promise.resolve(new Map<string, SummaryEntry>()),
     selected === null ? Promise.resolve(null) : loadEvidence(accessToken, selected.id),
   ]);
 
   const everySummaryFailed =
-    queue.disputes.length > 0 && [...summaries.values()].every((entry) => !entry.ok);
+    canReadSummaries &&
+    queue.disputes.length > 0 &&
+    [...summaries.values()].every((entry) => !entry.ok);
 
   return (
     <div className="flex flex-col gap-8">
-      {everySummaryFailed ? (
+      {!canReadSummaries && queue.disputes.length > 0 ? (
+        <ErrorState
+          title="Emanet tutarlarını görüntüleme izniniz yok."
+          description="Atama özeti GET /admin/job-assignments/{id} üzerinde payment.read izni ister. Panel yetkisiz bir özet isteği göndermedi; finansal kararlar kapalı, emanete dokunmayan DISMISSED kararı kullanılabilir."
+          errorCode="PANEL_PERMISSION_DENIED"
+        />
+      ) : everySummaryFailed ? (
         <ErrorState
           title="Emanet tutarları okunamıyor, bu yüzden para işlemleri kapalı."
           description={
@@ -435,8 +441,11 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
                         <span className="font-mono text-xs">{dispute.jobAssignmentId}</span>
                       </TableCell>
                       <TableCell>
-                        {entry !== undefined && entry.ok && entry.summary.totalCharged !== null
-                          ? formatCurrency(entry.summary.totalCharged, entry.summary.currency)
+                        {entry !== undefined && entry.ok
+                          ? formatCurrency(
+                              entry.summary.pricing.employerTotal,
+                              entry.summary.pricing.currency,
+                            )
                           : "—"}
                       </TableCell>
                       <TableCell>{formatDateTime(dispute.createdAt)}</TableCell>
@@ -465,8 +474,7 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
           dispute={selected}
           entry={summaries.get(selected.jobAssignmentId)}
           evidence={evidence}
-          canRelease={context.has("payout.release")}
-          canRefund={context.has("payment.refund")}
+          permissions={context.staff?.permissions ?? []}
         />
       )}
 
@@ -483,13 +491,15 @@ interface DetailProps {
   dispute: Dispute;
   entry: SummaryEntry | undefined;
   evidence: EvidenceResult | null;
-  canRelease: boolean;
-  canRefund: boolean;
+  permissions: readonly Permission[];
 }
 
-function DisputeDetail({ dispute, entry, evidence, canRelease, canRefund }: DetailProps) {
+function DisputeDetail({ dispute, entry, evidence, permissions }: DetailProps) {
   const summary = entry !== undefined && entry.ok ? entry.summary : null;
   const failure = entry !== undefined && !entry.ok ? entry.failure : null;
+  const heldPermissions = new Set(permissions);
+  const canRelease = heldPermissions.has("payout.release");
+  const canRefund = heldPermissions.has("payment.refund");
 
   const releaseMovement = summary === null ? null : movementFor(summary, "WORKER");
   const refundMovement = summary === null ? null : movementFor(summary, "EMPLOYER");
@@ -515,14 +525,17 @@ function DisputeDetail({ dispute, entry, evidence, canRelease, canRefund }: Deta
 
     const movement = spec.beneficiary === "WORKER" ? releaseMovement : refundMovement;
     const availability = spec.beneficiary === "WORKER" ? release : refund;
+    const permissionDenied =
+      spec.financialPermission !== null && !heldPermissions.has(spec.financialPermission);
 
     return {
       resolution: spec.resolution,
       label: spec.label,
       description: spec.description,
       movement,
-      unavailableReason:
-        movement === null
+      unavailableReason: permissionDenied
+        ? `${spec.financialPermission ?? "finans"} izniniz yok; bu finansal karar gönderilemez.`
+        : movement === null
           ? noSummaryReason
           : availability !== null && !availability.allowed
             ? availability.reason
@@ -587,44 +600,20 @@ function DisputeDetail({ dispute, entry, evidence, canRelease, canRefund }: Deta
               <dl className="flex flex-col gap-2 text-sm">
                 <Row
                   label="İşçiye ödenecek"
-                  value={
-                    summary.workerPayout === null
-                      ? "—"
-                      : formatCurrency(summary.workerPayout, summary.currency)
-                  }
+                  value={formatCurrency(summary.pricing.workerPayout, summary.pricing.currency)}
                 />
                 <Row
                   label="Komisyon"
-                  value={
-                    summary.commissionAmount === null
-                      ? "—"
-                      : `${formatCurrency(summary.commissionAmount, summary.currency)}${
-                          summary.commissionRate === null
-                            ? ""
-                            : ` (${formatPercent(Number(summary.commissionRate))})`
-                        }`
-                  }
+                  value={`${formatCurrency(
+                    summary.pricing.serviceFeeAmount,
+                    summary.pricing.currency,
+                  )} (${formatPercent(Number(summary.pricing.serviceFeeRate))})`}
                 />
                 <Row
                   label="İşverenden tahsil edilen"
-                  value={
-                    summary.settledPayment?.totalCharged !== undefined &&
-                    summary.settledPayment.totalCharged !== null
-                      ? formatCurrency(
-                          summary.settledPayment.totalCharged,
-                          summary.settledPayment.currency,
-                        )
-                      : summary.totalCharged === null
-                        ? "—"
-                        : formatCurrency(summary.totalCharged, summary.currency)
-                  }
+                  value={formatCurrency(summary.pricing.employerTotal, summary.pricing.currency)}
                 />
-                <Row
-                  label="Çalışma süresi"
-                  value={
-                    summary.workHours === null ? "—" : `${formatInteger(summary.workHours)} sa`
-                  }
-                />
+                <Row label="Çalışma süresi" value={`${formatInteger(summary.workHours)} sa`} />
               </dl>
             )}
           </div>
@@ -652,9 +641,9 @@ function DisputeDetail({ dispute, entry, evidence, canRelease, canRefund }: Deta
           </p>
           <p
             className="max-w-prose rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-ink"
-            data-testid="resolve-escalation-notice"
+            data-testid="resolve-permission-notice"
           >
-            {RESOLVE_ESCALATION_NOTICE}
+            {RESOLVE_PERMISSION_NOTICE}
           </p>
           <EscrowOperationForm
             action={submitEscrowOperation}
@@ -665,7 +654,7 @@ function DisputeDetail({ dispute, entry, evidence, canRelease, canRefund }: Deta
             title="Uyuşmazlık kararını onayla"
             summary="Karar kaydedilecek ve seçilen yön emanetteki paraya uygulanacak."
             choices={choices}
-            notice={RESOLVE_ESCALATION_NOTICE}
+            notice={RESOLVE_PERMISSION_NOTICE}
           />
         </div>
 
@@ -693,7 +682,7 @@ function DisputeDetail({ dispute, entry, evidence, canRelease, canRefund }: Deta
                       ? release.reason
                       : null
                 }
-                notice="Release ucu gerekçe alanı taşımaz; yazdığınız gerekçe backend'e gitmez, yalnız bu ekranın son işlemler listesine yazılır. Kalıcı kayıt denetim kaydıdır."
+                notice="Gerekçe release isteğine aynen gönderilir ve kalıcı denetim kaydında saklanır."
               />
             ) : (
               <p className="text-xs text-ink-muted" data-testid="release-permission-missing">

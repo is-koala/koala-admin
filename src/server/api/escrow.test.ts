@@ -2,6 +2,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { apiUrl, server } from "../../../test/msw";
+import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment";
 
 import { isKoalaApiError } from "./errors";
 import {
@@ -50,30 +51,7 @@ const PAYOUT = {
   createdAt: "2026-09-06T09:30:00.000000000Z",
 };
 
-const SUMMARY = {
-  id: ASSIGNMENT,
-  status: "COMPLETED",
-  paymentStatus: "HELD_IN_ESCROW",
-  currency: "TRY",
-  workerPayout: 1240.5,
-  commissionAmount: 137.83,
-  commissionRate: 0.1,
-  totalCharged: 1378.33,
-  workHours: 8,
-  jobTitle: "Garsonluk",
-  worker: { id: "w-1", firstName: "Ayşe", lastName: "Yılmaz", username: "ayse" },
-  employer: { id: "e-1", firstName: "Mehmet", lastName: "Demir", username: "mehmet" },
-  companyName: "Koala Kafe",
-  settledPayment: {
-    id: "p-1",
-    currency: "TRY",
-    totalCharged: 1378.33,
-    workerPayout: 1240.5,
-    commissionAmount: 137.83,
-    commissionRate: 0.1,
-    completedAt: "2026-09-01T10:00:00.000000000Z",
-  },
-};
+const SUMMARY = adminAssignmentFixture({ id: ASSIGNMENT });
 
 describe("the paths match the controller, not the issue body", () => {
   it("uses the /admin/job-assignments/{id}/… shape the controller declares", () => {
@@ -88,7 +66,7 @@ describe("the paths match the controller, not the issue body", () => {
 });
 
 describe("release", () => {
-  it("POSTs with the bearer token and no body at all", async () => {
+  it("POSTs the audit reason exactly, without an amount", async () => {
     let method: string | null = null;
     let authorization: string | null = null;
     let body: string | null = null;
@@ -102,13 +80,14 @@ describe("release", () => {
       }),
     );
 
-    const payout = await releaseEscrow("ACCESS-TOKEN", ASSIGNMENT);
+    const reason = "İşçi işi tamamladı; kanıtlar teslimatı doğruluyor.";
+    const payout = await releaseEscrow("ACCESS-TOKEN", ASSIGNMENT, reason);
 
     expect(method).toBe("POST");
     expect(authorization).toBe("Bearer ACCESS-TOKEN");
-    // The amount is `assignment.getWorkerPayout()`, chosen by the backend. The
-    // panel could not override it if it wanted to.
-    expect(body).toBe("");
+    expect(JSON.parse(body ?? "null")).toEqual({ reason });
+    // The amount is `assignment.getWorkerPayout()`, chosen by the backend.
+    expect(JSON.parse(body ?? "null")).not.toHaveProperty("amount");
     expect(payout.amount).toBe(1240.5);
     expect(payout.status).toBe("PENDING");
   });
@@ -132,7 +111,9 @@ describe("release", () => {
       ),
     );
 
-    const error = await releaseEscrow("ACCESS-TOKEN", ASSIGNMENT).catch((e: unknown) => e);
+    const error = await releaseEscrow("ACCESS-TOKEN", ASSIGNMENT, "Kanıtlar doğrulandı.").catch(
+      (e: unknown) => e,
+    );
 
     expect(isKoalaApiError(error)).toBe(true);
     if (!isKoalaApiError(error)) throw new Error("unreachable");
@@ -171,7 +152,7 @@ describe("refund", () => {
     expect(meta.requestId).toBe("rid-refund");
   });
 
-  it("truncates the reason to the backend's @Size(max = 512)", async () => {
+  it("does not silently truncate a reason before transport", async () => {
     let body: { reason?: string } | undefined;
 
     server.use(
@@ -188,14 +169,14 @@ describe("refund", () => {
       }),
     );
 
-    await refundEmployer("ACCESS-TOKEN", ASSIGNMENT, "x".repeat(900));
+    await refundEmployer("ACCESS-TOKEN", ASSIGNMENT, "x".repeat(513));
 
-    expect(body?.reason).toHaveLength(512);
+    expect(body?.reason).toHaveLength(513);
   });
 });
 
 describe("the escrow summary read", () => {
-  it("parses the assignment and its settled payment", async () => {
+  it("preserves the backend's nested pricing snapshot", async () => {
     server.use(
       http.get(apiUrl(escrowSummaryPath(ASSIGNMENT)), () =>
         HttpResponse.json(envelope(escrowSummaryPath(ASSIGNMENT), SUMMARY)),
@@ -205,35 +186,38 @@ describe("the escrow summary read", () => {
     const summary = await getEscrowSummary("ACCESS-TOKEN", ASSIGNMENT);
 
     expect(summary.paymentStatus).toBe("HELD_IN_ESCROW");
-    expect(summary.workerPayout).toBe(1240.5);
-    expect(summary.settledPayment?.totalCharged).toBe(1378.33);
+    expect(summary.pricing.workerPayout).toBe("1240.50");
+    expect(summary.pricing.serviceFeeAmount).toBe("137.83");
+    expect(summary.pricing.serviceFeeRate).toBe("0.1000");
+    expect(summary.pricing.employerTotal).toBe("1378.33");
     expect(summary.worker?.firstName).toBe("Ayşe");
   });
 
-  it("accepts a BigDecimal serialised as a string without turning it into a float", async () => {
-    server.use(
-      http.get(apiUrl(escrowSummaryPath(ASSIGNMENT)), () =>
-        HttpResponse.json(
-          envelope(escrowSummaryPath(ASSIGNMENT), {
-            ...SUMMARY,
-            workerPayout: "1240.50",
-            settledPayment: { ...SUMMARY.settledPayment, totalCharged: "1378.33" },
-          }),
+  it.each(["workerPayout", "serviceFeeAmount", "serviceFeeRate", "employerTotal"] as const)(
+    "rejects numeric drift in pricing.%s instead of losing BigDecimal precision",
+    async (field) => {
+      server.use(
+        http.get(apiUrl(escrowSummaryPath(ASSIGNMENT)), () =>
+          HttpResponse.json(
+            envelope(escrowSummaryPath(ASSIGNMENT), {
+              ...SUMMARY,
+              pricing: { ...SUMMARY.pricing, [field]: 1240.5 },
+            }),
+          ),
         ),
-      ),
-    );
+      );
 
-    const summary = await getEscrowSummary("ACCESS-TOKEN", ASSIGNMENT);
+      const error = await getEscrowSummary("ACCESS-TOKEN", ASSIGNMENT).catch(
+        (caught: unknown) => caught,
+      );
 
-    // Still a string. Nothing in the panel parses it; `formatCurrency` takes both.
-    expect(summary.workerPayout).toBe("1240.50");
-    expect(summary.settledPayment?.totalCharged).toBe("1378.33");
-  });
+      expect(isKoalaApiError(error)).toBe(true);
+      if (!isKoalaApiError(error)) throw new Error("unreachable");
+      expect(error.errorCode).toBe("RESPONSE_SCHEMA_MISMATCH");
+    },
+  );
 
-  it("reports the 403 an unmapped /admin path answers today", async () => {
-    // koala-backend#14 denies by default, so this endpoint is 403 rather than
-    // 404 until somebody ships it. The screen renders that, and withholds the
-    // money buttons.
+  it("reports a payment.read denial explicitly", async () => {
     server.use(
       http.get(apiUrl(escrowSummaryPath(ASSIGNMENT)), () =>
         HttpResponse.json(

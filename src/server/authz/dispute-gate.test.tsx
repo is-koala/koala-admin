@@ -2,6 +2,7 @@ import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { adminMeSuccessBody } from "../../../test/fixtures/envelopes";
+import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment";
 import { apiUrl, server } from "../../../test/msw";
 import { renderServerComponent } from "../../../test/render-server";
 
@@ -43,7 +44,13 @@ const SUMMARY = apiUrl(`/admin/job-assignments/${ASSIGNMENT}`);
 const EVIDENCE = apiUrl(`/admin/disputes/${DISPUTE}/evidence`);
 const EVIDENCE_ID = "e1000000-0000-4c00-8000-000000000001";
 
-const TRUST_LEAD = ["dispute.resolve", "payout.release", "payment.refund"];
+const OWNER_REVIEW_PERMISSIONS = [
+  "dispute.resolve",
+  "payment.read",
+  "payout.release",
+  "payment.refund",
+];
+const DISPUTE_HANDLER_PERMISSIONS = ["dispute.resolve"];
 const CATALOG_EDITOR = ["category.manage"];
 
 const DISPUTE_ROW = {
@@ -58,30 +65,7 @@ const DISPUTE_ROW = {
   createdAt: "2026-09-05T08:00:00.000000000Z",
 };
 
-const SUMMARY_BODY = {
-  id: ASSIGNMENT,
-  status: "COMPLETED",
-  paymentStatus: "HELD_IN_ESCROW",
-  currency: "TRY",
-  workerPayout: "1240.50",
-  commissionAmount: "137.83",
-  commissionRate: "0.1000",
-  totalCharged: "1378.33",
-  workHours: 8,
-  jobTitle: "Garsonluk",
-  worker: { id: "w-1", firstName: "Ayşe", lastName: "Yılmaz", username: "ayse" },
-  employer: { id: "e-1", firstName: "Mehmet", lastName: "Demir", username: "mehmet" },
-  companyName: "Koala Kafe",
-  settledPayment: {
-    id: "p-1",
-    currency: "TRY",
-    totalCharged: "1378.33",
-    workerPayout: "1240.50",
-    commissionAmount: "137.83",
-    commissionRate: "0.1000",
-    completedAt: "2026-09-01T10:00:00.000000000Z",
-  },
-};
+const SUMMARY_BODY = adminAssignmentFixture({ id: ASSIGNMENT });
 
 function stubMe(permissions: readonly string[], roles: readonly string[]) {
   server.use(
@@ -295,9 +279,9 @@ describe("a CATALOG_EDITOR typing /disputes by hand", () => {
   });
 });
 
-describe("a TRUST_LEAD on the queue", () => {
+describe("an OWNER on the queue", () => {
   it("sees the dispute with its status, opening party, assignment, amount and date", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     const disputes = watchDisputes();
     watchSummary();
     const evidence = watchEvidence();
@@ -315,7 +299,7 @@ describe("a TRUST_LEAD on the queue", () => {
   });
 
   it("offers only the statuses the endpoint can return, and says why", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes();
     watchSummary();
 
@@ -329,7 +313,7 @@ describe("a TRUST_LEAD on the queue", () => {
   });
 
   it("filters the loaded page by status", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes();
     watchSummary();
 
@@ -341,7 +325,7 @@ describe("a TRUST_LEAD on the queue", () => {
   });
 
   it("says the queue is empty rather than that it failed", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes(emptyQueue);
 
     const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
@@ -352,7 +336,7 @@ describe("a TRUST_LEAD on the queue", () => {
 
 describe("the selected dispute", () => {
   it("shows both parties, the payment status, the price breakdown and the evidence", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes();
     watchSummary();
     const evidence = watchEvidence();
@@ -383,7 +367,7 @@ describe("the selected dispute", () => {
   });
 
   it("keeps the queue and decision controls usable when no evidence was attached", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes();
     watchSummary();
     watchEvidence(emptyEvidence);
@@ -399,7 +383,7 @@ describe("the selected dispute", () => {
   });
 
   it("contains an evidence failure inside its panel and keeps the rest of the dispute usable", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes();
     watchSummary();
     watchEvidence(evidenceFailed);
@@ -418,7 +402,7 @@ describe("the selected dispute", () => {
   });
 
   it("arms the resolution form and both escrow operations", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes();
     watchSummary();
     watchEvidence();
@@ -430,32 +414,60 @@ describe("the selected dispute", () => {
     expect(html).toContain("Kararı gözden geçir");
     expect(html).toContain("Çıkışı gözden geçir");
     expect(html).toContain("İadeyi gözden geçir");
-    // The resolve endpoint is guarded by dispute.resolve alone, and the screen
-    // says so rather than leaving the escalation implicit.
-    expect(html).toContain("yalnız dispute.resolve izniyle korunuyor");
-    expect(html).toContain('data-testid="resolve-escalation-notice"');
+    expect(html).toContain("Para taşıyan her yol ayrıca");
+    expect(html).toContain(
+      "RELEASE_TO_WORKER için dispute.resolve ve payment.read ve payout.release",
+    );
+    expect(html).toContain(
+      "REFUND_EMPLOYER için dispute.resolve ve payment.read ve payment.refund",
+    );
+    expect(html).toContain('data-testid="resolve-permission-notice"');
   });
 
-  it("hides an operation whose permission is missing", async () => {
-    stubMe(["dispute.resolve"], ["DISPUTE_HANDLER"]);
+  it("does not request payment summaries for the current DISPUTE_HANDLER role", async () => {
+    stubMe(DISPUTE_HANDLER_PERMISSIONS, ["DISPUTE_HANDLER"]);
     watchDisputes();
-    watchSummary();
+    const summary = watchSummary();
     watchEvidence();
 
     const html = await renderServerComponent(
       <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
     );
 
+    expect(summary.calls).toBe(0);
     expect(html).toContain("Kararı gözden geçir");
     expect(html).not.toContain("Çıkışı gözden geçir");
     expect(html).not.toContain("İadeyi gözden geçir");
     expect(html).toContain("izniniz yok; bu işlem gösterilmiyor");
+    expect(html).toContain("payment.read");
+    expect(html).toContain('value="RELEASE_TO_WORKER" disabled=""');
+    expect(html).toContain('value="REFUND_EMPLOYER" disabled=""');
+    expect(html).toContain('value="DISMISSED"');
+    expect(html).not.toContain('value="DISMISSED" disabled=""');
+  });
+
+  it("disables financial resolution choices when their current permissions are missing", async () => {
+    stubMe(["dispute.resolve", "payment.read"], ["DISPUTE_HANDLER"]);
+    watchDisputes();
+    const summary = watchSummary();
+    watchEvidence();
+
+    const html = await renderServerComponent(
+      <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
+    );
+
+    expect(summary.calls).toBe(1);
+    expect(html).toContain('value="RELEASE_TO_WORKER" disabled=""');
+    expect(html).toContain('value="REFUND_EMPLOYER" disabled=""');
+    expect(html).toContain('data-testid="release-permission-missing"');
+    expect(html).toContain('data-testid="refund-permission-missing"');
+    expect(html).toContain("DISMISSED için dispute.resolve");
   });
 });
 
 describe("when the panel cannot read the amount", () => {
   it("shows the dispute, withholds the money, and says which read failed", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes();
     const summary = watchSummary(summaryForbidden);
     watchEvidence();
@@ -480,7 +492,7 @@ describe("when the panel cannot read the amount", () => {
 
 describe("the backend is the authority", () => {
   it("renders its refusal of the queue instead of crashing", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     const disputes = watchDisputes(() =>
       HttpResponse.json(
         {
@@ -506,7 +518,7 @@ describe("the backend is the authority", () => {
   });
 
   it("shows the recent-operations panel with its caveat even when the queue fails", async () => {
-    stubMe(TRUST_LEAD, ["TRUST_LEAD"]);
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes(() => HttpResponse.json({ success: false, message: "boom" }, { status: 500 }));
 
     const html = await renderServerComponent(<DisputesPage searchParams={params()} />);

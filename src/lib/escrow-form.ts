@@ -17,6 +17,17 @@
 
 export type EscrowFormStatus = "IDLE" | "SUCCEEDED" | "REFUSED" | "BLOCKED";
 
+/** Matches ReleaseRequestDto/RefundRequestDto and ResolveDisputeDto exactly. */
+export const ESCROW_REASON_LIMITS = {
+  RELEASE: 512,
+  REFUND: 512,
+  RESOLVE_DISPUTE: 2000,
+} as const;
+
+export function escrowReasonMaxLength(kind: keyof typeof ESCROW_REASON_LIMITS): number {
+  return ESCROW_REASON_LIMITS[kind];
+}
+
 export interface EscrowFormState {
   readonly status: EscrowFormStatus;
   readonly message: string;

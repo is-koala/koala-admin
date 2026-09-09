@@ -1,6 +1,7 @@
 import "server-only";
 
 import { formatCurrency } from "@/lib/format";
+import { escrowReasonMaxLength } from "@/lib/escrow-form";
 import {
   disputeResolutionSpec,
   isDisputeResolution,
@@ -104,23 +105,26 @@ export interface EscrowOperationOutcome {
   readonly deduplicated: boolean;
 }
 
-const PERMISSION_FOR: Record<EscrowOperationKind, Permission> = {
-  /**
-   * Note what this says, and what koala-backend says. `POST /admin/disputes/{id}/resolve`
-   * is gated by `dispute.resolve` **alone** — a `PermissionSensitivity.NORMAL`
-   * permission — even when the chosen resolution releases escrow or refunds an
-   * employer. The panel matches the backend rather than inventing a stricter
-   * rule that would lock out a dispute handler the backend would let through;
-   * the screen names the consequence out loud instead.
-   */
-  RESOLVE_DISPUTE: "dispute.resolve",
-  RELEASE: "payout.release",
-  REFUND: "payment.refund",
-};
+function permissionsFor(request: EscrowOperationRequest): readonly Permission[] {
+  switch (request.kind) {
+    case "RELEASE":
+      return ["payment.read", "payout.release"];
+    case "REFUND":
+      return ["payment.read", "payment.refund"];
+    case "RESOLVE_DISPUTE": {
+      const financialPermission =
+        request.resolution === null
+          ? null
+          : disputeResolutionSpec(request.resolution).financialPermission;
+      return financialPermission === null
+        ? ["dispute.resolve"]
+        : ["dispute.resolve", "payment.read", financialPermission];
+    }
+  }
+}
 
 /** A reason that will be read years later has to be longer than "ok". */
 const MIN_MONEY_REASON_LENGTH = 10;
-const MAX_REASON_LENGTH = 2000;
 
 /* -------------------------------------------------------------------------- */
 /* Double-submit guard                                                         */
@@ -251,8 +255,9 @@ function validate(request: EscrowOperationRequest): string | null {
   if (reason.length === 0) {
     return "Gerekçe zorunludur. Bu alan boş bırakılamaz.";
   }
-  if (reason.length > MAX_REASON_LENGTH) {
-    return `Gerekçe en fazla ${MAX_REASON_LENGTH} karakter olabilir.`;
+  const reasonMaxLength = escrowReasonMaxLength(request.kind);
+  if (reason.length > reasonMaxLength) {
+    return `Gerekçe en fazla ${reasonMaxLength} karakter olabilir.`;
   }
 
   const direction = directionFor(request);
@@ -281,10 +286,10 @@ async function execute(request: EscrowOperationRequest): Promise<EscrowOperation
     );
   }
 
-  const permission = PERMISSION_FOR[request.kind];
-  if (!context.has(permission)) {
+  const missingPermission = permissionsFor(request).find((permission) => !context.has(permission));
+  if (missingPermission !== undefined) {
     return blocked(
-      `Bu işlem "${permission}" iznini gerektiriyor ve hesabınızda bu izin yok. İstek backend'e hiç gönderilmedi.`,
+      `Bu işlem "${missingPermission}" iznini gerektiriyor ve hesabınızda bu izin yok. İstek backend'e hiç gönderilmedi.`,
       "PANEL_PERMISSION_DENIED",
     );
   }
@@ -399,10 +404,9 @@ interface ConfirmationCheck {
 /**
  * Prove that the operator confirmed the amount the backend holds *right now*.
  *
- * The submitted figure is compared and then discarded. It is never forwarded:
- * release sends no body at all, and refund deliberately sends no `amount`, so
- * there is no path by which a number from the browser could become the number
- * that moves.
+ * The submitted figure is compared and then discarded. Neither release nor
+ * refund forwards an amount, so there is no path by which a number from the
+ * browser could become the number that moves.
  */
 async function confirmAmount(
   accessToken: string,
@@ -464,7 +468,7 @@ async function send(
 ): Promise<SuccessDetail> {
   switch (request.kind) {
     case "RELEASE": {
-      const payout = await releaseEscrow(accessToken, request.assignmentId);
+      const payout = await releaseEscrow(accessToken, request.assignmentId, reason);
       return {
         message: `Çıkış kaydı oluşturuldu (durum: ${payout.status}).`,
         // The backend's own figure, not the one that was confirmed.
