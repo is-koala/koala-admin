@@ -181,6 +181,13 @@ describe("the menu is drawn from the registry and from permissions only", () => 
     expect(entries.map((entry) => entry.href)).toEqual(["/job-categories", "/audit-log"]);
   });
 
+  it("advertises bank reconciliation only to payout.reconcile holders", () => {
+    expect(navigationFor(["payout.reconcile"]).map((entry) => entry.href)).toEqual([
+      "/payout-reconciliation",
+    ]);
+    expect(navigationFor(["payout.release", "finance.read"])).toEqual([]);
+  });
+
   it("draws nothing at all for an empty permission list", () => {
     // The fail-closed path. Not a partial menu, not a menu of disabled items.
     expect(navigationFor([])).toEqual([]);

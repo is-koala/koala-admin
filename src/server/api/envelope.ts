@@ -141,6 +141,7 @@ export function toKoalaApiError(body: unknown, context: EnvelopeContext): KoalaA
       resourceId: error.resourceId,
       path: error.path ?? context.path,
       method: context.method,
+      hasContractEnvelope: true,
     });
   }
 

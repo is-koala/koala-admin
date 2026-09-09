@@ -151,6 +151,18 @@ export const ROUTES = [
   },
   {
     /**
+     * Banka ekstresiyle mutabakat, escrow çıkışından ayrı bir operasyondur:
+     * `payout.release` talimatı başlatır; `payout.reconcile` gerçekleşmiş banka
+     * satırını kanıtlar. Backend de iki ucu ve iki izni ayrı tutar.
+     */
+    path: "/payout-reconciliation",
+    title: "Hakediş banka mutabakatı",
+    access: "permission",
+    permission: "payout.reconcile",
+    nav: { label: "Hakediş mutabakatı", order: 50 },
+  },
+  {
+    /**
      * koala-admin#9, rol→izin yarısı. `role.manage`, ve bu izin tek başına
      * `/admin/roles`'un yedi ucunun tamamını açıyor — okumalar dâhil, çünkü
      * backend'de `role.read` diye bir izin yok.
