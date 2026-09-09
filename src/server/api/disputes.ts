@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { Permission } from "@/server/authz/permissions";
+
 import { koalaApi } from "./koala";
 import { pageDtoSchema } from "./schemas";
 import type { PageDto } from "./types";
@@ -27,9 +29,9 @@ import { z } from "zod";
  *
  * And what `DisputeDto` does *not* carry, which is the single most consequential
  * fact for this screen: **no amount, no payment status, no parties beyond
- * `openedBy`.** The money figures live in `escrow.ts`, behind a read endpoint
- * that does not exist yet — see the comment there. Nothing in this file
- * computes money, and nothing above it may either.
+ * `openedBy`.** The money figures live in `escrow.ts`, behind
+ * `GET /admin/job-assignments/{id}`, which requires `payment.read`. Nothing in
+ * this file computes money, and nothing above it may either.
  */
 
 export const DISPUTES_PATH = "/admin/disputes";
@@ -79,6 +81,8 @@ export interface DisputeResolutionSpec {
   readonly movesMoney: boolean;
   /** Who ends up with the money, or `null` when nobody does. */
   readonly beneficiary: "WORKER" | "EMPLOYER" | null;
+  /** Additional mutating permission the backend requires for this variant. */
+  readonly financialPermission: Extract<Permission, "payout.release" | "payment.refund"> | null;
   readonly description: string;
 }
 
@@ -88,6 +92,7 @@ export const DISPUTE_RESOLUTION_SPECS: readonly DisputeResolutionSpec[] = [
     label: "İşçiye çıkar",
     movesMoney: true,
     beneficiary: "WORKER",
+    financialPermission: "payout.release",
     description:
       "Emanetteki tutar işçiye çıkar. Bu karar, ayrı bir release çağrısı değil, uyuşmazlık çözümünün kendisi tarafından yapılır.",
   },
@@ -96,6 +101,7 @@ export const DISPUTE_RESOLUTION_SPECS: readonly DisputeResolutionSpec[] = [
     label: "İşverene iade et",
     movesMoney: true,
     beneficiary: "EMPLOYER",
+    financialPermission: "payment.refund",
     description:
       "Tahsil edilen tutarın tamamı işverene iade edilir. Kısmi paylaşım yoktur; backend iade tutarını kendisi belirler.",
   },
@@ -104,6 +110,7 @@ export const DISPUTE_RESOLUTION_SPECS: readonly DisputeResolutionSpec[] = [
     label: "Reddet (emanete dokunma)",
     movesMoney: false,
     beneficiary: null,
+    financialPermission: null,
     description:
       "Uyuşmazlık kapanır, emanetteki paraya dokunulmaz. Kapandığı için release'i bloke etmeyi de bırakır.",
   },

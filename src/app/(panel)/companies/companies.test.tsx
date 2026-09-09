@@ -1,18 +1,10 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { reviewCompany, type CompanyReviewOverrides } from "../../../../test/fixtures/companies";
 import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
-
-/**
- * koala-admin#8's acceptance criteria, rendered.
- *
- * The screen's job is to end a dead end — nobody could move a company out of
- * `PENDING`, so no company could post a job — while being straight about the
- * three things `AdminController` does not do: reject, record a reason, or tell
- * the company owner anything.
- */
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
 
@@ -26,7 +18,6 @@ const ADMIN_ME = apiUrl("/admin/me");
 const COMPANIES = apiUrl("/admin/companies");
 
 const APPROVER = ["company.approve"];
-/** Holds a moderation permission and no approval right. */
 const MODERATOR = ["content.moderate"];
 
 beforeEach(() => {
@@ -50,49 +41,36 @@ function stubMe(permissions: readonly string[], roles: readonly string[] = ["COM
   );
 }
 
-function company(overrides: Record<string, unknown> = {}) {
+function company(overrides: CompanyReviewOverrides = {}) {
+  const review = reviewCompany(overrides);
+
   return {
-    id: "9c000000-0000-4000-8000-000000000001",
-    name: "Koala Kahve A.Ş.",
-    email: "info@koalakahve.test",
-    logoUrl: null,
-    phoneNumber: "+905551112233",
-    website: "https://koalakahve.test",
-    description: "Üçüncü nesil kahveci.",
-    taxNumber: "1234567890",
-    type: "CORPORATION",
-    address: {
-      displayAddress: "Kadıköy, İstanbul",
-      cityName: "İstanbul",
-      districtName: "Kadıköy",
-      countryName: "Türkiye",
-    },
-    companyContacts: [
-      {
-        id: "c1",
-        user: {
-          id: "u1",
-          firstName: "Ayşe",
-          lastName: "Yılmaz",
-          username: "ayse",
-          profilePictureUrl: null,
-        },
-        role: "ADMIN",
-      },
-    ],
-    images: [],
-    approved: false,
-    ...overrides,
+    ...review,
+    createdBy:
+      review.createdBy === null
+        ? null
+        : {
+            ...review.createdBy,
+            email: "private@koala.test",
+            passwordHash: "never-render-this",
+          },
+    address: { displayAddress: "must not render" },
+    companyContacts: [{ id: "must-not-render" }],
   };
 }
 
 function watchQueue(rows: unknown[] = [], respond?: () => Response) {
-  const seen: { calls: number; url: URL | null } = { calls: 0, url: null };
+  const seen: { calls: number; url: URL | null; authorization: string | null } = {
+    calls: 0,
+    url: null,
+    authorization: null,
+  };
 
   server.use(
     http.get(COMPANIES, ({ request }) => {
       seen.calls += 1;
       seen.url = new URL(request.url);
+      seen.authorization = request.headers.get("authorization");
 
       if (respond !== undefined) return respond();
 
@@ -119,7 +97,6 @@ function watchQueue(rows: unknown[] = [], respond?: () => Response) {
   return seen;
 }
 
-/** React inserts `<!-- -->` between adjacent interpolations; drop them. */
 const render = async (params: Record<string, string> = {}) =>
   (
     await renderServerComponent(<CompaniesPage searchParams={Promise.resolve(params)} />)
@@ -135,110 +112,157 @@ describe("who can see the queue", () => {
     expect(queue.calls).toBe(0);
     expect(html).toContain("403 — Bu sayfa için yetkiniz yok");
     expect(html).toContain("Şirket başvurularını onayla");
-    expect(html).toContain("Şirket onay kuyruğu");
     expect(html).not.toContain("Koala Kahve");
   });
 
-  it("lets company.approve through and makes the request", async () => {
+  it("lets company.approve through and keeps the bearer token on the server", async () => {
     stubMe(APPROVER);
     const queue = watchQueue([company()]);
 
     const html = await render();
 
     expect(queue.calls).toBe(1);
+    expect(queue.authorization).toBe("Bearer ACCESS-TOKEN");
     expect(html).toContain("Koala Kahve A.Ş.");
+    expect(html).not.toContain("ACCESS-TOKEN");
   });
 });
 
-describe("the filter and the page are query parameters", () => {
-  it("defaults to the companies waiting for a decision", async () => {
-    stubMe(APPROVER);
-    const queue = watchQueue([company()]);
-
-    await render();
-
-    expect(queue.url?.searchParams.get("approved")).toBe("false");
-    expect(queue.url?.searchParams.get("page")).toBe("0");
-    expect(queue.url?.searchParams.get("sort")).toBe("createdAt,desc");
-  });
-
-  it("switches to the approved view when the URL says so", async () => {
-    stubMe(APPROVER);
-    const queue = watchQueue([company({ approved: true })]);
-
-    await render({ onay: "onayli", sayfa: "1", sirala: "name,asc" });
-
-    expect(queue.url?.searchParams.get("approved")).toBe("true");
-    expect(queue.url?.searchParams.get("page")).toBe("1");
-    expect(queue.url?.searchParams.get("sort")).toBe("name,asc");
-  });
-
-  it("falls back to the pending view for a nonsense parameter", async () => {
+describe("status, search and paging are backend query parameters", () => {
+  it("defaults to PENDING and never sends the retired approved filter", async () => {
     stubMe(APPROVER);
     const queue = watchQueue([]);
 
-    await render({ onay: "belki" });
+    await render();
 
-    expect(queue.url?.searchParams.get("approved")).toBe("false");
+    expect(queue.url?.searchParams.get("status")).toBe("PENDING");
+    expect(queue.url?.searchParams.has("approved")).toBe(false);
+    expect(queue.url?.searchParams.get("page")).toBe("0");
+    expect(queue.url?.searchParams.get("size")).toBe("20");
+    expect(queue.url?.searchParams.get("sort")).toBe("createdAt,desc");
   });
 
-  it("says there is no search, rather than offering one that only searches a page", async () => {
+  it("sends each non-default status with the requested page and sort", async () => {
     stubMe(APPROVER);
-    watchQueue([company()]);
+    const queue = watchQueue([]);
 
-    const html = await render();
+    await render({ durum: "APPROVED", sayfa: "1", boyut: "40", sirala: "name,asc" });
 
-    expect(html).toContain("Ada ya da vergi numarasına göre arama yok");
+    expect(queue.url?.searchParams.get("status")).toBe("APPROVED");
+    expect(queue.url?.searchParams.get("page")).toBe("1");
+    expect(queue.url?.searchParams.get("size")).toBe("40");
+    expect(queue.url?.searchParams.get("sort")).toBe("name,asc");
+  });
+
+  it("sends REJECTED and a trimmed name or tax-number search", async () => {
+    stubMe(APPROVER);
+    const queue = watchQueue([]);
+
+    const html = await render({ durum: "REJECTED", ara: "  1234567890  " });
+
+    expect(queue.url?.searchParams.get("status")).toBe("REJECTED");
+    expect(queue.url?.searchParams.get("query")).toBe("1234567890");
+    expect(html).toContain("Şirket adı ya da vergi numarası ara");
+    expect(html).toContain('type="search"');
+  });
+
+  it("falls back to PENDING for a status Spring would reject", async () => {
+    stubMe(APPROVER);
+    const queue = watchQueue([]);
+
+    await render({ durum: "MAYBE" });
+
+    expect(queue.url?.searchParams.get("status")).toBe("PENDING");
+  });
+
+  it("keeps a previous-page control when the requested nonzero page becomes empty", async () => {
+    stubMe(APPROVER);
+    watchQueue([], () =>
+      HttpResponse.json({
+        success: true,
+        message: "Şirketler listelendi.",
+        data: {
+          content: [],
+          page: 1,
+          size: 20,
+          totalElements: 20,
+          totalPages: 1,
+          first: false,
+          last: true,
+        },
+      }),
+    );
+
+    const html = await render({ sayfa: "1" });
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    const previous = [
+      ...container.querySelectorAll<HTMLButtonElement>('button[name="sayfa"]'),
+    ].find((button) => button.textContent === "Önceki");
+
+    expect(previous).toBeDefined();
+    expect(previous?.value).toBe("0");
+    expect(previous?.disabled).toBe(false);
   });
 });
 
-describe("what the queue and the detail show", () => {
-  it("puts the registration details in the table and the detail", async () => {
+describe("the safe review projection", () => {
+  it("renders creator, timestamps, status and saved note without extra user or company fields", async () => {
     stubMe(APPROVER);
-    watchQueue([company()]);
+    watchQueue([
+      company({
+        approvalStatus: "REJECTED",
+        approvalNote: "Vergi levhası okunmuyor.",
+        approvalDecidedAt: "2026-09-06T09:40:00Z",
+      }),
+    ]);
 
-    const html = await render();
+    const html = await render({ durum: "REJECTED" });
 
-    expect(html).toContain("Koala Kahve A.Ş.");
-    expect(html).toContain("Anonim şirket");
-    expect(html).toContain("1234567890");
-    expect(html).toContain("Kadıköy, İstanbul");
     expect(html).toContain("Ayşe Yılmaz");
-    expect(html).toContain("Şirket yetkilisi");
+    expect(html).toContain("01.09.2026 11:00");
+    expect(html).toContain("06.09.2026 12:40");
+    expect(html).toContain("Reddedildi");
+    expect(html).toContain("Vergi levhası okunmuyor.");
+    expect(html).not.toContain("private@koala.test");
+    expect(html).not.toContain("never-render-this");
+    expect(html).not.toContain("must not render");
+    expect(html).not.toContain("must-not-render");
   });
 
-  it("says the application date and creator are not returned", async () => {
-    // koala-admin#8 asks for "oluşturan, tarih"; CompanyDto carries neither.
+  it("renders explicit fallbacks when optional review metadata is absent", async () => {
     stubMe(APPROVER);
-    watchQueue([company()]);
+    watchQueue([
+      company({
+        name: "Yeni Şirket",
+        email: null,
+        phoneNumber: null,
+        taxNumber: null,
+        type: null,
+        createdAt: null,
+        createdBy: null,
+      }),
+    ]);
 
     const html = await render();
 
-    expect(html).toContain("Başvuru tarihi ve başvuran");
-    expect(html).toContain("Backend döndürmüyor.");
-    expect(html).toContain("başvuruyu açan kişi ile aynı olmak zorunda değildir");
+    expect(html).toContain("Yeni Şirket");
+    expect(html).toContain("Oluşturan");
+    expect(html).toContain("Başvuru zamanı");
+    expect(html).toContain("—");
   });
 
-  it("does not call gallery images documents without saying what they are", async () => {
-    stubMe(APPROVER);
-    watchQueue([company()]);
-
-    const html = await render();
-
-    expect(html).toContain("Backend&#x27;de belge için ayrı bir alan da yok");
-  });
-
-  it("distinguishes an empty queue from a failure", async () => {
+  it("distinguishes an empty search result from a load failure", async () => {
     stubMe(APPROVER);
     watchQueue([]);
 
-    const html = await render();
+    const html = await render({ ara: "kahve" });
 
-    expect(html).toContain("Onay bekleyen şirket yok. Kuyruk temiz.");
+    expect(html).toContain("Aramayla eşleşen şirket yok.");
     expect(html).not.toContain("Şirket kuyruğu yüklenemedi.");
   });
 
-  it("renders the backend's 403 rather than crashing when the gate opened anyway", async () => {
+  it("renders the backend's 403 rather than an empty queue", async () => {
     stubMe(APPROVER);
     const queue = watchQueue([], () =>
       HttpResponse.json(
@@ -264,86 +288,116 @@ describe("what the queue and the detail show", () => {
   });
 });
 
-describe("the decision, and the three things it does not do", () => {
-  it("states the missing rejection path above the queue, not buried in a form", async () => {
+describe("the backend decision state machine", () => {
+  it("keeps successful decision feedback visible after the decided row leaves the queue", async () => {
     stubMe(APPROVER);
-    watchQueue([company()]);
+    watchQueue([]);
 
-    const html = await render();
+    const html = await render({ durum: "PENDING", sonuc: "approved" });
 
-    expect(html).toContain("Bu kuyrukta ret yolu yok.");
-    expect(html).toContain("Panel bunun için bir düğme uydurmuyor");
+    expect(html).toContain("Onay kararı backend tarafından kaydedildi.");
+    expect(html).toContain('role="status"');
   });
 
-  it("offers approval only, and marks it irreversible", async () => {
+  it("keeps successful decision feedback visible when the refreshed queue fails to load", async () => {
+    stubMe(APPROVER);
+    watchQueue([], () => HttpResponse.error());
+
+    const html = await render({ sonuc: "rejected" });
+
+    expect(html).toContain("Ret kararı backend tarafından kaydedildi.");
+    expect(html).toContain("Şirket kuyruğu yüklenemedi.");
+  });
+
+  it("carries the canonical queue location into the decision action", async () => {
+    stubMe(APPROVER);
+    watchQueue([company({ approvalStatus: "REJECTED" })]);
+
+    const html = await render({
+      durum: "REJECTED",
+      ara: "  Koala  ",
+      sirala: "name,asc",
+      boyut: "40",
+      sayfa: "2",
+    });
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    expect(container.querySelector<HTMLInputElement>('input[name="returnTo"]')?.value).toBe(
+      "/companies?durum=REJECTED&ara=Koala&sirala=name%2Casc&boyut=40&sayfa=2",
+    );
+  });
+
+  it("offers both approval and rejection for PENDING", async () => {
     stubMe(APPROVER);
     watchQueue([company()]);
 
     const html = await render();
 
-    expect(html).toContain("Şirketi onayla");
-    expect(html).toContain("Geri alınamaz");
-    expect(html).toContain("ilan yayınlayabilir hale gelir");
-    // One radio, one value. Asserting on the word "reddet" would not work:
-    // the page says the rejection endpoint is missing, repeatedly and on
-    // purpose. What must not exist is a control.
+    expect([...html.matchAll(/name="decision"/g)]).toHaveLength(2);
+    expect(html).toContain('value="APPROVE"');
+    expect(html).toContain('value="REJECT"');
+    expect(html).toContain("Karar gerekçesi");
+    expect(html).toContain('maxLength="1000"');
+  });
+
+  it("lets a REJECTED company be approved but not rejected twice", async () => {
+    stubMe(APPROVER);
+    watchQueue([company({ approvalStatus: "REJECTED", approvalNote: "Eksik evrak." })]);
+
+    const html = await render({ durum: "REJECTED" });
+
     expect([...html.matchAll(/name="decision"/g)]).toHaveLength(1);
     expect(html).toContain('value="APPROVE"');
     expect(html).not.toContain('value="REJECT"');
+    expect(html).toContain("önceki ret gerekçesinin yerini");
   });
 
-  it("requires a written reason and says where it does not go", async () => {
+  it("closes every decision control for APPROVED", async () => {
     stubMe(APPROVER);
-    watchQueue([company()]);
+    watchQueue([company({ approvalStatus: "APPROVED" })]);
 
-    const html = await render();
+    const html = await render({ durum: "APPROVED" });
 
-    expect(html).toContain("Onay gerekçesi");
-    expect(html).toContain("Gerekçeniz backend&#x27;e gitmez.");
-  });
-
-  it("warns that the owner is not notified, because the backend never notifies", async () => {
-    stubMe(APPROVER);
-    watchQueue([company()]);
-
-    const html = await render();
-
-    expect(html).toContain("Şirket sahibine bildirim gitmez.");
-    expect(html).toContain("bildirim servisi çağrılmıyor");
-  });
-
-  it("closes the form on a company the backend would answer 409 for", async () => {
-    stubMe(APPROVER);
-    watchQueue([company({ approved: true })]);
-
-    const html = await render({ onay: "onayli" });
-
-    expect(html).toContain("Bu şirket zaten onaylı.");
-    // No form at all — not a form with a disabled button.
+    expect(html).toContain("Backend onayı geri almaya");
+    expect(html).not.toContain('name="decision"');
     expect(html).not.toContain('name="note"');
-    expect(html).not.toContain("Gerekçe yazılmadan karar gönderilemez.");
+  });
+
+  it("states that notes persist and notification delivery is not claimed", async () => {
+    stubMe(APPROVER);
+    watchQueue([company()]);
+
+    const html = await render();
+
+    expect(html).toContain("Gerekçe şirket kararında saklanır.");
+    expect(html).toContain("varsa şirketin ADMIN yetkilileri");
+    expect(html).toContain("göndermeyi dener");
+    expect(html).toContain("teslim veya denetim kaydı sonucunu taşımadığı");
+    expect(html).not.toContain("yönetim denetim kaydında saklanır");
+    expect(html).not.toContain("bildirim gitmez");
   });
 });
 
-describe("the gaps are on the screen", () => {
-  it("lists what AdminController cannot answer, including the rejection endpoint", async () => {
+describe("the review contract is visible", () => {
+  it("does not invent documents or full-company collections", async () => {
     stubMe(APPROVER);
     watchQueue([company()]);
 
     const html = await render();
 
-    expect(html).toContain("Backend&#x27;in veremedikleri");
-    expect(html).toContain("Ret yolu yok");
-    expect(html).toContain("Onay sonrası şirkete bildirim gitmiyor");
+    expect(html).toContain("İnceleme verisinin sınırı");
+    expect(html).toContain("CompanyReviewDto");
+    expect(html).toContain("belge koleksiyonu bu sözleşmede yoktur");
   });
 
-  it("still lists them when the queue itself could not be loaded", async () => {
+  it("keeps the contract boundary visible when loading fails", async () => {
     stubMe(APPROVER);
     watchQueue([], () => HttpResponse.error());
 
     const html = await render();
 
     expect(html).toContain("Şirket kuyruğu yüklenemedi.");
-    expect(html).toContain("Backend&#x27;in veremedikleri");
+    expect(html).toContain("İnceleme verisinin sınırı");
   });
 });

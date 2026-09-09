@@ -21,7 +21,7 @@ const MOVEMENT: MoneyMovement = {
   amountText: "₺1.240,50",
   partyName: "Ayşe Yılmaz",
   partyRole: "İşçi",
-  source: "jobAssignment.workerPayout",
+  source: "pricing.workerPayout",
 };
 
 const REASON = "İşçi işi tamamladı, itiraz kanıtlanamadı.";
@@ -68,6 +68,18 @@ beforeEach(() => {
   user = userEvent.setup();
 });
 
+describe("the backend reason boundary", () => {
+  it.each([
+    ["RELEASE" as const, 512],
+    ["REFUND" as const, 512],
+    ["RESOLVE_DISPUTE" as const, 2000],
+  ])("sets %s to the endpoint's exact %i-character limit", (kind, maxLength) => {
+    renderForm(vi.fn(succeed), { kind });
+
+    expect(screen.getByLabelText(/Gerekçe/)).toHaveAttribute("maxlength", String(maxLength));
+  });
+});
+
 describe("step one keeps the money button shut", () => {
   it("will not open a confirmation until a reason long enough to read is written", async () => {
     renderForm(vi.fn(succeed));
@@ -106,7 +118,7 @@ describe("step two restates the amount and the party", () => {
     expect(screen.getByTestId("confirmation-party")).toHaveTextContent("Ayşe Yılmaz");
     expect(confirmation).toHaveTextContent("İşçi");
     // Provenance, so the operator can see the panel did not work it out.
-    expect(confirmation).toHaveTextContent("jobAssignment.workerPayout");
+    expect(confirmation).toHaveTextContent("pricing.workerPayout");
     // The reason is quoted back rather than left behind on the previous step.
     expect(screen.getByRole("dialog")).toHaveTextContent(REASON);
   });
@@ -227,6 +239,8 @@ describe("a resolution that touches no money", () => {
         },
       ],
     });
+
+    expect(screen.getByRole("option", { name: /İşçiye çıkar/ })).toBeDisabled();
 
     await user.type(screen.getByLabelText(/Gerekçe/), REASON);
     await user.click(screen.getByRole("button", { name: "Kararı gözden geçir" }));

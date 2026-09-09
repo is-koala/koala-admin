@@ -2,6 +2,7 @@ import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiUrl, server } from "../../../test/msw";
+import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
 
@@ -37,7 +38,12 @@ const RELEASE = apiUrl(`/admin/job-assignments/${ASSIGNMENT}/release`);
 const REFUND = apiUrl(`/admin/job-assignments/${ASSIGNMENT}/refund`);
 const RESOLVE = apiUrl(`/admin/disputes/${DISPUTE}/resolve`);
 
-const ALL_MONEY_PERMISSIONS = ["dispute.resolve", "payout.release", "payment.refund"];
+const ALL_MONEY_PERMISSIONS = [
+  "dispute.resolve",
+  "payment.read",
+  "payout.release",
+  "payment.refund",
+];
 
 const REASON = "İşçi işi tamamladı, işverenin itirazı kanıtlanamadı.";
 
@@ -69,30 +75,7 @@ function envelope(path: string, data: unknown) {
   };
 }
 
-const SUMMARY_BODY = {
-  id: ASSIGNMENT,
-  status: "COMPLETED",
-  paymentStatus: "HELD_IN_ESCROW",
-  currency: "TRY",
-  workerPayout: "1240.50",
-  commissionAmount: "137.83",
-  commissionRate: "0.1000",
-  totalCharged: "1378.33",
-  workHours: 8,
-  jobTitle: "Garsonluk",
-  worker: { id: "w-1", firstName: "Ayşe", lastName: "Yılmaz", username: "ayse" },
-  employer: { id: "e-1", firstName: "Mehmet", lastName: "Demir", username: "mehmet" },
-  companyName: "Koala Kafe",
-  settledPayment: {
-    id: "p-1",
-    currency: "TRY",
-    totalCharged: "1378.33",
-    workerPayout: "1240.50",
-    commissionAmount: "137.83",
-    commissionRate: "0.1000",
-    completedAt: "2026-09-01T10:00:00.000000000Z",
-  },
-};
+const SUMMARY_BODY = adminAssignmentFixture({ id: ASSIGNMENT, jobId: "job-1" });
 
 function stubMe(permissions: readonly string[]) {
   server.use(
@@ -205,6 +188,37 @@ describe("a release that should go through", () => {
       reason: REASON,
     });
   });
+
+  it("transports an exact 512-character reason and records the same recent operation", async () => {
+    const reason = "x".repeat(512);
+    let body: unknown = undefined;
+    stubSummary();
+    server.use(
+      http.post(RELEASE, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(
+          envelope(`/admin/job-assignments/${ASSIGNMENT}/release`, {
+            id: "payout-1",
+            jobAssignmentId: ASSIGNMENT,
+            amount: "1240.50",
+            currency: "TRY",
+            status: "PENDING",
+            failureReason: null,
+            completedAt: null,
+            createdAt: "2026-09-06T10:00:00.000000000Z",
+          }),
+        );
+      }),
+    );
+
+    const outcome = await runEscrowOperation(releaseRequest({ reason }));
+
+    expect(outcome.status).toBe("SUCCEEDED");
+    // Backend audit transport proof: the reason crossed the request boundary unchanged.
+    expect(body).toEqual({ reason });
+    // Separate, transient panel record; not the durable backend audit log.
+    expect(recentOperations()[0]?.reason).toBe(reason);
+  });
 });
 
 describe("double submission", () => {
@@ -315,20 +329,23 @@ describe("the confirmed amount has to be the server's amount", () => {
     expect(release.count).toBe(1);
   });
 
-  it("will not move money it cannot price, even when the read succeeds", async () => {
-    stubSummary({ ...SUMMARY_BODY, workerPayout: null });
+  it("will not move money when the backend returns a malformed pricing snapshot", async () => {
+    stubSummary({
+      ...SUMMARY_BODY,
+      pricing: { ...SUMMARY_BODY.pricing, workerPayout: null },
+    });
     const release = stubRelease();
 
     const outcome = await runEscrowOperation(releaseRequest());
 
     expect(outcome.status).toBe("BLOCKED");
-    expect(outcome.errorCode).toBe("AMOUNT_UNAVAILABLE");
+    expect(outcome.errorCode).toBe("RESPONSE_SCHEMA_MISMATCH");
     expect(release.count).toBe(0);
   });
 
   it("fails closed when the amount cannot be read at all", async () => {
-    // This is today's behaviour: GET /admin/job-assignments/{id} is unmapped,
-    // and koala-backend#14 answers an unmapped /admin path with 403.
+    // The backend remains authoritative even after the local payment.read
+    // check, so a revoked or stale permission can still answer 403 here.
     const release = stubRelease();
     server.use(
       http.get(SUMMARY, () =>
@@ -358,7 +375,7 @@ describe("the confirmed amount has to be the server's amount", () => {
 
 describe("permission, re-resolved on the server for every submission", () => {
   it("refuses a release from someone without payout.release, and asks the backend nothing", async () => {
-    stubMe(["dispute.resolve"]);
+    stubMe(["payment.read"]);
     const summary = stubSummary();
     const release = stubRelease();
 
@@ -374,7 +391,7 @@ describe("permission, re-resolved on the server for every submission", () => {
   });
 
   it("refuses a refund from someone without payment.refund", async () => {
-    stubMe(["dispute.resolve", "payout.release"]);
+    stubMe(["payment.read", "payout.release"]);
     const refund = counter();
     server.use(
       http.post(REFUND, () => {
@@ -390,6 +407,33 @@ describe("permission, re-resolved on the server for every submission", () => {
     expect(outcome.status).toBe("BLOCKED");
     expect(refund.count).toBe(0);
   });
+
+  it.each([
+    { kind: "RELEASE" as const, permission: "payout.release", endpoint: RELEASE },
+    { kind: "REFUND" as const, permission: "payment.refund", endpoint: REFUND },
+  ])(
+    "refuses $kind before summary and mutation requests without payment.read",
+    async ({ kind, permission, endpoint }) => {
+      stubMe([permission]);
+      const summary = stubSummary();
+      const mutation = counter();
+      server.use(
+        http.post(endpoint, () => {
+          mutation.bump();
+          return HttpResponse.json({ success: true, message: "ok", httpStatus: "200 OK" });
+        }),
+      );
+
+      const outcome = await runEscrowOperation(
+        releaseRequest({ kind, confirmedAmount: kind === "RELEASE" ? "1240.50" : "1378.33" }),
+      );
+
+      expect(outcome.status).toBe("BLOCKED");
+      expect(outcome.message).toContain("payment.read");
+      expect(summary.count).toBe(0);
+      expect(mutation.count).toBe(0);
+    },
+  );
 
   it("moves nothing when it cannot find out what you may do", async () => {
     server.use(
@@ -440,6 +484,26 @@ describe("the mandatory reason", () => {
     expect(outcome.status).toBe("BLOCKED");
     expect(outcome.message).toContain("en az 10 karakter");
     expect(release.count).toBe(0);
+  });
+
+  it("blocks a 513-character refund before any summary or mutation request", async () => {
+    const summary = stubSummary();
+    const refund = counter();
+    server.use(
+      http.post(REFUND, () => {
+        refund.bump();
+        return HttpResponse.json({ success: true, message: "ok", httpStatus: "200 OK" });
+      }),
+    );
+
+    const outcome = await runEscrowOperation(
+      releaseRequest({ kind: "REFUND", confirmedAmount: "1378.33", reason: "x".repeat(513) }),
+    );
+
+    expect(outcome.status).toBe("BLOCKED");
+    expect(outcome.message).toContain("en fazla 512 karakter");
+    expect(summary.count).toBe(0);
+    expect(refund.count).toBe(0);
   });
 });
 
@@ -525,6 +589,35 @@ describe("refund", () => {
     expect(outcome.errorCode).toBe("AMOUNT_CHANGED");
     expect(refund.count).toBe(0);
   });
+
+  it("preserves an exact 512-character reason through transport and the transient panel record", async () => {
+    const reason = "ğ".repeat(512);
+    let body: unknown = undefined;
+    stubSummary();
+    server.use(
+      http.post(REFUND, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({
+          success: true,
+          message: "İade kaydı oluşturuldu.",
+          httpStatus: "200 OK",
+          path: `/admin/job-assignments/${ASSIGNMENT}/refund`,
+          requestId: "rid-refund-512",
+          timeStamp: "2026-09-06T10:00:00.000000000Z",
+        });
+      }),
+    );
+
+    const outcome = await runEscrowOperation(
+      releaseRequest({ kind: "REFUND", confirmedAmount: "1378.33", reason }),
+    );
+
+    expect(outcome.status).toBe("SUCCEEDED");
+    // Backend audit transport proof: the reason crossed the request boundary unchanged.
+    expect(body).toEqual({ reason });
+    // Separate, transient panel record; not the durable backend audit log.
+    expect(recentOperations()[0]?.reason).toBe(reason);
+  });
 });
 
 describe("resolving a dispute", () => {
@@ -570,6 +663,94 @@ describe("resolving a dispute", () => {
     };
   }
 
+  it.each([
+    {
+      resolution: "RELEASE_TO_WORKER" as const,
+      confirmedAmount: "1240.50",
+      permissions: ["dispute.resolve", "payment.read", "payment.refund"],
+      missing: "payout.release",
+    },
+    {
+      resolution: "REFUND_EMPLOYER" as const,
+      confirmedAmount: "1378.33",
+      permissions: ["dispute.resolve", "payment.read", "payout.release"],
+      missing: "payment.refund",
+    },
+    {
+      resolution: "RELEASE_TO_WORKER" as const,
+      confirmedAmount: "1240.50",
+      permissions: ["payment.read", "payout.release", "payment.refund"],
+      missing: "dispute.resolve",
+    },
+  ])(
+    "blocks $resolution before any summary or mutation request when $missing is missing",
+    async ({ resolution, confirmedAmount, permissions, missing }) => {
+      stubMe(permissions);
+      const summary = stubSummary();
+      const resolve = stubResolve();
+
+      const outcome = await runEscrowOperation(resolveRequest(resolution, confirmedAmount));
+
+      expect(outcome.status).toBe("BLOCKED");
+      expect(outcome.errorCode).toBe("PANEL_PERMISSION_DENIED");
+      expect(outcome.message).toContain(missing);
+      expect(summary.count).toBe(0);
+      expect(resolve.calls.count).toBe(0);
+    },
+  );
+
+  it.each([
+    {
+      resolution: "RELEASE_TO_WORKER" as const,
+      confirmedAmount: "1240.50",
+      financialPermission: "payout.release",
+    },
+    {
+      resolution: "REFUND_EMPLOYER" as const,
+      confirmedAmount: "1378.33",
+      financialPermission: "payment.refund",
+    },
+  ])(
+    "blocks $resolution before summary and mutation requests without payment.read",
+    async ({ resolution, confirmedAmount, financialPermission }) => {
+      stubMe(["dispute.resolve", financialPermission]);
+      const summary = stubSummary();
+      const resolve = stubResolve();
+
+      const outcome = await runEscrowOperation(resolveRequest(resolution, confirmedAmount));
+
+      expect(outcome.status).toBe("BLOCKED");
+      expect(outcome.message).toContain("payment.read");
+      expect(summary.count).toBe(0);
+      expect(resolve.calls.count).toBe(0);
+    },
+  );
+
+  it.each([
+    {
+      resolution: "RELEASE_TO_WORKER" as const,
+      confirmedAmount: "1240.50",
+      permissions: ["dispute.resolve", "payment.read", "payout.release"],
+    },
+    {
+      resolution: "REFUND_EMPLOYER" as const,
+      confirmedAmount: "1378.33",
+      permissions: ["dispute.resolve", "payment.read", "payment.refund"],
+    },
+  ])(
+    "allows $resolution with its resolution, summary-read, and financial permissions",
+    async ({ resolution, confirmedAmount, permissions }) => {
+      stubMe(permissions);
+      stubSummary();
+      const resolve = stubResolve();
+
+      const outcome = await runEscrowOperation(resolveRequest(resolution, confirmedAmount));
+
+      expect(outcome.status).toBe("SUCCEEDED");
+      expect(resolve.calls.count).toBe(1);
+    },
+  );
+
   it("sends the decision and the mandatory reason as the note", async () => {
     stubSummary();
     const resolve = stubResolve();
@@ -594,6 +775,7 @@ describe("resolving a dispute", () => {
   });
 
   it("asks for no amount and reads no summary when the decision touches no money", async () => {
+    stubMe(["dispute.resolve"]);
     const summary = stubSummary();
     const resolve = stubResolve();
 

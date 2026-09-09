@@ -211,13 +211,18 @@ describe("the resolve endpoint", () => {
 describe("the resolution catalogue", () => {
   it("knows which decisions move money and to whom", () => {
     expect(
-      DISPUTE_RESOLUTION_SPECS.map((spec) => [spec.resolution, spec.beneficiary, spec.movesMoney]),
+      DISPUTE_RESOLUTION_SPECS.map((spec) => [
+        spec.resolution,
+        spec.beneficiary,
+        spec.movesMoney,
+        spec.financialPermission,
+      ]),
     ).toEqual([
-      ["RELEASE_TO_WORKER", "WORKER", true],
-      ["REFUND_EMPLOYER", "EMPLOYER", true],
+      ["RELEASE_TO_WORKER", "WORKER", true, "payout.release"],
+      ["REFUND_EMPLOYER", "EMPLOYER", true, "payment.refund"],
       // The only one that leaves escrow untouched — and the only one this
       // screen can offer when the amount cannot be read from the server.
-      ["DISMISSED", null, false],
+      ["DISMISSED", null, false, null],
     ]);
   });
 
