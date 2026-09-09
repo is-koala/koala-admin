@@ -1,42 +1,47 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { COMPANY_REVIEW_ID, reviewCompany } from "../../../../test/fixtures/companies";
 import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 
 /**
- * Approving a company, treated as the irreversible POST endpoint it is.
+ * Approving or rejecting a company through their distinct POST endpoints.
  *
- * The refusals are what matter. There is no un-approve anywhere in
- * koala-backend, so a call that should not have happened cannot be taken back —
- * which makes "the request was never made" the only assertion worth writing.
+ * Both decisions change backend state and there is no un-approve endpoint, so
+ * a call that should not have happened cannot be taken back. That makes "the
+ * request was never made" the central authorization and validation assertion.
  */
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+const revalidatePath = vi.fn<(path: string) => void>();
+const redirect = vi.fn<(path: string) => never>((path) => {
+  throw new Error(`NEXT_REDIRECT:${path}`);
+});
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
 }));
 
+vi.mock("next/cache", () => ({ revalidatePath }));
+vi.mock("next/navigation", () => ({ redirect }));
+
 const { initialDecisionState } = await import("@/components/panel/queue/decision-state");
-const { APPROVAL_MIN_NOTE_LENGTH } = await import("@/server/api/companies");
-const { submitCompanyApproval } = await import("./actions");
+const { COMPANY_DECISION_MIN_NOTE_LENGTH } = await import("@/server/api/companies");
+const { submitCompanyDecision } = await import("./actions");
 
 const ADMIN_ME = apiUrl("/admin/me");
 const APPROVE = apiUrl("/admin/companies/:companyId/approve");
+const REJECT = apiUrl("/admin/companies/:companyId/reject");
 
-const COMPANY_ID = "9c000000-0000-4000-8000-000000000001";
+const COMPANY_ID = COMPANY_REVIEW_ID;
 const GOOD_NOTE = "Vergi levhası ve imza sirküleri kontrol edildi.";
 
-let infoLines: string[] = [];
-
 beforeEach(() => {
-  infoLines = [];
+  revalidatePath.mockReset();
+  redirect.mockClear();
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
   vi.spyOn(console, "error").mockImplementation(() => undefined);
-  vi.spyOn(console, "info").mockImplementation((line: unknown) => {
-    infoLines.push(String(line));
-  });
 });
 
 afterEach(() => {
@@ -56,12 +61,17 @@ function stubMe(permissions: readonly string[]) {
 }
 
 function watchApprove(respond?: () => Response) {
-  const seen: { calls: number; body: string | null } = { calls: 0, body: null };
+  const seen: { calls: number; body: unknown; authorization: string | null } = {
+    calls: 0,
+    body: null,
+    authorization: null,
+  };
 
   server.use(
     http.post(APPROVE, async ({ request }) => {
       seen.calls += 1;
-      seen.body = await request.text();
+      seen.body = await request.json();
+      seen.authorization = request.headers.get("authorization");
 
       if (respond !== undefined) return respond();
 
@@ -72,21 +82,44 @@ function watchApprove(respond?: () => Response) {
         path: `/admin/companies/${COMPANY_ID}/approve`,
         requestId: "rid-approve",
         timeStamp: "2026-09-06T09:41:00.000000000Z",
-        data: {
-          id: COMPANY_ID,
-          name: "Koala Kahve A.Ş.",
+        data: reviewCompany({
           email: null,
-          logoUrl: null,
           phoneNumber: null,
-          website: null,
-          description: null,
-          taxNumber: "1234567890",
-          type: "CORPORATION",
-          address: null,
-          companyContacts: [],
-          images: [],
-          approved: true,
-        },
+          approvalStatus: "APPROVED",
+          approvalNote: GOOD_NOTE,
+          approvalDecidedAt: "2026-09-06T09:41:00Z",
+          createdBy: null,
+        }),
+      });
+    }),
+  );
+
+  return seen;
+}
+
+function watchReject() {
+  const seen: { calls: number; body: unknown; authorization: string | null } = {
+    calls: 0,
+    body: null,
+    authorization: null,
+  };
+
+  server.use(
+    http.post(REJECT, async ({ request }) => {
+      seen.calls += 1;
+      seen.body = await request.json();
+      seen.authorization = request.headers.get("authorization");
+      return HttpResponse.json({
+        success: true,
+        message: "Şirket reddedildi.",
+        data: reviewCompany({
+          email: null,
+          phoneNumber: null,
+          approvalStatus: "REJECTED",
+          approvalNote: GOOD_NOTE,
+          approvalDecidedAt: "2026-09-06T09:41:00Z",
+          createdBy: null,
+        }),
       });
     }),
   );
@@ -97,21 +130,33 @@ function watchApprove(respond?: () => Response) {
 function submit(fields: Record<string, string>) {
   const data = new FormData();
   for (const [name, value] of Object.entries(fields)) data.append(name, value);
-  return submitCompanyApproval(initialDecisionState, data);
+  return submitCompanyDecision(initialDecisionState, data);
 }
 
-describe("the action refuses before it approves", () => {
-  it("will not approve for a MODERATOR, and sends nothing", async () => {
+describe("the action refuses before it decides", () => {
+  it("will not approve or reject for a MODERATOR, and sends nothing", async () => {
     // `content.moderate` is not `company.approve`. The form living on another
     // page is not a defence; this action has its own URL.
     stubMe(["content.moderate"]);
     const approve = watchApprove();
+    const reject = watchReject();
 
-    const state = await submit({ companyId: COMPANY_ID, decision: "APPROVE", note: GOOD_NOTE });
+    const approveState = await submit({
+      companyId: COMPANY_ID,
+      decision: "APPROVE",
+      note: GOOD_NOTE,
+    });
+    const rejectState = await submit({
+      companyId: COMPANY_ID,
+      decision: "REJECT",
+      note: GOOD_NOTE,
+    });
 
     expect(approve.calls).toBe(0);
-    expect(state.outcome).toBe("error");
-    expect(state.message).toContain("Şirket başvurularını onayla");
+    expect(reject.calls).toBe(0);
+    expect(approveState.outcome).toBe("error");
+    expect(rejectState.outcome).toBe("error");
+    expect(approveState.message).toContain("Şirket başvurularını onayla");
   });
 
   it("will not approve without a written reason", async () => {
@@ -122,18 +167,35 @@ describe("the action refuses before it approves", () => {
 
     expect(approve.calls).toBe(0);
     expect(state.field).toBe("note");
-    expect(state.message).toContain(String(APPROVAL_MIN_NOTE_LENGTH));
+    expect(state.message).toContain(String(COMPANY_DECISION_MIN_NOTE_LENGTH));
   });
 
-  it("refuses any decision other than approval, because there is no other one", async () => {
+  it("keeps an overlong decision note away from both backend mutations", async () => {
+    stubMe(["company.approve"]);
+    const approve = watchApprove();
+    const reject = watchReject();
+
+    const state = await submit({
+      companyId: COMPANY_ID,
+      decision: "REJECT",
+      note: "x".repeat(1001),
+    });
+
+    expect(approve.calls).toBe(0);
+    expect(reject.calls).toBe(0);
+    expect(state.field).toBe("note");
+    expect(state.message).toContain("1000");
+  });
+
+  it("refuses any decision outside the backend's two decision endpoints", async () => {
     stubMe(["company.approve"]);
     const approve = watchApprove();
 
-    const state = await submit({ companyId: COMPANY_ID, decision: "REJECT", note: GOOD_NOTE });
+    const state = await submit({ companyId: COMPANY_ID, decision: "SUSPEND", note: GOOD_NOTE });
 
     expect(approve.calls).toBe(0);
     expect(state.field).toBe("decision");
-    expect(state.message).toContain("ret ya da onayı geri alma ucu yok");
+    expect(state.message).toContain("Geçerli bir şirket kararı");
   });
 
   it("refuses a submission with no company id", async () => {
@@ -148,45 +210,113 @@ describe("the action refuses before it approves", () => {
 });
 
 describe("the action, when it is allowed to act", () => {
-  it("approves with no request body, because the endpoint reads none", async () => {
+  it("redirects to persistent page-level feedback after a successful decision", async () => {
+    stubMe(["company.approve"]);
+    watchApprove();
+
+    await expect(
+      submit({
+        companyId: COMPANY_ID,
+        decision: "APPROVE",
+        note: GOOD_NOTE,
+        returnTo: "/companies?durum=PENDING&sayfa=1",
+      }),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(redirect).toHaveBeenCalledWith("/companies?durum=PENDING&sayfa=1&sonuc=approved");
+  });
+
+  it("rejects with the written reason and revalidates the queue", async () => {
+    stubMe(["company.approve"]);
+    const reject = watchReject();
+
+    await expect(
+      submit({ companyId: COMPANY_ID, decision: "REJECT", note: GOOD_NOTE }),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(reject.calls).toBe(1);
+    expect(reject.body).toEqual({ reason: GOOD_NOTE });
+    expect(reject.authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(revalidatePath).toHaveBeenCalledWith("/companies");
+    expect(redirect).toHaveBeenCalledWith("/companies?sonuc=rejected");
+  });
+
+  it("accepts the current review response as success and revalidates the queue", async () => {
+    stubMe(["company.approve"]);
+    const approve = watchApprove(() =>
+      HttpResponse.json({
+        success: true,
+        message: "Şirket onaylandı.",
+        data: reviewCompany({
+          email: null,
+          phoneNumber: null,
+          approvalStatus: "APPROVED",
+          approvalNote: GOOD_NOTE,
+          approvalDecidedAt: "2026-09-06T09:41:00Z",
+          createdBy: null,
+        }),
+      }),
+    );
+
+    await expect(
+      submit({ companyId: COMPANY_ID, decision: "APPROVE", note: GOOD_NOTE }),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(approve.body).toEqual({ note: GOOD_NOTE });
+    expect(revalidatePath).toHaveBeenCalledWith("/companies");
+    expect(redirect).toHaveBeenCalledWith("/companies?sonuc=approved");
+  });
+
+  it("trims the approval note before sending it and redirects with no secret material", async () => {
     stubMe(["company.approve"]);
     const approve = watchApprove();
 
-    const state = await submit({ companyId: COMPANY_ID, decision: "APPROVE", note: GOOD_NOTE });
+    await expect(
+      submit({
+        companyId: COMPANY_ID,
+        decision: "APPROVE",
+        note: `  ${GOOD_NOTE}  `,
+      }),
+    ).rejects.toThrow("NEXT_REDIRECT");
 
     expect(approve.calls).toBe(1);
-    expect(approve.body).toBe("");
-    expect(state.outcome).toBe("success");
-    expect(state.message).toContain("ilan yayınlayabilir");
+    expect(approve.body).toEqual({ note: GOOD_NOTE });
+    expect(approve.authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(JSON.stringify(redirect.mock.calls)).not.toContain("ACCESS-TOKEN");
+    expect(JSON.stringify(redirect.mock.calls)).not.toContain(GOOD_NOTE);
   });
 
-  it("tells the operator their reason did not reach the backend", async () => {
-    // The note is required by the panel and has nowhere to go on the backend.
-    // Saying so is the difference between a rule and a pretence.
+  it("still redirects to success when cache revalidation fails after the mutation", async () => {
+    stubMe(["company.approve"]);
+    watchApprove();
+    revalidatePath.mockImplementationOnce(() => {
+      throw new Error("cache unavailable");
+    });
+
+    await expect(
+      submit({ companyId: COMPANY_ID, decision: "APPROVE", note: GOOD_NOTE }),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(redirect).toHaveBeenCalledWith("/companies?sonuc=approved");
+  });
+
+  it("will not redirect a successful decision to an external return target", async () => {
     stubMe(["company.approve"]);
     watchApprove();
 
-    const state = await submit({ companyId: COMPANY_ID, decision: "APPROVE", note: GOOD_NOTE });
+    await expect(
+      submit({
+        companyId: COMPANY_ID,
+        decision: "APPROVE",
+        note: GOOD_NOTE,
+        returnTo: "https://evil.example/collect",
+      }),
+    ).rejects.toThrow("NEXT_REDIRECT");
 
-    expect(state.message).toContain("Gerekçeniz backend'e gönderilmedi");
-    expect(state.message).toContain("bildirim gitmez");
+    expect(redirect).toHaveBeenCalledWith("/companies?sonuc=approved");
   });
 
-  it("writes the reason to the server log, marked as not sent", async () => {
-    // A stopgap until koala-backend#15, and not an audit mechanism: one line,
-    // stored nowhere, queryable from nothing in this panel.
-    stubMe(["company.approve"]);
-    watchApprove();
-
-    await submit({ companyId: COMPANY_ID, decision: "APPROVE", note: GOOD_NOTE });
-
-    const line = infoLines.find((entry) => entry.startsWith("[company-approval]"));
-    expect(line).toContain(COMPANY_ID);
-    expect(line).toContain(GOOD_NOTE);
-    expect(line).toContain("sentToBackend=false");
-  });
-
-  it("logs nothing when the approval failed", async () => {
+  it("does not revalidate when the approval failed", async () => {
     stubMe(["company.approve"]);
     watchApprove(() =>
       HttpResponse.json(
@@ -206,7 +336,8 @@ describe("the action, when it is allowed to act", () => {
 
     const state = await submit({ companyId: COMPANY_ID, decision: "APPROVE", note: GOOD_NOTE });
 
-    expect(infoLines.some((entry) => entry.startsWith("[company-approval]"))).toBe(false);
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
     expect(state.message).toContain("sizden önce sonuçlandırılmış olabilir");
     expect(state.requestId).toBe("rid-409");
   });

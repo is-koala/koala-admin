@@ -33,17 +33,46 @@ function captureErrorLog(): { lines: string[] } {
 }
 
 describe("buildKoalaUrl", () => {
-  it("joins the base URL and a root-relative path", () => {
-    expect(buildKoalaUrl("/reference/job-categories")).toBe(
-      "http://koala-backend.test/reference/job-categories",
-    );
+  it.each([
+    {
+      path: "/reference/job-categories",
+      expected: "http://koala-backend.test/reference/job-categories",
+    },
+    {
+      path: "reference/job-categories",
+      expected: "http://koala-backend.test/reference/job-categories",
+    },
+    { path: "/admin/me", expected: "http://koala-backend.test/admin/me" },
+  ])("joins the backend root and $path", ({ path, expected }) => {
+    expect(buildKoalaUrl(path)).toBe(expected);
   });
 
-  it("tolerates a path without a leading slash", () => {
-    expect(buildKoalaUrl("reference/job-categories")).toBe(
-      "http://koala-backend.test/reference/job-categories",
-    );
-  });
+  it.each([
+    {
+      configuredRoot: "  HTTP://KOALA-BACKEND.TEST:8080/  ",
+      path: "/admin/me",
+      expected: "http://koala-backend.test:8080/admin/me",
+    },
+    {
+      configuredRoot: "HTTPS://API.ISKOALA.COM:8443/",
+      path: "admin/disputes",
+      expected: "https://api.iskoala.com:8443/admin/disputes",
+    },
+  ])(
+    "joins a canonicalised $configuredRoot without losing its port",
+    async ({ configuredRoot, path, expected }) => {
+      vi.stubEnv("KOALA_API_BASE_URL", configuredRoot);
+      vi.resetModules();
+
+      try {
+        const { buildKoalaUrl: buildWithConfiguredRoot } = await import("./koala");
+        expect(buildWithConfiguredRoot(path)).toBe(expected);
+      } finally {
+        vi.unstubAllEnvs();
+        vi.resetModules();
+      }
+    },
+  );
 
   it("drops null and undefined query values instead of sending 'null'", () => {
     expect(buildKoalaUrl("/admin/jobs", { page: 0, size: 20, status: null, q: undefined })).toBe(
