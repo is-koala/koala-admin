@@ -8,8 +8,7 @@ import {
 import { isKoalaApiError } from "@/server/api/errors";
 import { reconcilePayout, type PayoutSettlementEvidence } from "@/server/api/payout-reconciliation";
 import { getKoalaAccessToken } from "@/server/auth/session";
-import { permissionLabel } from "@/server/authz/permissions";
-import { getStaffContext } from "@/server/authz/staff-context";
+import { guardDecision } from "@/server/queue/decisions";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MONEY = /^\d{1,17}(?:\.\d{1,2})?$/;
@@ -120,20 +119,16 @@ export async function submitPayoutReconciliation(
 ): Promise<PayoutReconciliationState> {
   // A Server Action is independently reachable. Resolve the permission again
   // on every POST, including malformed ones, before revealing form rules.
-  const context = await getStaffContext();
-  if (context.failure !== null) {
+  const denied = await guardDecision("payout.reconcile");
+  if (denied !== null) {
     return {
-      ...blocked(
-        "İzinleriniz çözülemediği için mutabakat gönderilmedi. Panel emin olmadığı hiçbir finans işlemini yapmaz.",
-      ),
-      errorCode: context.failure.kind,
-      requestId: context.failure.requestId,
-    };
-  }
-  if (!context.has("payout.reconcile")) {
-    return blocked(
-      `Bu işlem "${permissionLabel("payout.reconcile")}" iznini gerektiriyor ve hesabınızda bu izin yok.`,
-    );
+      status: "BLOCKED",
+      message: denied.message,
+      errorCode: denied.errorCode ?? "PANEL_PERMISSION_DENIED",
+      requestId: denied.requestId,
+      field: null,
+      payout: null,
+    } satisfies PayoutReconciliationState;
   }
 
   const submittedPayoutId = text(formData, FIELD.payoutId);
