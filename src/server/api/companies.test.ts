@@ -1,22 +1,24 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { COMPANY_REVIEW_ID, reviewCompany } from "../../../test/fixtures/companies";
 import { apiUrl, server } from "../../../test/msw";
 
 import { readPaging } from "./paging";
 import {
   COMPANY_PAGING,
   approveCompany,
-  companyContactRoleLabel,
+  companyApprovalStatusLabel,
   companyTypeLabel,
-  contactDisplayName,
   getCompanies,
+  rejectCompany,
+  safeUserDisplayName,
 } from "./companies";
 
 /**
- * Same claim as the report queue, on a different endpoint: the filter and the
- * page are query parameters, and the approval call carries no body it is not
- * entitled to.
+ * Same claim as the report queue, on a different endpoint: filters and paging
+ * are query parameters, while each decision sends exactly the note field its
+ * backend request DTO accepts.
  */
 
 const COMPANIES = apiUrl("/admin/companies");
@@ -29,40 +31,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const COMPANY = {
-  id: "9c000000-0000-4000-8000-000000000001",
-  name: "Koala Kahve A.Ş.",
-  email: "info@koalakahve.test",
-  logoUrl: null,
-  phoneNumber: "+905551112233",
-  website: "https://koalakahve.test",
-  description: "Üçüncü nesil kahveci.",
-  taxNumber: "1234567890",
-  type: "CORPORATION",
-  address: {
-    displayAddress: "Kadıköy, İstanbul",
-    cityName: "İstanbul",
-    districtName: "Kadıköy",
-    countryName: "Türkiye",
+const COMPANY_ID = COMPANY_REVIEW_ID;
+const SAFE_REVIEW_COMPANY = reviewCompany();
+const REVIEW_COMPANY = {
+  ...SAFE_REVIEW_COMPANY,
+  createdBy: {
+    ...SAFE_REVIEW_COMPANY.createdBy,
+    email: "private@koala.test",
+    passwordHash: "never-render-this",
   },
-  companyContacts: [
-    {
-      id: "c1",
-      user: {
-        id: "u1",
-        firstName: "Ayşe",
-        lastName: "Yılmaz",
-        username: "ayse",
-        profilePictureUrl: null,
-      },
-      role: "ADMIN",
-    },
-  ],
-  images: [{ id: "i1", url: "https://cdn.test/1.jpg", caption: null }],
-  approved: false,
+  companyContacts: [{ id: "must-be-stripped" }],
+  images: [{ id: "must-be-stripped" }],
 };
 
-function watchQueue(content: unknown[] = [COMPANY]) {
+function watchQueue(content: unknown[] = [REVIEW_COMPANY]) {
   const seen: { url: URL | null; authorization: string | null } = {
     url: null,
     authorization: null,
@@ -97,32 +79,35 @@ function watchQueue(content: unknown[] = [COMPANY]) {
 
 describe("the queue asks the backend for the page it is showing", () => {
   it("defaults to the companies waiting for a decision", async () => {
-    // `@RequestParam(defaultValue = "false") boolean approved` — the panel sends
-    // it explicitly rather than relying on the default, so the URL says what the
-    // screen shows.
     const seen = watchQueue();
 
     await getCompanies("ACCESS-TOKEN", {
-      approved: false,
+      status: "PENDING",
+      query: null,
       paging: readPaging({}, COMPANY_PAGING),
     });
 
-    expect(seen.url?.searchParams.get("approved")).toBe("false");
+    expect(seen.url?.searchParams.get("status")).toBe("PENDING");
+    expect(seen.url?.searchParams.has("approved")).toBe(false);
+    expect(seen.url?.searchParams.has("query")).toBe(false);
     expect(seen.url?.searchParams.get("page")).toBe("0");
     expect(seen.url?.searchParams.get("size")).toBe("20");
     expect(seen.url?.searchParams.get("sort")).toBe("createdAt,desc");
     expect(seen.authorization).toBe("Bearer ACCESS-TOKEN");
   });
 
-  it("sends the approved filter, the page and the sort the URL asked for", async () => {
+  it("sends the status, search, page and sort the screen asked for", async () => {
     const seen = watchQueue();
 
     await getCompanies("ACCESS-TOKEN", {
-      approved: true,
+      status: "APPROVED",
+      query: "  kahve  ",
       paging: readPaging({ sayfa: "1", boyut: "40", sirala: "name,asc" }, COMPANY_PAGING),
     });
 
-    expect(seen.url?.searchParams.get("approved")).toBe("true");
+    expect(seen.url?.searchParams.get("status")).toBe("APPROVED");
+    expect(seen.url?.searchParams.get("query")).toBe("kahve");
+    expect(seen.url?.searchParams.has("approved")).toBe(false);
     expect(seen.url?.searchParams.get("page")).toBe("1");
     expect(seen.url?.searchParams.get("size")).toBe("40");
     expect(seen.url?.searchParams.get("sort")).toBe("name,asc");
@@ -133,65 +118,59 @@ describe("the queue asks the backend for the page it is showing", () => {
     const seen = watchQueue();
 
     await getCompanies("ACCESS-TOKEN", {
-      approved: false,
+      status: "REJECTED",
+      query: null,
       paging: readPaging({ sirala: "taxNumber,asc" }, COMPANY_PAGING),
     });
 
     expect(seen.url?.searchParams.get("sort")).toBe("createdAt,desc");
   });
 
-  it("reads the registration details, the contacts and the gallery", async () => {
-    watchQueue();
+  it("parses only the safe CompanyReviewDto fields returned by the queue", async () => {
+    watchQueue([REVIEW_COMPANY]);
 
     const page = await getCompanies("ACCESS-TOKEN", {
-      approved: false,
+      status: "PENDING",
+      query: null,
       paging: readPaging({}, COMPANY_PAGING),
     });
 
-    const company = page.content[0];
-    expect(company?.name).toBe("Koala Kahve A.Ş.");
-    expect(company?.taxNumber).toBe("1234567890");
-    expect(company?.address?.displayAddress).toBe("Kadıköy, İstanbul");
-    expect(company?.companyContacts).toHaveLength(1);
-    expect(company?.images).toHaveLength(1);
-    expect(company?.approved).toBe(false);
+    expect(page.content[0]).toEqual(SAFE_REVIEW_COMPANY);
   });
 
-  it("survives a company with no address, contacts or gallery", async () => {
-    // All three are nullable in the DTO; a half-filled application is exactly
-    // the kind that ends up in an approval queue.
+  it("survives nullable review metadata", async () => {
     watchQueue([
       {
         id: "9c000000-0000-4000-8000-000000000002",
         name: "Yeni Şirket",
-        approved: false,
+        approvalStatus: "PENDING",
       },
     ]);
 
     const page = await getCompanies("ACCESS-TOKEN", {
-      approved: false,
+      status: "PENDING",
+      query: null,
       paging: readPaging({}, COMPANY_PAGING),
     });
 
-    expect(page.content[0]?.address).toBeNull();
-    expect(page.content[0]?.companyContacts).toEqual([]);
-    expect(page.content[0]?.images).toEqual([]);
+    expect(page.content[0]?.approvalNote).toBeNull();
+    expect(page.content[0]?.approvalDecidedAt).toBeNull();
+    expect(page.content[0]?.createdAt).toBeNull();
+    expect(page.content[0]?.createdBy).toBeNull();
   });
 });
 
 describe("approving a company", () => {
-  it("posts to the approve endpoint with no body at all", async () => {
-    // The controller takes only `@PathVariable UUID companyId`. Sending JSON it
-    // never reads would suggest the approval note is stored; it is not.
+  it("posts the approval note and parses the review response", async () => {
     let contentType: string | null = null;
-    let raw: string | null = null;
+    let body: unknown = null;
     let url: string | null = null;
 
     server.use(
       http.post(`${COMPANIES}/:companyId/approve`, async ({ request }) => {
         url = request.url;
         contentType = request.headers.get("content-type");
-        raw = await request.text();
+        body = await request.json();
         return HttpResponse.json({
           success: true,
           message: "Şirket onaylandı.",
@@ -199,17 +178,22 @@ describe("approving a company", () => {
           path: "/admin/companies/9c000000-0000-4000-8000-000000000001/approve",
           requestId: "rid-approve",
           timeStamp: "2026-09-06T09:41:00.000000000Z",
-          data: { ...COMPANY, approved: true },
+          data: {
+            ...REVIEW_COMPANY,
+            approvalStatus: "APPROVED",
+            approvalNote: "Vergi levhası doğrulandı.",
+            approvalDecidedAt: "2026-09-06T09:41:00Z",
+          },
         });
       }),
     );
 
-    const approved = await approveCompany("ACCESS-TOKEN", COMPANY.id);
+    const approved = await approveCompany("ACCESS-TOKEN", COMPANY_ID, "Vergi levhası doğrulandı.");
 
-    expect(url).toBe(`${COMPANIES}/${COMPANY.id}/approve`);
-    expect(raw).toBe("");
-    expect(contentType).toBeNull();
-    expect(approved.approved).toBe(true);
+    expect(url).toBe(`${COMPANIES}/${COMPANY_ID}/approve`);
+    expect(body).toEqual({ note: "Vergi levhası doğrulandı." });
+    expect(contentType).toBe("application/json");
+    expect(approved.approvalStatus).toBe("APPROVED");
   });
 
   it("escapes the company id rather than pasting it into a path", async () => {
@@ -221,9 +205,57 @@ describe("approving a company", () => {
       }),
     );
 
-    await approveCompany("ACCESS-TOKEN", "../../me").catch(() => undefined);
+    await approveCompany("ACCESS-TOKEN", "../../me", "Kontrol edildi.").catch(() => undefined);
 
     expect(url).toContain("%2F");
+  });
+});
+
+describe("rejecting a company", () => {
+  it("posts the rejection reason to the reject endpoint", async () => {
+    let body: unknown = null;
+    let url: string | null = null;
+    let authorization: string | null = null;
+
+    server.use(
+      http.post(`${COMPANIES}/:companyId/reject`, async ({ request }) => {
+        url = request.url;
+        authorization = request.headers.get("authorization");
+        body = await request.json();
+        return HttpResponse.json({
+          success: true,
+          message: "Şirket reddedildi.",
+          data: {
+            ...REVIEW_COMPANY,
+            approvalStatus: "REJECTED",
+            approvalNote: "Vergi levhası okunmuyor.",
+            approvalDecidedAt: "2026-09-06T09:42:00Z",
+          },
+        });
+      }),
+    );
+
+    const rejected = await rejectCompany("ACCESS-TOKEN", COMPANY_ID, "Vergi levhası okunmuyor.");
+
+    expect(url).toBe(`${COMPANIES}/${COMPANY_ID}/reject`);
+    expect(authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(body).toEqual({ reason: "Vergi levhası okunmuyor." });
+    expect(rejected.approvalStatus).toBe("REJECTED");
+  });
+
+  it("escapes the company id before building the rejection path", async () => {
+    let url: string | null = null;
+    server.use(
+      http.post(`${COMPANIES}/*`, ({ request }) => {
+        url = request.url;
+        return HttpResponse.json({ success: false, message: "yok" }, { status: 404 });
+      }),
+    );
+
+    await rejectCompany("ACCESS-TOKEN", "../../me", "Kontrol edildi.").catch(() => undefined);
+
+    expect(url).toContain("%2F");
+    expect(url).toContain("/reject");
   });
 });
 
@@ -238,40 +270,34 @@ describe("labels", () => {
     expect(companyTypeLabel(null)).toBeNull();
   });
 
-  it("names a contact by their name, falling back to the username", () => {
+  it("names the safe creator by their name, falling back to the username", () => {
     expect(
-      contactDisplayName({
-        id: "c1",
-        user: {
-          id: "u1",
-          firstName: "Ayşe",
-          lastName: "Yılmaz",
-          username: "ayse",
-          profilePictureUrl: null,
-        },
-        role: "ADMIN",
+      safeUserDisplayName({
+        id: "u1",
+        firstName: "Ayşe",
+        lastName: "Yılmaz",
+        username: "ayse",
+        profilePictureUrl: null,
       }),
     ).toBe("Ayşe Yılmaz");
 
     expect(
-      contactDisplayName({
-        id: "c2",
-        user: {
-          id: "u2",
-          firstName: null,
-          lastName: null,
-          username: "mehmet",
-          profilePictureUrl: null,
-        },
-        role: "STAFF",
+      safeUserDisplayName({
+        id: "u2",
+        firstName: null,
+        lastName: null,
+        username: "mehmet",
+        profilePictureUrl: null,
       }),
     ).toBe("mehmet");
 
-    expect(contactDisplayName({ id: "c3", user: null, role: "STAFF" })).toBeNull();
+    expect(safeUserDisplayName(null)).toBeNull();
   });
 
-  it("says which contacts are authorised for the company", () => {
-    expect(companyContactRoleLabel("ADMIN")).toBe("Şirket yetkilisi");
-    expect(companyContactRoleLabel("STAFF")).toBe("Şirket çalışanı");
+  it("labels every current decision status and exposes a future one verbatim", () => {
+    expect(companyApprovalStatusLabel("PENDING")).toBe("Onay bekliyor");
+    expect(companyApprovalStatusLabel("APPROVED")).toBe("Onaylı");
+    expect(companyApprovalStatusLabel("REJECTED")).toBe("Reddedildi");
+    expect(companyApprovalStatusLabel("SUSPENDED")).toBe("SUSPENDED");
   });
 });

@@ -1,0 +1,30 @@
+import type { CompanyReview } from "../../src/server/api/companies";
+
+export const COMPANY_REVIEW_ID = "9c000000-0000-4000-8000-000000000001";
+
+export type CompanyReviewOverrides = Partial<CompanyReview>;
+
+/** One safe `CompanyReviewDto`, shared by contract, action and page tests. */
+export function reviewCompany(overrides: CompanyReviewOverrides = {}): CompanyReview {
+  return {
+    id: COMPANY_REVIEW_ID,
+    name: "Koala Kahve A.Ş.",
+    email: "info@koalakahve.test",
+    phoneNumber: "+905551112233",
+    taxNumber: "1234567890",
+    type: "CORPORATION",
+    logoUrl: null,
+    approvalStatus: "PENDING",
+    approvalNote: null,
+    approvalDecidedAt: null,
+    createdAt: "2026-09-01T08:00:00Z",
+    createdBy: {
+      id: "u1",
+      firstName: "Ayşe",
+      lastName: "Yılmaz",
+      username: "ayse",
+      profilePictureUrl: null,
+    },
+    ...overrides,
+  };
+}

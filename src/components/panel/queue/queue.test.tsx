@@ -273,6 +273,24 @@ describe("a decision says what it will do, and will not go without a reason", ()
     expect(action).not.toHaveBeenCalled();
   });
 
+  it("can expose a backend note limit on the textarea", () => {
+    render(
+      <DecisionForm
+        action={stubAction()}
+        hiddenFields={{ companyId: "company-1" }}
+        options={OPTIONS}
+        legend="Karar"
+        noteLabel="Gerekçe"
+        submitLabel="Kararı gönder"
+        minNoteLength={10}
+        maxNoteLength={1000}
+        idPrefix="company-1"
+      />,
+    );
+
+    expect(screen.getByLabelText(/Gerekçe/)).toHaveAttribute("maxLength", "1000");
+  });
+
   it("sends the decision, the reason and the record id together", async () => {
     const action = stubAction();
     renderDecision(action);
