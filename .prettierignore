@@ -10,3 +10,11 @@ src/app/server-only-guard-probe/
 # Hand-authored prose owned by other slices; reflowing tables and emphasis in it
 # produces diff noise with no reader benefit.
 docs/
+
+# AGENTS.md hosts Next's byte-exact `BEGIN:nextjs-agent-rules` block
+# (`generate-agent-files.js`). Reflowing it would make `hasCurrentAgentRules`
+# false and invite `next dev` to rewrite the file. CLAUDE.md / CONTRIBUTING.md
+# are pointers into that same prose.
+AGENTS.md
+CLAUDE.md
+CONTRIBUTING.md
