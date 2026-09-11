@@ -35,8 +35,8 @@ export function AuditPointer({
           className="text-brand hover:underline"
         >
           {linkLabel}
-        </Link>{" "}
-        — <code className="font-mono">audit.read</code> izni gerekir.
+        </Link>
+        .
       </p>
     </section>
   );

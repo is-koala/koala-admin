@@ -77,9 +77,8 @@ export default async function ReportsPage({
         title="Şikayet inceleme kuyruğu"
         description={
           <>
-            Mobil uygulamadan açılan kullanıcı ve içerik şikayetleri.{" "}
-            <code className="font-mono">content.moderate</code> izni gerektirir. Karar veren
-            personel ve karar zamanı backend&apos;in denetim kaydına yazılır (koala-backend#15).
+            Mobil uygulamadan açılan kullanıcı ve içerik şikayetleri. Karar ve gerekçe denetim
+            kaydına yazılır.
           </>
         }
       />

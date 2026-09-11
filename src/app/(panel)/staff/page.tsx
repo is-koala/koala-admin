@@ -102,10 +102,7 @@ export default async function StaffPage({
         title="Personel"
         description={
           <>
-            Personel kayıtları ve rol üyeliği. Listeyi görmek{" "}
-            <code className="font-mono">staff.read</code>, değiştirmek{" "}
-            <code className="font-mono">staff.manage</code> izni gerektirir. Rol iptali anında
-            geçerlidir: üyelik her istekte veritabanından okunur (ADR-0014).
+            Personel kayıtları ve rol üyeliği. Rol değişikliği bir sonraki istekte geçerlidir.
           </>
         }
       />

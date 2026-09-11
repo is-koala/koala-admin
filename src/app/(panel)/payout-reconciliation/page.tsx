@@ -16,9 +16,8 @@ export default function PayoutReconciliationPage() {
         title="Hakediş banka mutabakatı"
         description={
           <>
-            Banka ekstresindeki gerçekleşmiş transferi bir hakediş kaydıyla eşleştirin. Bu ekran
-            bekleyen hakedişleri listelemez; kimlik ve kanıtlar ödeme runbook&apos;undaki sorgudan
-            alınır. <code className="font-mono">payout.reconcile</code> izni gerekir.
+            Banka ekstresindeki gerçekleşmiş transferi bir hakediş kaydıyla eşleştirin. Bekleyen
+            kuyruk yoksa kimliği runbook&apos;tan yazın.
           </>
         }
       />

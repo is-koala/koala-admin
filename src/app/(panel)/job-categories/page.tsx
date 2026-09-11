@@ -27,9 +27,8 @@ export default async function JobCategoriesPage() {
         title="İş kategorileri"
         description={
           <>
-            Pazaryerinin ilan kategorilerini oluşturun, düzenleyin veya silin.{" "}
-            <code className="font-mono">category.manage</code> izni gerekir; başarılı değişiklikler
-            backend denetim kaydına yazılır.
+            Pazaryerinin ilan kategorilerini oluşturun, düzenleyin veya silin. Başarılı
+            değişiklikler denetim kaydına yazılır.
           </>
         }
       />

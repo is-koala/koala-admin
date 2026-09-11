@@ -59,10 +59,8 @@ export default async function AccountDeletionsPage({
         title="Hesap silme talepleri"
         description={
           <>
-            Kullanıcının açtığı silme talepleri. Liste{" "}
-            <code className="font-mono">user.read_pii</code> ister; ret{" "}
-            <code className="font-mono">user.deletion.manage</code> ister. Anonimleştirme
-            zamanlayıcı işidir — panel onaylamaz, yalnız reddeder.
+            Kullanıcının açtığı silme talepleri. Anonimleştirme zamanlayıcı işidir — panel
+            onaylamaz, yalnız reddeder.
           </>
         }
       />
@@ -284,7 +282,7 @@ function DeletionDetail({
           />
         ) : (
           <p className="text-sm text-ink-muted">
-            Reddetmek için <code className="font-mono">user.deletion.manage</code> izni gerekir.
+            Bu talebi reddetmek için silme yönetimi yetkisi gerekir.
             Listeyi görebilmek yetmez.
           </p>
         )}

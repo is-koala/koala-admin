@@ -54,8 +54,7 @@ export default async function IbanVerificationsPage({
         description={
           <>
             Bekleyen küçük havaleleri kuyruktan seçin ve ekstre satırıyla onaylayın. Liste maskeli
-            IBAN ve referans taşır; tam IBAN yoktur. Reddetme ucu yok.{" "}
-            <code className="font-mono">bank.account.verify</code> izni gerekir.
+            IBAN ve referans taşır; tam IBAN yoktur. Reddetme ucu yok.
           </>
         }
       />

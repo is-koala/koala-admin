@@ -33,8 +33,7 @@ export default async function BadgesPage() {
         description={
           <>
             Katalogdaki rozetleri oluşturun, düzenleyin, ikon yükleyin veya pasifleştirin. Pasif
-            rozet yeni kimseye verilmez; sahiplerinde kalır.{" "}
-            <code className="font-mono">badge.manage</code> izni gerekir.
+            rozet yeni kimseye verilmez; sahiplerinde kalır.
           </>
         }
       />
