@@ -65,10 +65,8 @@ export default async function UsersPage({
         title="Kullanıcılar"
         description={
           <>
-            Pazaryeri kullanıcıları. Liste <code className="font-mono">user.read</code> ister; rol
-            vermek ve geri almak <code className="font-mono">user.role.manage</code>. E-posta
-            aramada kullanılır, yanıtta yoktur — tabloda yalnız ad, kullanıcı adı, kimlik ve roller
-            görünür.
+            Pazaryeri kullanıcıları. E-posta ile arayabilirsiniz; tabloda e-posta görünmez, yalnız
+            ad, kullanıcı adı, kimlik ve roller durur.
           </>
         }
       />

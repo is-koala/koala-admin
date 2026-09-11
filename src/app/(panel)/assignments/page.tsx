@@ -87,10 +87,8 @@ export default async function AssignmentsPage({
         title="Atama özeti"
         description={
           <>
-            Son atamaları sayfalar veya kimlikle bir kaydı açın.{" "}
-            <code className="font-mono">payment.read</code> izni gerekir —{" "}
-            <code className="font-mono">dispute.resolve</code> bu ekranı açmaz. Para yazımı
-            uyuşmazlık kuyruğundadır.
+            Son atamaları sayfalar veya kimlikle bir kaydı açın. Para yazımı uyuşmazlık
+            kuyruğundadır.
           </>
         }
       />

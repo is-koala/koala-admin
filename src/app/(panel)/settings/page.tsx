@@ -28,10 +28,7 @@ export default async function SettingsPage() {
         title="Çalışma zamanı ayarları"
         description={
           <>
-            Politika sayılarını deploy olmadan değiştirin. Yalnız{" "}
-            <code className="font-mono">SettingKeys</code> içindeki anahtarlar yazılır; oranlar 0
-            ile 1 arasında olmalıdır. <code className="font-mono">settings.manage</code> izni
-            gerekir.
+            Politika sayılarını deploy olmadan değiştirin. Oranlar 0 ile 1 arasında olmalıdır.
           </>
         }
       />

@@ -124,7 +124,7 @@ describe("who can see the queue", () => {
     expect(queue.authorization).toBe("Bearer ACCESS-TOKEN");
     expect(html).toContain("bbbbbbbb-0000-4000-8000-000000000001");
     expect(html).not.toContain("ACCESS-TOKEN");
-    expect(html).toContain("user.deletion.manage");
+    expect(html).toContain("silme yönetimi yetkisi");
   });
 
   it("shows the reject form only when user.deletion.manage is held", async () => {

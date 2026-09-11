@@ -462,7 +462,7 @@ describe("the selected dispute", () => {
     expect(html).toContain("Kararı gözden geçir");
     expect(html).toContain("Çıkışı gözden geçir");
     expect(html).toContain("İadeyi gözden geçir");
-    expect(html).toContain("Para taşıyan her yol ayrıca");
+    expect(html).toContain("kısmi iade yoktur");
     expect(html).toContain(
       "RELEASE_TO_WORKER için dispute.resolve ve payment.read ve payout.release",
     );

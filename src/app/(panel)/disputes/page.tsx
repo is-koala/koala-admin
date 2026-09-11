@@ -147,13 +147,8 @@ export default async function DisputesPage({ searchParams }: PageProps) {
         title="Uyuşmazlıklar ve emanet"
         description={
           <>
-            Açık ve çözülmüş uyuşmazlıkları sayfalar, emanetteki parayı işçiye çıkarır ya da
-            işverene iade eder. <code className="font-mono">dispute.resolve</code> izni
-            gerektirir. Tutarlar atama özetinden okunur ({" "}
-            <code className="font-mono">payment.read</code>
-            ). Para taşıyan her yol ayrıca yönüne göre{" "}
-            <code className="font-mono">payout.release</code> ya da{" "}
-            <code className="font-mono">payment.refund</code> ister.
+            Açık ve çözülmüş uyuşmazlıkları sayfalar. Emanetteki parayı işçiye çıkarır veya
+            işverene iade eder; kısmi iade yoktur. Tutarlar atama özetinden gelir.
           </>
         }
       />

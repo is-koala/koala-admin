@@ -38,9 +38,7 @@ export default async function FinancePage({
         description={
           <>
             Dönemdeki başarılı tahsilat hacmi, Koala hizmet bedeli ve tamamlanan hakedişler.
-            Bekleyen hakediş anlık yükümlülüktür, dönem süzgecine girmez.{" "}
-            <code className="font-mono">finance.read</code> izni gerekir —{" "}
-            <code className="font-mono">payment.read</code> bu ekranı açmaz.
+            Bekleyen hakediş anlık yükümlülüktür, dönem süzgecine girmez.
           </>
         }
       />

@@ -2,33 +2,32 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/panel/page-header";
 import { Badge } from "@/components/ui";
-import { formatInteger } from "@/lib/format";
-import { loadOpsSnapshot } from "@/server/api/ops-snapshot";
+import { formatCurrency, formatDate, formatDateTime, formatInteger } from "@/lib/format";
+import { loadOpsHome } from "@/server/api/ops-snapshot";
 import { getKoalaAccessToken, requireStaffSession } from "@/server/auth/session";
-import { permissionLabel } from "@/server/authz/permissions";
 import { navigationFor } from "@/server/authz/routes";
 import { getStaffContext } from "@/server/authz/staff-context";
 
 /**
- * Operatör evi. Rol/izin kartları durur çünkü menü onlara bağlıdır; asıl iş
- * bekleyen kuyruk sayılarıdır. Doğrulama sayfası reklam edilmez.
+ * Operatör evi. Bekleyen kuyruklar, dönem finansı ve son denetim —
+ * izin listesi değil. Doğrulama sayfası reklam edilmez.
  */
 export default async function PanelHomePage() {
   await requireStaffSession();
   const context = await getStaffContext();
   const reachable = navigationFor(context.permissions);
-  const queues = await loadOpsSnapshot(await getKoalaAccessToken(), context.permissions);
+  const home = await loadOpsHome(await getKoalaAccessToken(), context.permissions);
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Güncel durum"
-        description="Bugün sizin açabileceğiniz kuyruklar. Sayılar her açılışta backend'den gelir."
+        description="Bugün sizin açabileceğiniz kuyruklar, dönem tahsilatı ve son işlemler."
       />
 
-      {queues.length > 0 ? (
+      {home.queues.length > 0 ? (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {queues.map((tile) => (
+          {home.queues.map((tile) => (
             <Link
               key={tile.href}
               href={tile.href}
@@ -38,67 +37,88 @@ export default async function PanelHomePage() {
               <span className="text-2xl font-semibold tracking-tight text-ink">
                 {tile.count === null ? "—" : formatInteger(tile.count)}
               </span>
-              <span className="text-xs text-ink-subtle">Kuyruğu aç</span>
+              {tile.oldestAt !== null ? (
+                <span className="text-xs text-ink-subtle">En eski {formatDate(tile.oldestAt)}</span>
+              ) : (
+                <span className="text-xs text-ink-subtle">Kuyruğu aç</span>
+              )}
             </Link>
           ))}
         </section>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <article className="flex flex-col gap-3 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-semibold">Oturum</h2>
-            <p className="text-sm text-ink">{context.staff?.displayName ?? "—"}</p>
-            <p className="text-xs text-ink-muted">{context.staff?.email ?? "—"}</p>
-          </div>
+      {home.finance !== null ? (
+        <section className="grid gap-3 sm:grid-cols-3">
+          <Link
+            href="/finance"
+            className="flex flex-col gap-1 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm hover:bg-surface-muted"
+          >
+            <span className="text-xs font-medium text-ink-muted">Tahsilat</span>
+            <span className="text-2xl font-semibold tracking-tight text-ink">
+              {formatCurrency(home.finance.employerVolume, home.finance.currency)}
+            </span>
+            <span className="text-xs text-ink-subtle">
+              {formatInteger(home.finance.succeededPaymentCount)} başarılı işlem
+            </span>
+          </Link>
+          <Link
+            href="/finance"
+            className="flex flex-col gap-1 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm hover:bg-surface-muted"
+          >
+            <span className="text-xs font-medium text-ink-muted">Hizmet bedeli</span>
+            <span className="text-2xl font-semibold tracking-tight text-ink">
+              {formatCurrency(home.finance.koalaFee, home.finance.currency)}
+            </span>
+            <span className="text-xs text-ink-subtle">Koala payı</span>
+          </Link>
+          <Link
+            href="/finance"
+            className="flex flex-col gap-1 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm hover:bg-surface-muted"
+          >
+            <span className="text-xs font-medium text-ink-muted">Bekleyen hakediş</span>
+            <span className="text-2xl font-semibold tracking-tight text-ink">
+              {formatCurrency(home.finance.awaitingPayoutAmount, home.finance.currency)}
+            </span>
+            <span className="text-xs text-ink-subtle">
+              {formatInteger(home.finance.awaitingPayoutCount)} bekleyen kayıt
+            </span>
+          </Link>
+        </section>
+      ) : null}
 
-          <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-medium text-ink-muted">
-              Roller ({context.staff?.roles.length ?? 0})
-            </h3>
-            <ul className="flex flex-wrap gap-1.5">
-              {(context.staff?.roles ?? []).map((role) => (
-                <li key={role}>
-                  <Badge tone={role === "OWNER" ? "brand" : "neutral"}>{role}</Badge>
-                </li>
-              ))}
-            </ul>
+      {home.recentAudit.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-semibold">Son işlemler</h2>
+            <Link href="/audit-log" className="text-xs font-medium text-brand hover:underline">
+              Denetim kaydı
+            </Link>
           </div>
-        </article>
+          <ul className="divide-y divide-border-subtle overflow-hidden rounded-2xl border border-border-subtle bg-surface shadow-sm">
+            {home.recentAudit.map((entry) => (
+              <li key={entry.id} className="flex flex-col gap-0.5 px-4 py-2.5">
+                <span className="text-sm text-ink">
+                  {entry.actorDisplayName} · {entry.action}
+                </span>
+                <span className="text-xs text-ink-muted">{formatDateTime(entry.occurredAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
-        <article className="flex flex-col gap-3 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-semibold">İzinler</h2>
-            <p className="text-xs text-ink-muted">
-              {context.staff === null
-                ? "Personel kaydı okunamadı; menü boş kabul edildi."
-                : "Her istekte yeniden çözülür. Token'da taşınmaz."}
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-medium text-ink-muted">
-              Etkin izinler ({context.permissions.length})
-            </h3>
-            {context.permissions.length === 0 ? (
-              <p className="text-sm text-ink">Hiçbir izniniz yok.</p>
-            ) : (
-              <ul className="flex flex-col gap-0.5">
-                {context.permissions.map((permission) => (
-                  <li key={permission} className="text-sm text-ink">
-                    <span className="font-mono text-xs text-ink-muted">{permission}</span>{" "}
-                    {permissionLabel(permission)}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {context.staff !== null && context.staff.unknownPermissions.length > 0 ? (
-              <p className="text-xs text-warning">
-                Bu panel sürümünün tanımadığı izinler: {context.staff.unknownPermissions.join(", ")}
-              </p>
-            ) : null}
-          </div>
-        </article>
+      <section className="rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm">
+        <h2 className="text-sm font-semibold">Oturum</h2>
+        <p className="mt-1 text-sm text-ink">{context.staff?.displayName ?? "—"}</p>
+        <p className="text-xs text-ink-muted">{context.staff?.email ?? "—"}</p>
+        <ul className="mt-3 flex flex-wrap gap-1.5">
+          {(context.staff?.roles ?? []).map((role) => (
+            <li key={role}>
+              <Badge tone={role === "OWNER" ? "brand" : "neutral"}>{role}</Badge>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-xs text-ink-subtle">Menü bu rollere göre çizilir.</p>
       </section>
 
       <section className="flex flex-col gap-2">

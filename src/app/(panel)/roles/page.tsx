@@ -98,10 +98,8 @@ export default async function RolesPage() {
         title="Roller ve izinler"
         description={
           <>
-            Rol→izin grafiği ve roller arası kapsama (DAG).{" "}
-            <code className="font-mono">role.manage</code> izni gerektirir. İzinler token&apos;a
-            gömülmez; her istekte veritabanından çözülür, bu yüzden burada yapılan bir değişiklik
-            ilgili personelin <strong>bir sonraki isteğinde</strong> geçerlidir.
+            Rol grafiği ve roller arası kapsama. Değişiklik ilgili personelin bir sonraki
+            isteğinde geçerlidir.
           </>
         }
       />

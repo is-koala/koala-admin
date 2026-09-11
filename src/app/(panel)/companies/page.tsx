@@ -61,9 +61,7 @@ export default async function CompaniesPage({
         description={
           <>
             Şirket başvurularını ara, kayıtlı adres ve galeri fotoğraflarıyla incele, onayla ya da
-            gerekçesiyle reddet. Liste ve kararlar yalnız sunucuda Koala API&apos;sine gider;{" "}
-            <code className="font-mono">company.approve</code> izni hem panelde hem backend&apos;de
-            yeniden denetlenir.
+            gerekçesiyle reddet. Onay geri alınamaz.
           </>
         }
       />
