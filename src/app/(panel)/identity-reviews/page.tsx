@@ -48,14 +48,7 @@ export default async function IdentityReviewsPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Kimlik belge kuyruğu"
-        description={
-          <>
-            Kullanıcının yüklediği TCKK ön ve arka fotoğraflarını inceleyip onaylayın veya
-            gerekçesiyle reddedin. Onay <code className="font-mono">identityVerified</code>{" "}
-            damgasını çip olmadan koyar. İzin <code className="font-mono">identity.review</code> hem
-            panelde hem backend&apos;de yeniden denetlenir.
-          </>
-        }
+        description="Yüklenen TCKK ön ve arka fotoğraflarını inceleyip onaylayın veya gerekçesiyle reddedin. Onay kimlik damgasını çip olmadan koyar ve geri alınamaz."
       />
 
       <RequirePermission permission="identity.review">
@@ -112,12 +105,7 @@ async function IdentityQueue({ params }: { params: SearchParams }) {
         },
       ]}
       carry={{ boyut: String(paging.size) }}
-      notice={
-        <>
-          Durum ve sıralama backend&apos;e gider. Fotoğraflar bu dilimde yalnız belge kimliği olarak
-          görünür; imzalı indirme sonraki dilimdedir.
-        </>
-      }
+      notice="Durum ve sıralama kuyruğu süzer. İnceleme detayında TCKK ön ve arka fotoğraflarını görürsünüz."
     />
   );
 
@@ -251,21 +239,31 @@ function ReviewDetail({ review, returnTo }: { review: IdentityReview; returnTo: 
             }
           />
           <Row label="Doğum tarihi" value={review.birthDate ?? EMPTY_VALUE} />
-          <Row
-            label="Ön yüz belgesi"
-            value={
-              <span className="font-mono text-xs">{review.frontDocumentId ?? EMPTY_VALUE}</span>
-            }
-          />
-          <Row
-            label="Arka yüz belgesi"
-            value={
-              <span className="font-mono text-xs">{review.backDocumentId ?? EMPTY_VALUE}</span>
-            }
-          />
           <Row label="Gönderim" value={formatDateTime(review.createdAt)} />
           <Row label="Ret gerekçesi" value={review.rejectionReason ?? EMPTY_VALUE} />
         </dl>
+
+        <section className="flex flex-col gap-3" aria-labelledby={`tckk-${review.id}`}>
+          <h3 id={`tckk-${review.id}`} className="text-sm font-semibold text-ink">
+            TCKK fotoğrafları
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <DocumentPhoto
+              reviewId={review.id}
+              documentId={review.frontDocumentId}
+              label="Ön yüz"
+              emptyLabel="Ön yüz fotoğrafı yok"
+              alt="TCKK ön yüz"
+            />
+            <DocumentPhoto
+              reviewId={review.id}
+              documentId={review.backDocumentId}
+              label="Arka yüz"
+              emptyLabel="Arka yüz fotoğrafı yok"
+              alt="TCKK arka yüz"
+            />
+          </div>
+        </section>
 
         {review.status === "PENDING" ? (
           <IdentityReviewDecision reviewId={review.id} returnTo={returnTo} />
@@ -286,4 +284,40 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
       <dd className="text-sm text-ink">{value}</dd>
     </>
   );
+}
+
+function DocumentPhoto({
+  reviewId,
+  documentId,
+  label,
+  emptyLabel,
+  alt,
+}: {
+  reviewId: string;
+  documentId: string | null;
+  label: string;
+  emptyLabel: string;
+  alt: string;
+}) {
+  return (
+    <figure className="flex flex-col gap-2">
+      <figcaption className="text-sm font-medium text-ink">{label}</figcaption>
+      {documentId === null ? (
+        <p className="rounded-lg border border-border-subtle bg-surface-sunken px-3 py-8 text-center text-sm text-ink-muted">
+          {emptyLabel}
+        </p>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- same-origin BFF personel çerezini ister; next/image göndermez.
+        <img
+          src={identityPhotoSrc(reviewId, documentId)}
+          alt={alt}
+          className="max-h-[28rem] w-full rounded-lg border border-border-subtle bg-surface-sunken object-contain"
+        />
+      )}
+    </figure>
+  );
+}
+
+function identityPhotoSrc(reviewId: string, documentId: string): string {
+  return `/api/identity-verifications/${encodeURIComponent(reviewId)}/documents/${encodeURIComponent(documentId)}/download`;
 }

@@ -8,6 +8,7 @@ import {
   IDENTITY_REVIEW_PAGING,
   approveIdentityReview,
   getIdentityReviews,
+  identityDocumentDownloadPath,
   identityReviewStatusLabel,
   rejectIdentityReview,
 } from "./identity-reviews";
@@ -190,5 +191,11 @@ describe("deciding an identity review", () => {
     await approveIdentityReview("ACCESS-TOKEN", "../../me").catch(() => undefined);
 
     expect(url).toContain("/admin/identity-verifications/..%2F..%2Fme/approve");
+  });
+
+  it("escapes identifiers in the staff download path rather than pasting them", () => {
+    expect(identityDocumentDownloadPath("../../me", "x/y")).toBe(
+      "/admin/identity-verifications/..%2F..%2Fme/documents/x%2Fy/download",
+    );
   });
 });
