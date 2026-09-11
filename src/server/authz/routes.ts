@@ -45,6 +45,17 @@ interface RouteIdentity {
   readonly title: string;
 }
 
+/**
+ * Menu sections, in the order a full menu paints them.
+ *
+ * The ids are English because they are identifiers. The labels the operator
+ * reads live in `StaffNav`, next to the drawing code — this registry decides
+ * *which* group a screen belongs to so a new entry cannot invent a fifth
+ * section by accident.
+ */
+export const NAV_GROUPS = ["katalog", "operasyon", "finans", "yonetim"] as const;
+export type NavGroupId = (typeof NAV_GROUPS)[number];
+
 interface NavPlacement {
   /**
    * Where the route appears in the menu. Absent means "reachable, but not
@@ -54,6 +65,12 @@ interface NavPlacement {
     readonly label: string;
     /** Lower first. Gaps are fine; they leave room for later slices. */
     readonly order: number;
+    /**
+     * Visual section. Contiguous in `order` so grouping is a heading, not a
+     * second sort. A screen in the wrong group is a registry bug, not a
+     * drawing-code one.
+     */
+    readonly group: NavGroupId;
   };
 }
 
@@ -107,7 +124,7 @@ export const ROUTES = [
     title: "İş kategorileri",
     access: "permission",
     permission: "category.manage",
-    nav: { label: "İş kategorileri", order: 10 },
+    nav: { label: "İş kategorileri", order: 10, group: "katalog" },
   },
   {
     /**
@@ -119,7 +136,7 @@ export const ROUTES = [
     title: "Rozetler",
     access: "permission",
     permission: "badge.manage",
-    nav: { label: "Rozetler", order: 15 },
+    nav: { label: "Rozetler", order: 15, group: "katalog" },
   },
   {
     /**
@@ -133,7 +150,7 @@ export const ROUTES = [
     title: "Şikayetler",
     access: "permission",
     permission: "content.moderate",
-    nav: { label: "Şikayetler", order: 20 },
+    nav: { label: "Şikayetler", order: 20, group: "operasyon" },
   },
   {
     /**
@@ -144,7 +161,7 @@ export const ROUTES = [
     title: "Hesap silme talepleri",
     access: "permission",
     permission: "user.read_pii",
-    nav: { label: "Hesap silme", order: 25 },
+    nav: { label: "Hesap silme", order: 25, group: "operasyon" },
   },
   {
     /**
@@ -157,7 +174,7 @@ export const ROUTES = [
     title: "Kullanıcılar",
     access: "permission",
     permission: "user.read",
-    nav: { label: "Kullanıcılar", order: 26 },
+    nav: { label: "Kullanıcılar", order: 26, group: "operasyon" },
   },
   {
     /**
@@ -169,7 +186,7 @@ export const ROUTES = [
     title: "Şirket onayları",
     access: "permission",
     permission: "company.approve",
-    nav: { label: "Şirket onayları", order: 30 },
+    nav: { label: "Şirket onayları", order: 30, group: "operasyon" },
   },
   {
     /**
@@ -183,7 +200,7 @@ export const ROUTES = [
     title: "Uyuşmazlıklar",
     access: "permission",
     permission: "dispute.resolve",
-    nav: { label: "Uyuşmazlıklar", order: 40 },
+    nav: { label: "Uyuşmazlıklar", order: 40, group: "operasyon" },
   },
   {
     /**
@@ -195,7 +212,7 @@ export const ROUTES = [
     title: "Finans özeti",
     access: "permission",
     permission: "finance.read",
-    nav: { label: "Finans özeti", order: 43 },
+    nav: { label: "Finans özeti", order: 43, group: "finans" },
   },
   {
     /**
@@ -207,7 +224,7 @@ export const ROUTES = [
     title: "Atama özeti",
     access: "permission",
     permission: "payment.read",
-    nav: { label: "Atama özeti", order: 45 },
+    nav: { label: "Atama özeti", order: 45, group: "finans" },
   },
   {
     /**
@@ -219,7 +236,7 @@ export const ROUTES = [
     title: "IBAN doğrulama",
     access: "permission",
     permission: "bank.account.verify",
-    nav: { label: "IBAN doğrulama", order: 48 },
+    nav: { label: "IBAN doğrulama", order: 48, group: "finans" },
   },
   {
     /**
@@ -231,7 +248,7 @@ export const ROUTES = [
     title: "Hakediş banka mutabakatı",
     access: "permission",
     permission: "payout.reconcile",
-    nav: { label: "Hakediş mutabakatı", order: 50 },
+    nav: { label: "Hakediş mutabakatı", order: 50, group: "finans" },
   },
   {
     /**
@@ -243,7 +260,7 @@ export const ROUTES = [
     title: "Çalışma zamanı ayarları",
     access: "permission",
     permission: "settings.manage",
-    nav: { label: "Ayarlar", order: 60 },
+    nav: { label: "Ayarlar", order: 60, group: "yonetim" },
   },
   {
     /**
@@ -260,7 +277,7 @@ export const ROUTES = [
     title: "Roller ve izinler",
     access: "permission",
     permission: "role.manage",
-    nav: { label: "Roller ve izinler", order: 70 },
+    nav: { label: "Roller ve izinler", order: 70, group: "yonetim" },
   },
   {
     /**
@@ -276,14 +293,14 @@ export const ROUTES = [
     title: "Personel",
     access: "permission",
     permission: "staff.read",
-    nav: { label: "Personel", order: 80 },
+    nav: { label: "Personel", order: 80, group: "yonetim" },
   },
   {
     path: "/audit-log",
     title: "Denetim kaydı",
     access: "permission",
     permission: "audit.read",
-    nav: { label: "Denetim kaydı", order: 90 },
+    nav: { label: "Denetim kaydı", order: 90, group: "yonetim" },
   },
 ] as const satisfies readonly PanelRouteShape[];
 
@@ -338,6 +355,7 @@ export interface NavEntry {
   readonly label: string;
   readonly permission: Permission;
   readonly order: number;
+  readonly group: NavGroupId;
 }
 
 /**
@@ -364,6 +382,7 @@ export function navigationFor(permissions: readonly Permission[]): readonly NavE
       label: route.nav.label,
       permission: route.permission,
       order: route.nav.order,
+      group: route.nav.group,
     }))
     .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label, "tr"));
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PageHeader } from "@/components/panel/page-header";
 import {
   Badge,
   EmptyState,
@@ -46,14 +47,16 @@ export default async function JobCategoriesVerificationPage() {
     /* The panel shell supplies <main>, the sidebar and the "← Panel" way back,
        so this page renders a plain section inside it. */
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">İş kategorileri (doğrulama)</h1>
-        <p className="text-sm text-ink-muted">
-          Sunucudan <code className="font-mono">GET /reference/job-categories</code> çağrılır;
-          tarayıcı backend&apos;e hiç istek atmaz. Sayfa {formatDateTime(new Date())} itibarıyla
-          oluşturuldu.
-        </p>
-      </header>
+      <PageHeader
+        title="İş kategorileri (doğrulama)"
+        description={
+          <>
+            Sunucudan <code className="font-mono">GET /reference/job-categories</code> çağrılır;
+            tarayıcı backend&apos;e hiç istek atmaz. Sayfa {formatDateTime(new Date())} itibarıyla
+            oluşturuldu.
+          </>
+        }
+      />
 
       {result.ok ? <CategoriesResult categories={result.categories} /> : <Failure {...result} />}
     </div>

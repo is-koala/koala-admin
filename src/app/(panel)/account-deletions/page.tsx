@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PageHeader } from "@/components/panel/page-header";
 import {
   DecisionForm,
   QueueFilters,
@@ -54,15 +55,17 @@ export default async function AccountDeletionsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Hesap silme talepleri</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Kullanıcının açtığı silme talepleri. Liste{" "}
-          <code className="font-mono">user.read_pii</code> ister; ret{" "}
-          <code className="font-mono">user.deletion.manage</code> ister. Anonimleştirme zamanlayıcı
-          işidir — panel onaylamaz, yalnız reddeder.
-        </p>
-      </header>
+      <PageHeader
+        title="Hesap silme talepleri"
+        description={
+          <>
+            Kullanıcının açtığı silme talepleri. Liste{" "}
+            <code className="font-mono">user.read_pii</code> ister; ret{" "}
+            <code className="font-mono">user.deletion.manage</code> ister. Anonimleştirme
+            zamanlayıcı işidir — panel onaylamaz, yalnız reddeder.
+          </>
+        }
+      />
 
       <RequirePermission permission="user.read_pii">
         <DeletionQueue params={params} />

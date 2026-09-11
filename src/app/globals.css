@@ -4,31 +4,45 @@
  * The panel's whole design surface: a handful of semantic tokens.
  *
  * There is no external UI kit here on purpose — an admin panel that renders
- * tables, forms and dialogs does not need one, and owning these six components
+ * tables, forms and dialogs does not need one, and owning these components
  * locally is cheaper than owning someone else's upgrade path.
+ *
+ * The palette is koala-specific rather than the generic SaaS kit: bark for
+ * the chrome (fur, not slate-900), eucalyptus mist for the canvas, leaf for
+ * the one accent. IBM Plex Sans is the type, because it was cut for dense
+ * operational UI rather than marketing headlines.
  */
 @theme {
-  --color-surface: oklch(1 0 0);
-  --color-surface-muted: oklch(0.98 0.003 250);
-  --color-surface-sunken: oklch(0.96 0.005 250);
+  --font-sans: var(--font-plex), "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
 
-  --color-border-subtle: oklch(0.9 0.006 250);
-  --color-border-strong: oklch(0.82 0.008 250);
+  --color-bark: #2c2926;
+  --color-bark-hover: #3a3733;
+  --color-bark-line: #4a4641;
+  --color-bark-ink: #ede8e1;
+  --color-bark-muted: #b7b0a7;
 
-  --color-ink: oklch(0.24 0.015 260);
-  --color-ink-muted: oklch(0.5 0.012 260);
-  --color-ink-subtle: oklch(0.62 0.01 260);
+  --color-mist: #e7eeec;
+  --color-surface: #f7faf8;
+  --color-surface-muted: #e7eeec;
+  --color-surface-sunken: #dce6e2;
 
-  --color-brand: oklch(0.55 0.15 250);
-  --color-brand-strong: oklch(0.47 0.16 250);
-  --color-brand-soft: oklch(0.95 0.03 250);
+  --color-border-subtle: #c9d4cf;
+  --color-border-strong: #aebbb5;
 
-  --color-danger: oklch(0.52 0.19 27);
-  --color-danger-soft: oklch(0.96 0.03 27);
-  --color-success: oklch(0.52 0.13 155);
-  --color-success-soft: oklch(0.95 0.04 155);
-  --color-warning: oklch(0.62 0.14 75);
-  --color-warning-soft: oklch(0.96 0.05 75);
+  --color-ink: #1a221f;
+  --color-ink-muted: #4d5a54;
+  --color-ink-subtle: #6b7872;
+
+  --color-brand: #3b6b54;
+  --color-brand-strong: #2f5644;
+  --color-brand-soft: #dce8e3;
+
+  --color-danger: #8f3b32;
+  --color-danger-soft: #f3e4e1;
+  --color-success: #2f6b4a;
+  --color-success-soft: #e3eee8;
+  --color-warning: #8a5a1f;
+  --color-warning-soft: #f3eadb;
 }
 
 @layer base {
@@ -37,8 +51,9 @@
   }
 
   body {
-    background-color: var(--color-surface-muted);
+    background-color: var(--color-mist);
     color: var(--color-ink);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
 

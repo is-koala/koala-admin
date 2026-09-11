@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AuditLogFilterForm, AuditLogPager } from "@/components/panel/audit-log-filters";
+import { PageHeader } from "@/components/panel/page-header";
 import { AuditLogTable } from "@/components/panel/audit-log-table";
 import { EmptyState, ErrorState } from "@/components/ui";
 import {
@@ -56,14 +57,16 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Denetim kaydı</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Personelin yaptığı işlemlerin kaydı — reddedilen denemeler dâhil.{" "}
-          <code className="font-mono">audit.read</code> izni gerektirir. Kayıt salt okunurdur:
-          buradan düzenlenemez, silinemez.
-        </p>
-      </header>
+      <PageHeader
+        title="Denetim kaydı"
+        description={
+          <>
+            Personelin yaptığı işlemlerin kaydı — reddedilen denemeler dâhil.{" "}
+            <code className="font-mono">audit.read</code> izni gerektirir. Kayıt salt okunurdur:
+            buradan düzenlenemez, silinemez.
+          </>
+        }
+      />
 
       <RequirePermission permission="audit.read">
         <AuditLogView request={request} />

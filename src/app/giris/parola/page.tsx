@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AuthShell } from "@/components/panel/auth-shell";
 import { ErrorState, FormField, TextInput } from "@/components/ui";
 import { changeOwnPassword } from "@/server/auth/actions";
 import { isPasswordChangeFailureCode, type PasswordChangeFailureCode } from "@/server/auth/errors";
@@ -64,73 +65,76 @@ export default async function ChangePasswordPage({
   const failure = isPasswordChangeFailureCode(params.hata) ? FAILURES[params.hata] : null;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-8 px-6 py-16">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Parolanızı değiştirin</h1>
-        <p className="text-sm text-ink-muted">
-          Hesabınız &quot;ilk girişte parola değiştir&quot; işaretiyle açıldı. Bu adım tamamlanmadan
-          panelin hiçbir ekranı çalışmaz; kararı backend verir, bu sayfa yalnız gerekeni sorar.
+    <AuthShell>
+      <main className="flex flex-col gap-6">
+        <header className="flex flex-col gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">Parolanızı değiştirin</h1>
+          <p className="text-sm text-ink-muted">
+            Hesabınız &quot;ilk girişte parola değiştir&quot; işaretiyle açıldı. Bu adım
+            tamamlanmadan panelin hiçbir ekranı çalışmaz; kararı backend verir, bu sayfa yalnız
+            gerekeni sorar.
+          </p>
+        </header>
+
+        {failure ? <ErrorState title={failure.title} description={failure.description} /> : null}
+
+        <form action={changeOwnPassword} className="flex flex-col gap-4" noValidate>
+          <FormField id="currentPassword" label="Mevcut parola" required>
+            {({ id, describedBy, invalid }) => (
+              <TextInput
+                id={id}
+                name="currentPassword"
+                type="password"
+                autoComplete="current-password"
+                autoFocus
+                required
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </FormField>
+
+          <FormField id="newPassword" label="Yeni parola" required>
+            {({ id, describedBy, invalid }) => (
+              <TextInput
+                id={id}
+                name="newPassword"
+                type="password"
+                autoComplete="new-password"
+                required
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </FormField>
+
+          <FormField id="newPasswordRepeat" label="Yeni parola (tekrar)" required>
+            {({ id, describedBy, invalid }) => (
+              <TextInput
+                id={id}
+                name="newPasswordRepeat"
+                type="password"
+                autoComplete="new-password"
+                required
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </FormField>
+
+          <button
+            type="submit"
+            className="mt-2 w-full rounded-sm bg-brand px-4 py-2.5 text-sm font-medium text-surface hover:bg-brand-strong"
+          >
+            Parolayı değiştir
+          </button>
+        </form>
+
+        <p className="text-xs text-ink-subtle">
+          Parola değiştiğinde açık bütün oturumlarınız kapatılır ve yeniden giriş yapmanız istenir —
+          backend token sürümünü artırdığı için elinizdeki token o anda geçersizleşir.
         </p>
-      </header>
-
-      {failure ? <ErrorState title={failure.title} description={failure.description} /> : null}
-
-      <form action={changeOwnPassword} className="flex flex-col gap-4" noValidate>
-        <FormField id="currentPassword" label="Mevcut parola" required>
-          {({ id, describedBy, invalid }) => (
-            <TextInput
-              id={id}
-              name="currentPassword"
-              type="password"
-              autoComplete="current-password"
-              autoFocus
-              required
-              aria-describedby={describedBy}
-              aria-invalid={invalid}
-            />
-          )}
-        </FormField>
-
-        <FormField id="newPassword" label="Yeni parola" required>
-          {({ id, describedBy, invalid }) => (
-            <TextInput
-              id={id}
-              name="newPassword"
-              type="password"
-              autoComplete="new-password"
-              required
-              aria-describedby={describedBy}
-              aria-invalid={invalid}
-            />
-          )}
-        </FormField>
-
-        <FormField id="newPasswordRepeat" label="Yeni parola (tekrar)" required>
-          {({ id, describedBy, invalid }) => (
-            <TextInput
-              id={id}
-              name="newPasswordRepeat"
-              type="password"
-              autoComplete="new-password"
-              required
-              aria-describedby={describedBy}
-              aria-invalid={invalid}
-            />
-          )}
-        </FormField>
-
-        <button
-          type="submit"
-          className="mt-2 w-full rounded-md bg-brand px-4 py-3 text-sm font-medium text-white hover:bg-brand-strong"
-        >
-          Parolayı değiştir
-        </button>
-      </form>
-
-      <p className="text-xs text-ink-subtle">
-        Parola değiştiğinde açık bütün oturumlarınız kapatılır ve yeniden giriş yapmanız istenir —
-        backend token sürümünü artırdığı için elinizdeki token o anda geçersizleşir.
-      </p>
-    </main>
+      </main>
+    </AuthShell>
   );
 }

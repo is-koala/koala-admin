@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
+import { PageHeader } from "@/components/panel/page-header";
 import { ErrorState } from "@/components/ui";
 import { presentSettings } from "@/lib/runtime-settings";
 import { isKoalaApiError } from "@/server/api/errors";
@@ -23,14 +24,17 @@ export const metadata: Metadata = { title: "Çalışma zamanı ayarları" };
 export default async function SettingsPage() {
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Çalışma zamanı ayarları</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Politika sayılarını deploy olmadan değiştirin. Yalnız{" "}
-          <code className="font-mono">SettingKeys</code> içindeki anahtarlar yazılır; oranlar 0 ile
-          1 arasında olmalıdır. <code className="font-mono">settings.manage</code> izni gerekir.
-        </p>
-      </header>
+      <PageHeader
+        title="Çalışma zamanı ayarları"
+        description={
+          <>
+            Politika sayılarını deploy olmadan değiştirin. Yalnız{" "}
+            <code className="font-mono">SettingKeys</code> içindeki anahtarlar yazılır; oranlar 0
+            ile 1 arasında olmalıdır. <code className="font-mono">settings.manage</code> izni
+            gerekir.
+          </>
+        }
+      />
 
       <RequirePermission permission="settings.manage">
         <SettingsTable />

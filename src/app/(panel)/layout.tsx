@@ -38,25 +38,28 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   const entries = navigationFor(context.permissions);
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col gap-6 px-6 py-8 md:flex-row md:gap-10 md:py-12">
-      <aside className="flex w-full shrink-0 flex-col gap-6 md:w-60">
-        <Link href="/" className="text-sm font-semibold text-ink">
-          Koala Yönetim Paneli
+    <div className="flex min-h-dvh flex-col md:flex-row">
+      <aside className="flex w-full shrink-0 flex-col gap-5 bg-bark px-3 py-5 text-bark-ink md:sticky md:top-0 md:h-dvh md:w-60">
+        <Link href="/" className="px-2">
+          <span className="block text-sm font-semibold tracking-tight">Koala</span>
+          <span className="block text-xs text-bark-muted">Yönetim paneli</span>
         </Link>
 
-        <StaffNav entries={entries} unresolved={context.failure !== null} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <StaffNav entries={entries} unresolved={context.failure !== null} />
+        </div>
 
-        <div className="mt-auto flex flex-col gap-2 border-t border-border-subtle pt-4">
+        <div className="flex flex-col gap-3 border-t border-bark-line pt-4">
           {context.staff === null ? null : (
-            <div className="flex flex-col">
-              <span className="text-sm text-ink">{context.staff.displayName}</span>
-              <span className="text-xs text-ink-muted">{context.staff.email}</span>
+            <div className="flex flex-col px-2">
+              <span className="truncate text-sm text-bark-ink">{context.staff.displayName}</span>
+              <span className="truncate text-xs text-bark-muted">{context.staff.email}</span>
             </div>
           )}
           <form action={signOut}>
             <button
               type="submit"
-              className="rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
+              className="w-full rounded-sm border border-bark-line px-2 py-1.5 text-left text-sm font-medium text-bark-ink hover:bg-bark-hover"
             >
               Çıkış yap
             </button>
@@ -64,7 +67,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
         </div>
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col gap-6">
+      <main className="flex min-w-0 flex-1 flex-col gap-5 bg-mist px-4 py-5 md:px-8 md:py-6">
         {/*
          * Shown above the page rather than instead of it. The person whose
          * permissions could not be resolved still sees where they are and can

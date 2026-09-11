@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PageHeader } from "@/components/panel/page-header";
 import {
   DecisionForm,
   QueueFilters,
@@ -55,15 +56,17 @@ export default async function CompaniesPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Şirket onay kuyruğu</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Şirket başvurularını ara, incele, onayla ya da gerekçesiyle reddet. Liste ve kararlar
-          yalnız sunucuda Koala API&apos;sine gider;{" "}
-          <code className="font-mono">company.approve</code> izni hem panelde hem backend&apos;de
-          yeniden denetlenir.
-        </p>
-      </header>
+      <PageHeader
+        title="Şirket onay kuyruğu"
+        description={
+          <>
+            Şirket başvurularını ara, incele, onayla ya da gerekçesiyle reddet. Liste ve kararlar
+            yalnız sunucuda Koala API&apos;sine gider;{" "}
+            <code className="font-mono">company.approve</code> izni hem panelde hem backend&apos;de
+            yeniden denetlenir.
+          </>
+        }
+      />
 
       <RequirePermission permission="company.approve">
         <CompanyQueue params={params} />

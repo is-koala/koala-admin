@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { PageHeader } from "@/components/panel/page-header";
 import { Badge } from "@/components/ui";
 import { requireStaffSession } from "@/server/auth/session";
 import { permissionLabel } from "@/server/authz/permissions";
@@ -31,28 +32,25 @@ export default async function PanelHomePage() {
   const reachable = navigationFor(context.permissions);
 
   return (
-    <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Panel</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Kim olduğunuzu rol üyeliğiniz, ne yapabildiğinizi rol grafiğinden çözülen izinler söyler.
-          Panel ikisini de her istekte backend&apos;e sorar ve hiçbirini saklamaz.
-        </p>
-      </header>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Panel"
+        description="Kim olduğunuzu rol üyeliğiniz, ne yapabildiğinizi rol grafiğinden çözülen izinler söyler. Panel ikisini de her istekte backend'e sorar ve hiçbirini saklamaz."
+      />
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <article className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-5">
+      <section className="grid gap-px bg-border-subtle md:grid-cols-2">
+        <article className="flex flex-col gap-3 bg-surface p-4">
           <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-semibold">Kimlik · rol üyeliği</h2>
+            <h2 className="text-sm font-semibold">Kimlik, rol üyeliği</h2>
             <p className="text-sm text-ink">{context.staff?.displayName ?? "—"}</p>
             <p className="text-xs text-ink-muted">{context.staff?.email ?? "—"}</p>
           </div>
 
           <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-semibold text-ink-muted">
+            <h3 className="text-xs font-medium text-ink-muted">
               Roller ({context.staff?.roles.length ?? 0})
             </h3>
-            <ul className="flex flex-wrap gap-2">
+            <ul className="flex flex-wrap gap-1.5">
               {(context.staff?.roles ?? []).map((role) => (
                 <li key={role}>
                   <Badge tone={role === "OWNER" ? "brand" : "neutral"}>{role}</Badge>
@@ -66,9 +64,9 @@ export default async function PanelHomePage() {
           </div>
         </article>
 
-        <article className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-5">
+        <article className="flex flex-col gap-3 bg-surface p-4">
           <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-semibold">Yetki · rol grafiği</h2>
+            <h2 className="text-sm font-semibold">Yetki, rol grafiği</h2>
             <p className="text-sm text-ink">
               {context.staff === null ? "Personel kaydı çözülemedi" : "Her istekte yeniden çözüldü"}
             </p>
@@ -80,16 +78,16 @@ export default async function PanelHomePage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <h3 className="text-xs font-semibold text-ink-muted">
+            <h3 className="text-xs font-medium text-ink-muted">
               Etkin izinler ({context.permissions.length})
             </h3>
             {context.permissions.length === 0 ? (
               <p className="text-sm text-ink">Hiçbir izniniz yok.</p>
             ) : (
-              <ul className="flex flex-col gap-1">
+              <ul className="flex flex-col gap-0.5">
                 {context.permissions.map((permission) => (
                   <li key={permission} className="text-sm text-ink">
-                    <span className="font-mono text-xs text-ink-muted">{permission}</span> ·{" "}
+                    <span className="font-mono text-xs text-ink-muted">{permission}</span>{" "}
                     {permissionLabel(permission)}
                   </li>
                 ))}
@@ -104,19 +102,19 @@ export default async function PanelHomePage() {
         </article>
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">Erişebildiğiniz ekranlar</h2>
         {reachable.length === 0 ? (
           <p className="max-w-prose text-sm text-ink-muted">
             Şu an açık bir ekran yok. Menü de bu yüzden boş: panel, izniniz olduğunu varsaymaz.
           </p>
         ) : (
-          <ul className="flex flex-wrap gap-3">
+          <ul className="divide-y divide-border-subtle border border-border-subtle bg-surface">
             {reachable.map((entry) => (
               <li key={entry.href}>
                 <Link
                   href={entry.href}
-                  className="inline-flex rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-strong"
+                  className="flex px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
                 >
                   {entry.label}
                 </Link>
@@ -126,15 +124,15 @@ export default async function PanelHomePage() {
         )}
       </section>
 
-      <section className="rounded-lg border border-border-subtle bg-surface p-5">
+      <section className="flex flex-col gap-2 border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-semibold">Doğrulama</h2>
-        <p className="mt-1 max-w-prose text-sm text-ink-muted">
+        <p className="max-w-prose text-sm text-ink-muted">
           Sunucu tarafı API katmanının canlı backend&apos;e karşı çalıştığını gösteren sayfa; izin
           çözümünden bağımsız çalışır.
         </p>
         <Link
           href="/verification/job-categories"
-          className="mt-4 inline-flex rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
+          className="self-start text-sm font-medium text-brand hover:underline"
         >
           İş kategorileri (doğrulama)
         </Link>

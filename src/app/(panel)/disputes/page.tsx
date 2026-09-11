@@ -8,6 +8,7 @@ import {
   type ResolutionChoice,
 } from "@/components/escrow/escrow-operation-form";
 import { RecentOperationsList } from "@/components/escrow/recent-operations-list";
+import { PageHeader } from "@/components/panel/page-header";
 import {
   Badge,
   EmptyState,
@@ -150,16 +151,18 @@ export default async function DisputesPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Uyuşmazlıklar ve emanet</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Açık uyuşmazlıkları çözer ve emanetteki parayı işçiye çıkarır ya da işverene iade eder.{" "}
-          <code className="font-mono">dispute.resolve</code> izni gerektirir. Para taşıyan her yol
-          ayrıca <code className="font-mono">payment.read</code> ile birlikte yönüne göre{" "}
-          <code className="font-mono">payout.release</code> ya da{" "}
-          <code className="font-mono">payment.refund</code> ister.
-        </p>
-      </header>
+      <PageHeader
+        title="Uyuşmazlıklar ve emanet"
+        description={
+          <>
+            Açık uyuşmazlıkları çözer ve emanetteki parayı işçiye çıkarır ya da işverene iade eder.{" "}
+            <code className="font-mono">dispute.resolve</code> izni gerektirir. Para taşıyan her yol
+            ayrıca <code className="font-mono">payment.read</code> ile birlikte yönüne göre{" "}
+            <code className="font-mono">payout.release</code> ya da{" "}
+            <code className="font-mono">payment.refund</code> ister.
+          </>
+        }
+      />
 
       <RequirePermission permission="dispute.resolve">
         <DisputeWorkspace

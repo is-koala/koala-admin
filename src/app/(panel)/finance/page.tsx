@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { EmptyState, FormField, TextInput } from "@/components/ui";
 import { financeSummaryQuery, parseFinanceRequest } from "@/lib/finance-summary";
@@ -32,15 +33,17 @@ export default async function FinancePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Finans özeti</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Dönemdeki başarılı tahsilat hacmi, Koala hizmet bedeli ve tamamlanan hakedişler. Bekleyen
-          hakediş anlık yükümlülüktür, dönem süzgecine girmez.{" "}
-          <code className="font-mono">finance.read</code> izni gerekir —{" "}
-          <code className="font-mono">payment.read</code> bu ekranı açmaz.
-        </p>
-      </header>
+      <PageHeader
+        title="Finans özeti"
+        description={
+          <>
+            Dönemdeki başarılı tahsilat hacmi, Koala hizmet bedeli ve tamamlanan hakedişler.
+            Bekleyen hakediş anlık yükümlülüktür, dönem süzgecine girmez.{" "}
+            <code className="font-mono">finance.read</code> izni gerekir —{" "}
+            <code className="font-mono">payment.read</code> bu ekranı açmaz.
+          </>
+        }
+      />
 
       <RequirePermission permission="finance.read">
         <FinanceView request={request} />

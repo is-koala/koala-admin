@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PageHeader } from "@/components/panel/page-header";
 import { ErrorState } from "@/components/ui";
 import { isKoalaApiError } from "@/server/api/errors";
 import { getManagedJobCategories, type JobCategory } from "@/server/api/job-categories";
@@ -22,14 +23,16 @@ export const metadata: Metadata = { title: "İş kategorileri" };
 export default async function JobCategoriesPage() {
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">İş kategorileri</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Pazaryerinin ilan kategorilerini oluşturun, düzenleyin veya silin.{" "}
-          <code className="font-mono">category.manage</code> izni gerekir; başarılı değişiklikler
-          backend denetim kaydına yazılır.
-        </p>
-      </header>
+      <PageHeader
+        title="İş kategorileri"
+        description={
+          <>
+            Pazaryerinin ilan kategorilerini oluşturun, düzenleyin veya silin.{" "}
+            <code className="font-mono">category.manage</code> izni gerekir; başarılı değişiklikler
+            backend denetim kaydına yazılır.
+          </>
+        }
+      />
 
       <RequirePermission permission="category.manage">
         <JobCategoryTable />

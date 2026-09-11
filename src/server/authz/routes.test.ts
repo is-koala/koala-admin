@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { isPermission } from "./permissions";
-import { ROUTES, ROUTE_HANDLERS, gatedRoutes, navigationFor } from "./routes";
+import { NAV_GROUPS, ROUTES, ROUTE_HANDLERS, gatedRoutes, navigationFor } from "./routes";
 
 /**
  * The test that stops an ungated page being added.
@@ -214,5 +214,31 @@ describe("the menu is drawn from the registry and from permissions only", () => 
 
     expect(new Set(entries.map((entry) => entry.order)).size).toBe(entries.length);
     expect(new Set(entries.map((entry) => entry.label)).size).toBe(entries.length);
+  });
+
+  it("puts every advertised screen in a known group, contiguous in order", () => {
+    const entries = navigationFor(gatedRoutes().map((route) => route.permission));
+    const known = new Set<string>(NAV_GROUPS);
+
+    for (const entry of entries) {
+      expect(known.has(entry.group), entry.href).toBe(true);
+    }
+
+    // Grouping is a heading over a sorted list. If order 12 sits in a different
+    // group from 10 and 15, StaffNav would paint Katalog twice. Contiguity is
+    // the registry's job so the drawing code does not have to reshuffle.
+    const firstIndex = new Map<string, number>();
+    const lastIndex = new Map<string, number>();
+    entries.forEach((entry, index) => {
+      if (!firstIndex.has(entry.group)) firstIndex.set(entry.group, index);
+      lastIndex.set(entry.group, index);
+    });
+    for (const [group, first] of firstIndex) {
+      const last = lastIndex.get(group);
+      if (last === undefined) throw new Error(`${group} last index missing`);
+      for (let index = first; index <= last; index += 1) {
+        expect(entries[index]?.group, `${group} at ${index}`).toBe(group);
+      }
+    }
   });
 });

@@ -11,9 +11,7 @@ export interface TableProps {
 
 export function Table({ caption, children, className }: TableProps) {
   return (
-    <div
-      className={cn("overflow-x-auto rounded-lg border border-border-subtle bg-surface", className)}
-    >
+    <div className={cn("overflow-x-auto border border-border-subtle bg-surface", className)}>
       <table className="w-full border-collapse text-sm">
         {caption ? <caption className="sr-only">{caption}</caption> : null}
         {children}
@@ -64,7 +62,7 @@ export function TableHeaderCell({
     <th
       scope="col"
       className={cn(
-        "px-4 py-2.5 text-xs font-semibold tracking-wide text-ink-muted uppercase",
+        "px-3 py-2 text-xs font-medium text-ink-muted",
         numeric ? "text-right tabular-nums" : "text-left",
         className,
       )}
@@ -84,7 +82,7 @@ export function TableCell({ children, numeric = false, className, ...rest }: Tab
   return (
     <td
       className={cn(
-        "px-4 py-2.5 align-middle",
+        "px-3 py-2 align-middle text-sm",
         numeric ? "text-right tabular-nums" : "text-left",
         className,
       )}

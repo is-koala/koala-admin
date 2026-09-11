@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AuthShell } from "@/components/panel/auth-shell";
 import { ErrorState, FormField, TextInput } from "@/components/ui";
 import { signInWithPassword } from "@/server/auth/actions";
 import { isSignInFailureCode, type SignInFailureCode } from "@/server/auth/errors";
@@ -62,72 +63,74 @@ export default async function SignInPage({
   const passwordChanged = params.bilgi === "PASSWORD_CHANGED";
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-8 px-6 py-16">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Koala Yönetim Paneli</h1>
-        <p className="text-sm text-ink-muted">
-          Panele yalnız Koala personeli, kendi e-postası ve parolasıyla girer.
-        </p>
-      </header>
+    <AuthShell>
+      <main className="flex flex-col gap-6">
+        <header className="flex flex-col gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">Koala Yönetim Paneli</h1>
+          <p className="text-sm text-ink-muted">
+            Panele yalnız Koala personeli, kendi e-postası ve parolasıyla girer.
+          </p>
+        </header>
 
-      {passwordChanged ? (
-        <p
-          role="status"
-          className="rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3 text-sm text-ink"
+        {passwordChanged ? (
+          <p
+            role="status"
+            className="rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3 text-sm text-ink"
+          >
+            Parolanız değiştirildi. Açık bütün oturumlar kapatıldı; yeni parolanızla girin.
+          </p>
+        ) : null}
+
+        {failure ? <ErrorState title={failure.title} description={failure.description} /> : null}
+
+        <form
+          action={signInWithPassword.bind(null, callbackUrl)}
+          className="flex flex-col gap-4"
+          noValidate
         >
-          Parolanız değiştirildi. Açık bütün oturumlar kapatıldı; yeni parolanızla girin.
+          <FormField id="email" label="E-posta" required>
+            {({ id, describedBy, invalid }) => (
+              <TextInput
+                id={id}
+                name="email"
+                type="email"
+                autoComplete="username"
+                autoFocus
+                required
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </FormField>
+
+          <FormField id="password" label="Parola" required>
+            {({ id, describedBy, invalid }) => (
+              <TextInput
+                id={id}
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </FormField>
+
+          <button
+            type="submit"
+            className="mt-2 w-full rounded-sm bg-brand px-4 py-2.5 text-sm font-medium text-surface hover:bg-brand-strong"
+          >
+            Giriş yap
+          </button>
+        </form>
+
+        <p className="text-xs text-ink-subtle">
+          Parolanızı unuttuysanız personel yönetimi izni olan bir çalışandan sıfırlamasını isteyin:
+          e-postayla sıfırlama akışı bilerek yazılmadı. Yönetici yeni bir parola atar, siz ilk
+          girişte değiştirirsiniz.
         </p>
-      ) : null}
-
-      {failure ? <ErrorState title={failure.title} description={failure.description} /> : null}
-
-      <form
-        action={signInWithPassword.bind(null, callbackUrl)}
-        className="flex flex-col gap-4"
-        noValidate
-      >
-        <FormField id="email" label="E-posta" required>
-          {({ id, describedBy, invalid }) => (
-            <TextInput
-              id={id}
-              name="email"
-              type="email"
-              autoComplete="username"
-              autoFocus
-              required
-              aria-describedby={describedBy}
-              aria-invalid={invalid}
-            />
-          )}
-        </FormField>
-
-        <FormField id="password" label="Parola" required>
-          {({ id, describedBy, invalid }) => (
-            <TextInput
-              id={id}
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              aria-describedby={describedBy}
-              aria-invalid={invalid}
-            />
-          )}
-        </FormField>
-
-        <button
-          type="submit"
-          className="mt-2 w-full rounded-md bg-brand px-4 py-3 text-sm font-medium text-white hover:bg-brand-strong"
-        >
-          Giriş yap
-        </button>
-      </form>
-
-      <p className="text-xs text-ink-subtle">
-        Parolanızı unuttuysanız personel yönetimi izni olan bir çalışandan sıfırlamasını isteyin:
-        e-postayla sıfırlama akışı bilerek yazılmadı. Yönetici yeni bir parola atar, siz ilk girişte
-        değiştirirsiniz.
-      </p>
-    </main>
+      </main>
+    </AuthShell>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
+import { PageHeader } from "@/components/panel/page-header";
 import { PayoutReconciliationForm } from "@/components/payout-reconciliation/payout-reconciliation-form";
 import { RequirePermission } from "@/server/authz/require-permission";
 
@@ -11,14 +12,16 @@ export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
 export default function PayoutReconciliationPage() {
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Hakediş banka mutabakatı</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Banka ekstresindeki gerçekleşmiş transferi bir hakediş kaydıyla eşleştirin. Bu ekran
-          bekleyen hakedişleri listelemez; kimlik ve kanıtlar ödeme runbook&apos;undaki sorgudan
-          alınır. <code className="font-mono">payout.reconcile</code> izni gerekir.
-        </p>
-      </header>
+      <PageHeader
+        title="Hakediş banka mutabakatı"
+        description={
+          <>
+            Banka ekstresindeki gerçekleşmiş transferi bir hakediş kaydıyla eşleştirin. Bu ekran
+            bekleyen hakedişleri listelemez; kimlik ve kanıtlar ödeme runbook&apos;undaki sorgudan
+            alınır. <code className="font-mono">payout.reconcile</code> izni gerekir.
+          </>
+        }
+      />
 
       <RequirePermission permission="payout.reconcile">
         <div className="flex flex-col gap-6">

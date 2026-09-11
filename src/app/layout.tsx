@@ -1,7 +1,15 @@
 import type { Metadata } from "next";
+import { IBM_Plex_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 
 import "./globals.css";
+
+const plexSans = IBM_Plex_Sans({
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-plex",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -19,8 +27,8 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="tr">
-      <body className="min-h-dvh antialiased">{children}</body>
+    <html lang="tr" className={plexSans.variable}>
+      <body className={`${plexSans.className} min-h-dvh antialiased`}>{children}</body>
     </html>
   );
 }
