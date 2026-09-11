@@ -190,7 +190,8 @@ describe("the menu is drawn from the registry and from permissions only", () => 
     expect(navigationFor(["payout.reconcile"]).map((entry) => entry.href)).toEqual([
       "/payout-reconciliation",
     ]);
-    expect(navigationFor(["payout.release", "finance.read"])).toEqual([]);
+    expect(navigationFor(["payout.release"])).toEqual([]);
+    expect(navigationFor(["finance.read"]).map((entry) => entry.href)).toEqual(["/finance"]);
   });
 
   it("draws nothing at all for an empty permission list", () => {
