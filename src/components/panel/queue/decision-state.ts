@@ -18,7 +18,7 @@ export interface DecisionState {
    * message belongs to the form as a whole — a backend refusal, say, which is
    * nobody's typo.
    */
-  readonly field: "decision" | "note" | null;
+  readonly field: "decision" | "note" | "reason" | null;
   /** `ErrorResult.errorCode`, when the backend produced one. */
   readonly errorCode: string | null;
   /** The backend's request id — the only handle on the matching log line. */

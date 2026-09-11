@@ -189,6 +189,13 @@ export const ROUTES = [
     nav: { label: "Şirket onayları", order: 30, group: "operasyon" },
   },
   {
+    path: "/identity-reviews",
+    title: "Kimlik incelemeleri",
+    access: "permission",
+    permission: "identity.review",
+    nav: { label: "Kimlik incelemeleri", order: 35, group: "operasyon" },
+  },
+  {
     /**
      * The queue *and* the detail *and* the escrow operations, on one path.
      * There is no `GET /admin/disputes/{id}` to build a detail route on — see
