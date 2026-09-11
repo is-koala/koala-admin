@@ -358,6 +358,18 @@ describe("the decision", () => {
     expect(html).toContain("Bu karar içeriği kaldırmaz ve hesabı kapatmaz");
     expect(html).not.toContain("henüz yok");
     expect(html).not.toContain("kapsam dışı");
+    expect(html).not.toContain("Görseli kaldır");
+  });
+
+  it("offers image removal only when the report names an IMAGE target", async () => {
+    stubMe(MODERATOR);
+    watchQueue([row({ imageId: "cccccccc-0000-4000-8000-000000000003" })]);
+
+    const html = await render();
+
+    expect(html).toContain("Görseli kaldır");
+    expect(html).toContain("cccccccc-0000-4000-8000-000000000003");
+    expect(html).not.toContain("henüz yok");
   });
 });
 

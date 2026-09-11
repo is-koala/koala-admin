@@ -44,6 +44,7 @@ import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { submitReportReview } from "./actions";
+import { ImageRemovalForm } from "./image-removal-form";
 
 export const metadata: Metadata = { title: "Şikayetler" };
 
@@ -357,6 +358,10 @@ function ReportDetail({ report, repeatsOnPage }: { report: Report; repeatsOnPage
           disabledReason={`Bu şikayet "${reportStatusLabel(report.status)}" olarak sonuçlandırılmış. Backend sonuçlanmış bir şikayeti tekrar sonuçlandırmıyor (409).`}
           followUp={<FollowUp hasImageTarget={hasImageTarget} />}
         />
+
+        {hasImageTarget && report.imageId !== null ? (
+          <ImageRemovalForm imageId={report.imageId} />
+        ) : null}
       </div>
     </details>
   );
@@ -374,7 +379,7 @@ function FollowUp({ hasImageTarget }: { hasImageTarget: boolean }) {
   return (
     <p className="text-sm text-ink-muted">
       {hasImageTarget
-        ? "Bu karar görseli silmez ve hesabı kapatmaz. Karar denetim kaydına düşer."
+        ? "Bu karar görseli kendiliğinden silmez ve hesabı kapatmaz. Görseli aşağıdan kaldırabilirsiniz."
         : "Bu karar içeriği kaldırmaz ve hesabı kapatmaz. Karar denetim kaydına düşer."}
     </p>
   );
