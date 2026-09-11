@@ -187,6 +187,18 @@ export const ROUTES = [
   },
   {
     /**
+     * koala-admin#49. Liste ucu yok; bakış UUID ile. Uç `payment.read` ister,
+     * uyuşmazlık kuyruğu `dispute.resolve` — FINANCE_ANALYST atamayı buradan
+     * açar. Fetch kapının içinde: izni olmayan kişide GET hiç çıkmaz.
+     */
+    path: "/assignments",
+    title: "Atama özeti",
+    access: "permission",
+    permission: "payment.read",
+    nav: { label: "Atama özeti", order: 45 },
+  },
+  {
+    /**
      * koala-admin#48. Bekleyen doğrulamaları listeleyen uç yok; referans
      * ekstre açıklamasından gelir. Kapı `bank.account.verify` — yazım da aynı
      * izin, ve Server Action onu `guardDecision` ile yeniden çözer.
