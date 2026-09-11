@@ -187,6 +187,18 @@ export const ROUTES = [
   },
   {
     /**
+     * koala-admin#50. Toplu finans raporu `finance.read`; tekil atama
+     * `payment.read` (#49), emanet `dispute.resolve`. Fetch kapının içinde:
+     * DISPUTE_HANDLER menüde görmez ve GET çıkmaz.
+     */
+    path: "/finance",
+    title: "Finans özeti",
+    access: "permission",
+    permission: "finance.read",
+    nav: { label: "Finans özeti", order: 43 },
+  },
+  {
+    /**
      * koala-admin#49. Liste ucu yok; bakış UUID ile. Uç `payment.read` ister,
      * uyuşmazlık kuyruğu `dispute.resolve` — FINANCE_ANALYST atamayı buradan
      * açar. Fetch kapının içinde: izni olmayan kişide GET hiç çıkmaz.
