@@ -30,7 +30,6 @@ import {
   formatPercent,
 } from "@/lib/format";
 import {
-  ACTIVE_DISPUTE_STATUSES,
   DISPUTE_PAGING,
   DISPUTE_RESOLUTION_SPECS,
   getDisputeEvidence,
@@ -88,29 +87,21 @@ export const metadata: Metadata = { title: "Uyuşmazlıklar" };
  */
 
 /**
- * `?durum=` — the queue filter.
+ * `?durum=` — the queue filter, sent to the backend as `status`.
  *
- * Only the two statuses the list endpoint can return. `RESOLVED` is absent on
- * purpose: `DisputeManager.getPending` filters on `ACTIVE`, so a "Resolved" tab
- * would be a control that is always empty and always misleading. The
- * `satisfies` below fails the build if the backend's active set ever changes
- * without this list changing with it.
+ * `ALL` omits the parameter so the pending queue (OPEN + UNDER_REVIEW) is
+ * unchanged. `RESOLVED` pages closed records; DISMISSED is a resolution on
+ * those rows, not a fourth list status.
  */
-const STATUS_FILTERS = ["ALL", "OPEN", "UNDER_REVIEW"] as const satisfies readonly [
-  "ALL",
-  ...DisputeStatus[],
-];
+const STATUS_FILTERS = ["ALL", "OPEN", "UNDER_REVIEW", "RESOLVED"] as const;
 
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
-const _FILTERS_COVER_ACTIVE: Record<(typeof ACTIVE_DISPUTE_STATUSES)[number], StatusFilter> = {
-  OPEN: "OPEN",
-  UNDER_REVIEW: "UNDER_REVIEW",
-};
 const FILTER_LABELS: Record<StatusFilter, string> = {
-  ALL: "Tümü",
+  ALL: "Bekleyenler",
   OPEN: "Açık",
   UNDER_REVIEW: "İncelemede",
+  RESOLVED: "Çözüldü",
 };
 
 const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
@@ -156,9 +147,11 @@ export default async function DisputesPage({ searchParams }: PageProps) {
         title="Uyuşmazlıklar ve emanet"
         description={
           <>
-            Açık uyuşmazlıkları çözer ve emanetteki parayı işçiye çıkarır ya da işverene iade eder.{" "}
-            <code className="font-mono">dispute.resolve</code> izni gerektirir. Para taşıyan her yol
-            ayrıca <code className="font-mono">payment.read</code> ile birlikte yönüne göre{" "}
+            Açık ve çözülmüş uyuşmazlıkları sayfalar, emanetteki parayı işçiye çıkarır ya da
+            işverene iade eder. <code className="font-mono">dispute.resolve</code> izni
+            gerektirir. Tutarlar atama özetinden okunur ({" "}
+            <code className="font-mono">payment.read</code>
+            ). Para taşıyan her yol ayrıca yönüne göre{" "}
             <code className="font-mono">payout.release</code> ya da{" "}
             <code className="font-mono">payment.refund</code> ister.
           </>
@@ -193,9 +186,14 @@ type QueueResult =
 async function loadQueue(
   accessToken: string,
   paging: { page: number; size: number },
+  filter: StatusFilter,
 ): Promise<QueueResult> {
   try {
-    const page = await getDisputes(accessToken, { page: paging.page, size: paging.size });
+    const page = await getDisputes(accessToken, {
+      page: paging.page,
+      size: paging.size,
+      status: filter === "ALL" ? null : filter,
+    });
     return {
       ok: true,
       disputes: page.content,
@@ -321,7 +319,7 @@ interface WorkspaceProps {
 async function DisputeWorkspace({ filter, selectedId, paging }: WorkspaceProps) {
   const context = await getStaffContext();
   const accessToken = await getKoalaAccessToken();
-  const queue = await loadQueue(accessToken, paging);
+  const queue = await loadQueue(accessToken, paging, filter);
 
   if (!queue.ok) {
     return (
@@ -337,8 +335,7 @@ async function DisputeWorkspace({ filter, selectedId, paging }: WorkspaceProps) 
     );
   }
 
-  const visible =
-    filter === "ALL" ? queue.disputes : queue.disputes.filter((d) => d.status === filter);
+  const visible = queue.disputes;
   const selected = queue.disputes.find((dispute) => dispute.id === selectedId) ?? null;
   const canReadSummaries = context.has("payment.read");
   const [summaries, evidence] = await Promise.all([
@@ -365,7 +362,7 @@ async function DisputeWorkspace({ filter, selectedId, paging }: WorkspaceProps) 
         <ErrorState
           title="Emanet tutarları okunamıyor, bu yüzden para işlemleri kapalı."
           description={
-            "Uyuşmazlık kaydı tutar taşımıyor (DisputeDto'da tutar alanı yoktur), tutarlar ayrı bir okumadan gelir ve backend bu okumayı şu an vermiyor. Panel tutar uydurmayacağı için release/refund düğmeleri açılmadı; karar formunda yalnız emanete dokunmayan seçenek kullanılabilir. " +
+            "Uyuşmazlık kaydı tutar taşımaz; emanet rakamları GET /admin/job-assignments/{id} üzerinden payment.read ile okunur. Panel tutar uydurmayacağı için release/refund düğmeleri açılmadı; karar formunda yalnız emanete dokunmayan seçenek kullanılabilir. " +
             (summaryFailureDetail(summaries) ?? "")
           }
           errorCode="ESCROW_SUMMARY_UNAVAILABLE"
@@ -378,10 +375,10 @@ async function DisputeWorkspace({ filter, selectedId, paging }: WorkspaceProps) 
             Kuyruk
           </h2>
           <p className="max-w-prose text-xs text-ink-muted">
-            <code className="font-mono">GET /admin/disputes</code> yalnız <em>etkin</em>{" "}
-            uyuşmazlıkları döner (OPEN ve UNDER_REVIEW); ucun bir durum parametresi yoktur ve
-            çözülmüş bir uyuşmazlık bu uçtan hiç gelmez. Aşağıdaki süzgeç bu yüzden yüklenen
-            sayfanın üstünde çalışır, sunucuda değil.
+            <code className="font-mono">GET /admin/disputes</code> durum verilmezse bekleyen
+            kuyruğu (OPEN ve UNDER_REVIEW) döner. Çözüldü süzgeci kapalı kayıtları sayfalar;
+            DISMISSED bir çözüm türüdür, ayrı bir kuyruk durumu değildir. Tutarlar atama
+            özetinden gelir.
           </p>
         </div>
 
@@ -408,27 +405,24 @@ async function DisputeWorkspace({ filter, selectedId, paging }: WorkspaceProps) 
         {visible.length === 0 ? (
           <EmptyState
             title={
-              queue.disputes.length === 0
-                ? "Açık uyuşmazlık yok."
-                : "Bu süzgeçle eşleşen uyuşmazlık yok."
+              filter === "ALL"
+                ? "Bekleyen uyuşmazlık yok."
+                : `${FILTER_LABELS[filter]} durumunda uyuşmazlık yok.`
             }
             description={
-              queue.disputes.length === 0
+              filter === "ALL"
                 ? "Emanetteki hiçbir ödeme bir uyuşmazlık tarafından bloke edilmiyor."
-                : `Yüklenen ${formatInteger(queue.disputes.length)} kayıt arasında ${FILTER_LABELS[filter]} durumunda olan yok.`
+                : "Başka bir durum seçebilir ya da kuyruğu daha sonra yenileyebilirsiniz."
             }
           />
         ) : (
           <>
             <p className="text-sm text-ink-muted">
               Bu sayfada {formatInteger(visible.length)} kayıt
-              {filter === "ALL"
-                ? ""
-                : ` (${FILTER_LABELS[filter]} süzgeci, yüklenen ${formatInteger(queue.disputes.length)} satırın üstünde)`}
-              .
+              {filter === "ALL" ? "" : ` (${FILTER_LABELS[filter]})`}.
             </p>
 
-            <Table caption="Etkin uyuşmazlıklar">
+            <Table caption={filter === "RESOLVED" ? "Çözülmüş uyuşmazlıklar" : "Etkin uyuşmazlıklar"}>
               <TableHead>
                 <TableRow>
                   <TableHeaderCell>Durum</TableHeaderCell>
@@ -594,6 +588,21 @@ function DisputeDetail({ dispute, entry, evidence, permissions }: DetailProps) {
             label="Atama"
             value={<span className="font-mono text-xs">{dispute.jobAssignmentId}</span>}
           />
+          {dispute.status === "RESOLVED" ? (
+            <>
+              <Row
+                label="Kayıtlı çözüm"
+                value={
+                  dispute.resolution === null
+                    ? "—"
+                    : (DISPUTE_RESOLUTION_SPECS.find((spec) => spec.resolution === dispute.resolution)
+                        ?.label ?? dispute.resolution)
+                }
+              />
+              <Row label="Karar gerekçesi" value={dispute.resolutionNote ?? "—"} />
+              <Row label="Çözüm zamanı" value={formatDateTime(dispute.resolvedAt)} />
+            </>
+          ) : null}
           {summary === null ? null : (
             <>
               <Row label="İş" value={summary.jobTitle ?? "—"} />
@@ -661,6 +670,12 @@ function DisputeDetail({ dispute, entry, evidence, permissions }: DetailProps) {
       <div className="flex flex-col gap-6 rounded-lg border border-border-strong bg-surface p-4">
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">Uyuşmazlığı çöz</h3>
+          {dispute.status === "RESOLVED" ? (
+            <p className="max-w-prose text-sm text-ink-muted">
+              Bu uyuşmazlık kapanmış. Backend ikinci bir çözümü 409 ile reddeder.
+            </p>
+          ) : (
+            <>
           <p className="max-w-prose text-xs text-ink-muted">
             <code className="font-mono">POST /admin/disputes/{"{id}"}/resolve</code>. Karar{" "}
             <code className="font-mono">RELEASE_TO_WORKER</code> ise para aynı istekte işçiye çıkar,{" "}
@@ -684,6 +699,8 @@ function DisputeDetail({ dispute, entry, evidence, permissions }: DetailProps) {
             choices={choices}
             notice={RESOLVE_PERMISSION_NOTICE}
           />
+            </>
+          )}
         </div>
 
         <div className="grid gap-6 border-t border-border-subtle pt-6 md:grid-cols-2">

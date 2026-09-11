@@ -81,15 +81,20 @@ function stubMe(permissions: readonly string[], roles: readonly string[]) {
 /** Counts every call to the queue endpoint, whatever the gate decided. */
 function watchDisputes(respond: () => Response = queuePage) {
   let calls = 0;
+  let url: URL | null = null;
   server.use(
-    http.get(DISPUTES, () => {
+    http.get(DISPUTES, ({ request }) => {
       calls += 1;
+      url = new URL(request.url);
       return respond();
     }),
   );
   return {
     get calls() {
       return calls;
+    },
+    get url() {
+      return url;
     },
   };
 }
@@ -289,6 +294,7 @@ describe("an OWNER on the queue", () => {
     const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
 
     expect(disputes.calls).toBe(1);
+    expect(disputes.url?.searchParams.has("status")).toBe(false);
     expect(evidence.calls).toBe(0);
     expect(html).toContain("Etkin uyuşmazlıklar");
     expect(html).toContain("Ayşe Yılmaz");
@@ -298,7 +304,7 @@ describe("an OWNER on the queue", () => {
     expect(html).toContain("05.09.2026");
   });
 
-  it("offers only the statuses the endpoint can return, and says why", async () => {
+  it("sends status to the backend, including the closed archive", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes();
     watchSummary();
@@ -307,21 +313,24 @@ describe("an OWNER on the queue", () => {
 
     expect(html).toContain("Açık");
     expect(html).toContain("İncelemede");
-    // No "Çözüldü" filter: GET /admin/disputes never returns a resolved one.
-    expect(html).not.toContain(">Çözüldü<");
-    expect(html).toContain("yalnız <em>etkin</em>");
+    expect(html).toContain("Çözüldü");
+    expect(html).toContain("Bekleyenler");
+    expect(html).toContain("durum verilmezse bekleyen");
+    expect(html).not.toContain("ucun bir durum parametresi yoktur");
+    expect(html).not.toContain("DTO'da tutar alanı yoktur");
   });
 
-  it("filters the loaded page by status", async () => {
+  it("asks the backend for UNDER_REVIEW instead of filtering the loaded page", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
-    watchDisputes();
+    const disputes = watchDisputes(emptyQueue);
     watchSummary();
 
     const html = await renderServerComponent(
       <DisputesPage searchParams={params({ durum: "UNDER_REVIEW" })} />,
     );
 
-    expect(html).toContain("Bu süzgeçle eşleşen uyuşmazlık yok.");
+    expect(disputes.url?.searchParams.get("status")).toBe("UNDER_REVIEW");
+    expect(html).toContain("İncelemede durumunda uyuşmazlık yok.");
   });
 
   it("pages through GET /admin/disputes instead of truncating the first slice", async () => {
@@ -369,7 +378,7 @@ describe("an OWNER on the queue", () => {
 
     const html = await renderServerComponent(<DisputesPage searchParams={params()} />);
 
-    expect(html).toContain("Açık uyuşmazlık yok.");
+    expect(html).toContain("Bekleyen uyuşmazlık yok.");
   });
 });
 

@@ -17,13 +17,11 @@ import { z } from "zod";
  * Two things about the real endpoint that the issue body does not say, and that
  * every screen above this module has to be built around:
  *
- *  1. **`GET /admin/disputes` returns only the *active* ones.** The handler is
- *     `disputeService.getPending(pageable)` and `DisputeManager.getPending`
- *     filters on `DisputeManager.ACTIVE = [OPEN, UNDER_REVIEW]`. There is no
- *     `status` query parameter, and a `RESOLVED` dispute is not reachable
- *     through this endpoint at all. So the queue's status filter can only ever
- *     narrow OPEN vs UNDER_REVIEW, and the screen says so rather than offering
- *     a "Resolved" tab that would always be empty.
+ *  1. **`GET /admin/disputes` is pending unless `status` is sent.** Omit the
+ *     parameter and `DisputeManager.searchForStaff` returns OPEN +
+ *     UNDER_REVIEW. `status=RESOLVED` pages closed records, including those
+ *     whose resolution is DISMISSED. There is no `audit.read`; the list stays
+ *     on `dispute.resolve`.
  *  2. **It is gated by `dispute.resolve`, not by a read permission.**
  *     `@RequiresPermission(StaffPermission.DISPUTE_RESOLVE)` sits on the list
  *     handler too, so there is no read-only view of the queue to give someone.
@@ -53,9 +51,8 @@ export const DISPUTE_STATUSES = ["OPEN", "UNDER_REVIEW", "RESOLVED"] as const;
 export type DisputeStatus = (typeof DISPUTE_STATUSES)[number];
 
 /**
- * `DisputeManager.ACTIVE` — the only two the list endpoint can return.
- * Exported so the queue's filter is derived from the backend's rule instead of
- * repeating it.
+ * `DisputeManager.ACTIVE` — the statuses returned when `status` is omitted.
+ * Home counts this pending queue, not the closed archive.
  */
 export const ACTIVE_DISPUTE_STATUSES = [
   "OPEN",
@@ -186,15 +183,18 @@ export interface DisputeQuery {
   page?: number;
   /** `PageableSanitizer.MAX_PAGE_SIZE` is 100; anything larger is silently clamped. */
   size?: number;
+  /**
+   * Omit to keep the pending queue. `RESOLVED` includes DISMISSED
+   * resolutions; DISMISSED itself is not a list status.
+   */
+  status?: DisputeStatus | null;
 }
 
 /**
  * The queue.
  *
- * No `status` parameter is sent, because the endpoint has none — passing one
- * would be quietly ignored by Spring and would make the screen's filter look
- * server-side when it is not. The caller filters the page it was given and says
- * so on screen.
+ * `status` is omitted for the pending default so Spring does not receive a
+ * dummy value. A concrete status is forwarded as a query parameter.
  */
 export function getDisputes(
   accessToken: string,
@@ -203,7 +203,11 @@ export function getDisputes(
   return koalaApi.get({
     path: DISPUTES_PATH,
     schema: pageDtoSchema(disputeSchema),
-    query: { page: query.page ?? 0, size: query.size ?? DISPUTE_PAGING.defaultSize ?? 25 },
+    query: {
+      page: query.page ?? 0,
+      size: query.size ?? DISPUTE_PAGING.defaultSize ?? 25,
+      ...(query.status ? { status: query.status } : {}),
+    },
     accessToken,
     cache: "no-store",
   });

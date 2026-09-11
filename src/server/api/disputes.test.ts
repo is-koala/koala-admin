@@ -19,10 +19,10 @@ import { isKoalaApiError } from "./errors";
 /**
  * `webAPI/DisputesController.java`, pinned.
  *
- * The two facts worth a test rather than a comment: the list endpoint takes no
- * status parameter (so the panel must not pretend to send one), and the
- * resolution enum is closed (so an unknown value fails at the boundary instead
- * of reaching a screen that decides whether money moved).
+ * The two facts worth a test rather than a comment: omitting `status` keeps
+ * the pending queue, a concrete status is forwarded, and the resolution enum
+ * is closed (so an unknown value fails at the boundary instead of reaching a
+ * screen that decides whether money moved).
  */
 
 const DISPUTE_ID = "d1000000-0000-4c00-8000-000000000001";
@@ -61,7 +61,7 @@ function pageEnvelope(content: unknown[]) {
 }
 
 describe("the queue endpoint", () => {
-  it("asks for a page and nothing else — there is no status parameter to send", async () => {
+  it("asks for a page and omits status so the pending queue stays the default", async () => {
     let url: URL | null = null;
 
     server.use(
@@ -80,7 +80,24 @@ describe("the queue endpoint", () => {
     expect(page.content[0]?.openedBy?.firstName).toBe("Ayşe");
   });
 
-  it("mirrors DisputeManager.ACTIVE — the only statuses the endpoint can return", () => {
+  it("forwards a selected status so closed rows can be paged", async () => {
+    let url: URL | null = null;
+
+    server.use(
+      http.get(apiUrl(DISPUTES_PATH), ({ request }) => {
+        url = new URL(request.url);
+        return HttpResponse.json(pageEnvelope([{ ...DISPUTE, status: "RESOLVED" }]));
+      }),
+    );
+
+    await getDisputes("ACCESS-TOKEN", { status: "RESOLVED", page: 1, size: 25 });
+
+    expect(url).not.toBeNull();
+    expect((url as unknown as URL).searchParams.get("status")).toBe("RESOLVED");
+    expect((url as unknown as URL).searchParams.get("page")).toBe("1");
+  });
+
+  it("mirrors DisputeManager.ACTIVE — the pending default when status is omitted", () => {
     expect([...ACTIVE_DISPUTE_STATUSES]).toEqual(["OPEN", "UNDER_REVIEW"]);
   });
 
