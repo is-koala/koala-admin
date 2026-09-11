@@ -1,7 +1,12 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { reviewCompany, type CompanyReviewOverrides } from "../../../../test/fixtures/companies";
+import {
+  COMPANY_GALLERY_IMAGE_ID,
+  COMPANY_REVIEW_ID,
+  reviewCompany,
+  type CompanyReviewOverrides,
+} from "../../../../test/fixtures/companies";
 import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
@@ -54,8 +59,8 @@ function company(overrides: CompanyReviewOverrides = {}) {
             email: "private@koala.test",
             passwordHash: "never-render-this",
           },
-    address: { displayAddress: "must not render" },
     companyContacts: [{ id: "must-not-render" }],
+    images: [{ storageKey: "s3://must-not-render" }],
   };
 }
 
@@ -226,8 +231,32 @@ describe("the safe review projection", () => {
     expect(html).toContain("Vergi levhası okunmuyor.");
     expect(html).not.toContain("private@koala.test");
     expect(html).not.toContain("never-render-this");
-    expect(html).not.toContain("must not render");
     expect(html).not.toContain("must-not-render");
+    expect(html).not.toContain("s3://must-not-render");
+    expect(html).toContain("Caferağa Mah. Moda Cad. No:12, Kadıköy");
+    expect(html).toContain("İstanbul");
+    expect(html).toContain("Kadıköy");
+    expect(html).toContain(
+      `/api/companies/${COMPANY_REVIEW_ID}/images/${COMPANY_GALLERY_IMAGE_ID}/download`,
+    );
+  });
+
+  it("says when a company has no registered address or gallery photos", async () => {
+    stubMe(APPROVER);
+    watchQueue([
+      company({
+        address: null,
+        galleryImageIds: [],
+      }),
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Kayıtlı adres");
+    expect(html).toContain("Galeri");
+    expect(html).toContain("—");
+    expect(html).not.toContain("/api/companies/");
+    expect(html).not.toContain("sözleşmede yoktur");
   });
 
   it("renders explicit fallbacks when optional review metadata is absent", async () => {

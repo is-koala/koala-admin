@@ -60,8 +60,8 @@ export default async function CompaniesPage({
         title="Şirket onay kuyruğu"
         description={
           <>
-            Şirket başvurularını ara, incele, onayla ya da gerekçesiyle reddet. Liste ve kararlar
-            yalnız sunucuda Koala API&apos;sine gider;{" "}
+            Şirket başvurularını ara, kayıtlı adres ve galeri fotoğraflarıyla incele, onayla ya da
+            gerekçesiyle reddet. Liste ve kararlar yalnız sunucuda Koala API&apos;sine gider;{" "}
             <code className="font-mono">company.approve</code> izni hem panelde hem backend&apos;de
             yeniden denetlenir.
           </>
@@ -279,6 +279,49 @@ function ApprovalStatusBadge({ status }: { status: string }) {
   return <Badge tone={tone}>{companyApprovalStatusLabel(status)}</Badge>;
 }
 
+function CompanyAddress({ address }: { address: CompanyReview["address"] }) {
+  if (address === null) {
+    return EMPTY_VALUE;
+  }
+
+  const locality = [address.districtName, address.cityName, address.countryName]
+    .filter((part): part is string => part !== null && part.length > 0)
+    .join(" · ");
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span>{address.displayAddress ?? EMPTY_VALUE}</span>
+      {locality.length > 0 ? <span className="text-ink-muted">{locality}</span> : null}
+    </div>
+  );
+}
+
+function CompanyGallery({ companyId, imageIds }: { companyId: string; imageIds: readonly string[] }) {
+  if (imageIds.length === 0) {
+    return <span className="text-sm">{EMPTY_VALUE}</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-3">
+      {imageIds.map((imageId, index) => (
+        <figure key={imageId} className="flex w-40 flex-col gap-1.5">
+          <figcaption className="text-xs font-medium text-ink-muted">Fotoğraf {index + 1}</figcaption>
+          {/* eslint-disable-next-line @next/next/no-img-element -- same-origin BFF personel çerezini ister; next/image göndermez. */}
+          <img
+            src={companyGallerySrc(companyId, imageId)}
+            alt={`${index + 1}. galeri fotoğrafı`}
+            className="h-40 w-full rounded-lg border border-border-subtle bg-surface-sunken object-cover"
+          />
+        </figure>
+      ))}
+    </div>
+  );
+}
+
+function companyGallerySrc(companyId: string, imageId: string): string {
+  return `/api/companies/${encodeURIComponent(companyId)}/images/${encodeURIComponent(imageId)}/download`;
+}
+
 function CompanyDetail({ company, returnTo }: { company: CompanyReview; returnTo: string }) {
   const creator = company.createdBy;
 
@@ -312,6 +355,16 @@ function CompanyDetail({ company, returnTo }: { company: CompanyReview; returnTo
 
           <dt className="text-sm text-ink-muted">Telefon</dt>
           <dd className="text-sm">{company.phoneNumber ?? EMPTY_VALUE}</dd>
+
+          <dt className="text-sm text-ink-muted">Kayıtlı adres</dt>
+          <dd className="text-sm">
+            <CompanyAddress address={company.address} />
+          </dd>
+
+          <dt className="text-sm text-ink-muted">Galeri</dt>
+          <dd>
+            <CompanyGallery companyId={company.id} imageIds={company.galleryImageIds} />
+          </dd>
 
           <dt className="text-sm text-ink-muted">Oluşturan</dt>
           <dd className="text-sm">

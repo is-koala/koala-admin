@@ -1,6 +1,7 @@
 import type { CompanyReview } from "../../src/server/api/companies";
 
 export const COMPANY_REVIEW_ID = "9c000000-0000-4000-8000-000000000001";
+export const COMPANY_GALLERY_IMAGE_ID = "a1000000-0000-4000-8000-0000000000aa";
 
 export type CompanyReviewOverrides = Partial<CompanyReview>;
 
@@ -25,6 +26,13 @@ export function reviewCompany(overrides: CompanyReviewOverrides = {}): CompanyRe
       username: "ayse",
       profilePictureUrl: null,
     },
+    address: {
+      displayAddress: "Caferağa Mah. Moda Cad. No:12, Kadıköy",
+      countryName: "Türkiye",
+      cityName: "İstanbul",
+      districtName: "Kadıköy",
+    },
+    galleryImageIds: [COMPANY_GALLERY_IMAGE_ID],
     ...overrides,
   };
 }

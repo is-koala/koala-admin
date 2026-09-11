@@ -344,6 +344,12 @@ export const ROUTE_HANDLERS = [
     access: "permission",
     permission: "identity.review",
   },
+  {
+    path: "/api/companies/[companyId]/images/[imageId]/download",
+    title: "Şirket galeri fotoğrafı",
+    access: "permission",
+    permission: "company.approve",
+  },
 ] as const satisfies readonly (RouteIdentity & RouteGate)[];
 
 export type RouteHandlerEntry = (typeof ROUTE_HANDLERS)[number];
