@@ -174,6 +174,18 @@ export const ROUTES = [
   },
   {
     /**
+     * koala-admin#40. Backend `GET/PUT /admin/settings` `settings.manage`
+     * ister; panelin kapısı aynı izin, yoksa OWNER sayı değiştirmek için
+     * veritabanına iner.
+     */
+    path: "/settings",
+    title: "Çalışma zamanı ayarları",
+    access: "permission",
+    permission: "settings.manage",
+    nav: { label: "Ayarlar", order: 60 },
+  },
+  {
+    /**
      * koala-admin#9, rol→izin yarısı. `role.manage`, ve bu izin tek başına
      * `/admin/roles`'un yedi ucunun tamamını açıyor — okumalar dâhil, çünkü
      * backend'de `role.read` diye bir izin yok.
