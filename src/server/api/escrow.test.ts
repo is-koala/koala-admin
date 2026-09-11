@@ -6,9 +6,12 @@ import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment"
 
 import { isKoalaApiError } from "./errors";
 import {
+  ASSIGNMENT_PAGING,
+  ASSIGNMENTS_PATH,
   escrowRefundPath,
   escrowReleasePath,
   escrowSummaryPath,
+  getAdminAssignments,
   getEscrowSummary,
   refundEmployer,
   releaseEscrow,
@@ -172,6 +175,42 @@ describe("refund", () => {
     await refundEmployer("ACCESS-TOKEN", ASSIGNMENT, "x".repeat(513));
 
     expect(body?.reason).toHaveLength(513);
+  });
+});
+
+describe("the assignment list", () => {
+  it("pages GET /admin/job-assignments with the staff default sort", async () => {
+    let url: URL | null = null;
+    server.use(
+      http.get(apiUrl(ASSIGNMENTS_PATH), ({ request }) => {
+        url = new URL(request.url);
+        return HttpResponse.json({
+          ...envelope(ASSIGNMENTS_PATH, {
+            content: [SUMMARY],
+            page: 0,
+            size: 20,
+            totalElements: 1,
+            totalPages: 1,
+            first: true,
+            last: true,
+          }),
+        });
+      }),
+    );
+
+    const page = await getAdminAssignments("ACCESS-TOKEN", {
+      page: 0,
+      size: 20,
+      sort: ASSIGNMENT_PAGING.defaultSort,
+    });
+
+    expect(url).not.toBeNull();
+    const params = url as unknown as URL;
+    expect(params.pathname.endsWith("/admin/job-assignments")).toBe(true);
+    expect(params.searchParams.get("sort")).toBe("createdAt,desc");
+    expect(page.content[0]?.id).toBe(ASSIGNMENT);
+    expect(page.content[0]?.pricing.employerTotal).toBe("1378.33");
+    expect(page.content[0]).not.toHaveProperty("email");
   });
 });
 

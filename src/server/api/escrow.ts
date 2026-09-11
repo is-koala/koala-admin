@@ -1,7 +1,9 @@
 import "server-only";
 
 import { koalaApi, koalaRequestNoData } from "./koala";
-import type { KoalaResultMeta } from "./types";
+import { pagingQuery, type Paging, type PagingContract } from "./paging";
+import { pageDtoSchema } from "./schemas";
+import type { KoalaResultMeta, PageDto } from "./types";
 import { safeUserSchema } from "./users";
 
 import { z } from "zod";
@@ -101,8 +103,16 @@ export type Money = z.infer<typeof moneySchema>;
 /* The read surface                                                            */
 /* -------------------------------------------------------------------------- */
 
+export const ASSIGNMENTS_PATH = "/admin/job-assignments";
+
+/** `JobAssignmentManager.ADMIN_LIST_SORTABLE` / default `createdAt,desc`. */
+export const ASSIGNMENT_PAGING: PagingContract = {
+  sortable: ["createdAt", "assignmentDateTime", "status", "paymentStatus"],
+  defaultSort: { field: "createdAt", direction: "desc" },
+};
+
 export function escrowSummaryPath(assignmentId: string): string {
-  return `/admin/job-assignments/${encodeURIComponent(assignmentId)}`;
+  return `${ASSIGNMENTS_PATH}/${encodeURIComponent(assignmentId)}`;
 }
 
 /** `PricingBreakdownDto`, kept nested exactly as the backend returns it. */
@@ -132,7 +142,7 @@ export const escrowSummarySchema = z.object({
   employer: safeUserSchema,
   status: z.enum(ASSIGNMENT_STATUSES),
   paymentStatus: z.enum(PAYMENT_STATUSES),
-  assignmentDateTime: z.string(),
+  assignmentDateTime: nullableString,
   actualCompletionDateTime: nullableString,
   workHours: z.number().int(),
   pricing: pricingBreakdownSchema,
@@ -147,6 +157,19 @@ export function getEscrowSummary(
   return koalaApi.get({
     path: escrowSummaryPath(assignmentId),
     schema: escrowSummarySchema,
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+export function getAdminAssignments(
+  accessToken: string,
+  paging: Paging,
+): Promise<PageDto<EscrowSummary>> {
+  return koalaApi.get({
+    path: ASSIGNMENTS_PATH,
+    schema: pageDtoSchema(escrowSummarySchema),
+    query: pagingQuery(paging),
     accessToken,
     cache: "no-store",
   });
