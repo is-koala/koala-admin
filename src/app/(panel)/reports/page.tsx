@@ -28,7 +28,6 @@ import {
   type SearchParams,
 } from "@/server/api/paging";
 import {
-  REPORT_BACKEND_GAPS,
   REPORT_PAGING,
   REPORT_STATUSES,
   REVIEW_MIN_NOTE_LENGTH,
@@ -145,15 +144,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
         },
       ]}
       carry={{ boyut: String(paging.size) }}
-      notice={
-        <>
-          Durum ve sıralama sunucuya gider; gelen sayfa panelde süzülmez.{" "}
-          <strong>Şikayet türüne, gerekçeye ya da şikayet edene göre süzme yok</strong> — bunları
-          süzecek bir parametre <code className="font-mono">GET /admin/reports</code> üzerinde
-          bulunmuyor. Ayrıntı için aşağıdaki &quot;Backend&apos;in veremedikleri&quot; bölümüne
-          bakın.
-        </>
-      }
+      notice="Durum ve sıralama kuyruğu süzer. Gelen sayfa panelde yeniden süzülmez."
     />
   );
 
@@ -169,7 +160,6 @@ async function ReportQueue({ params }: { params: SearchParams }) {
           permission="content.moderate"
           failure={classifyQueueFailure(error)}
         />
-        <BackendGaps />
       </div>
     );
   }
@@ -263,8 +253,6 @@ async function ReportQueue({ params }: { params: SearchParams }) {
           </section>
         </>
       )}
-
-      <BackendGaps />
     </div>
   );
 }
@@ -342,24 +330,7 @@ function ReportDetail({ report, repeatsOnPage }: { report: Report; repeatsOnPage
           </dd>
 
           <dt className="text-sm text-ink-muted">Şikayet eden</dt>
-          <dd className="text-sm text-ink-muted">
-            Backend döndürmüyor. <code className="font-mono">Report.reporter</code> veritabanında
-            var, <code className="font-mono">ReportDto</code> içinde yok.
-          </dd>
-
-          <dt className="text-sm text-ink-muted">Geçmiş şikayet sayısı</dt>
-          <dd className="text-sm text-ink-muted">
-            Bilinmiyor. Şikayet edilene göre süzen bir uç ya da bir sayaç alanı yok; bu yüzden panel
-            bir sayı uydurmuyor.
-            {repeatsOnPage > 1 ? (
-              <>
-                {" "}
-                Yalnızca şu kadarını söyleyebilir: <strong>bu sayfada</strong> aynı kullanıcı
-                hakkında {formatInteger(repeatsOnPage)} kayıt var. Bu, kuyruğun tamamı için bir
-                toplam değildir.
-              </>
-            ) : null}
-          </dd>
+          <dd className="text-sm">{EMPTY_VALUE}</dd>
 
           {report.reviewNote === null && report.reviewedAt === null ? null : (
             <>
@@ -378,7 +349,7 @@ function ReportDetail({ report, repeatsOnPage }: { report: Report; repeatsOnPage
           options={decisionOptions()}
           legend="Karar"
           noteLabel="Karar gerekçesi"
-          noteHint={`En az ${REVIEW_MIN_NOTE_LENGTH} karakter. Backend boş not kabul ediyor; bu kural panelin.`}
+          noteHint={`En az ${REVIEW_MIN_NOTE_LENGTH} karakter.`}
           submitLabel="Kararı gönder"
           minNoteLength={REVIEW_MIN_NOTE_LENGTH}
           idPrefix={`sikayet-${report.id}`}
@@ -401,64 +372,10 @@ function ReportDetail({ report, repeatsOnPage }: { report: Report; repeatsOnPage
  */
 function FollowUp({ hasImageTarget }: { hasImageTarget: boolean }) {
   return (
-    <div className="flex flex-col gap-1">
-      <p className="font-medium text-ink">Karardan sonra:</p>
-      <ul className="list-disc pl-5">
-        <li>
-          <strong>Kullanıcı askıya alma / yasaklama:</strong> koala-backend&apos;de böyle bir uç
-          yok. Bu karar kimseyi askıya almaz; kapsam dışı.
-        </li>
-        <li>
-          <strong>İçerik kaldırma:</strong>{" "}
-          {hasImageTarget ? (
-            <>
-              görseller için{" "}
-              <code className="font-mono">DELETE /admin/images/&#123;imageId&#125;</code> ucu var
-              (aynı <code className="font-mono">content.moderate</code> izni). Panelde bu işlemin
-              ekranı henüz yok; şimdilik ayrı olarak yürütülmeli.
-            </>
-          ) : (
-            <>
-              ilan ve mesaj kaldıran bir uç yok; yalnızca görseller için{" "}
-              <code className="font-mono">DELETE /admin/images/&#123;imageId&#125;</code> var. Bu
-              şikayetin hedefi görsel olmadığı için uygulanabilir bir kaldırma adımı yok.
-            </>
-          )}
-        </li>
-        <li>
-          <strong>Denetim kaydı:</strong> karar backend tarafında kaydedilir (koala-backend#15).
-          Panel ayrı bir kayıt tutmaz.
-        </li>
-      </ul>
-    </div>
-  );
-}
-
-/**
- * The gaps, on the screen rather than only in a hand-off note.
- *
- * An operator who cannot find a "filter by reported user" control needs to know
- * it does not exist, not keep looking for it — and the list doubles as the
- * backlog for whoever picks up the backend side.
- */
-function BackendGaps() {
-  return (
-    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3">
-      <h2 className="text-sm font-semibold text-ink">
-        Backend&apos;in veremedikleri ({formatInteger(REPORT_BACKEND_GAPS.length)})
-      </h2>
-      <p className="max-w-prose text-xs text-ink-muted">
-        koala-admin#7&apos;nin istediği ama <code className="font-mono">ReportsController</code>
-        &apos;ın bugün karşılayamadığı alanlar. Panel bunları taklit etmiyor.
-      </p>
-      <dl className="flex flex-col gap-2">
-        {REPORT_BACKEND_GAPS.map((gap) => (
-          <div key={gap.id} className="flex flex-col">
-            <dt className="text-sm font-medium text-ink">{gap.title}</dt>
-            <dd className="max-w-prose text-xs text-ink-muted">{gap.detail}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
+    <p className="text-sm text-ink-muted">
+      {hasImageTarget
+        ? "Bu karar görseli silmez ve hesabı kapatmaz. Karar denetim kaydına düşer."
+        : "Bu karar içeriği kaldırmaz ve hesabı kapatmaz. Karar denetim kaydına düşer."}
+    </p>
   );
 }

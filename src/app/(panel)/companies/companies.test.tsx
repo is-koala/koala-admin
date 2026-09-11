@@ -379,25 +379,24 @@ describe("the backend decision state machine", () => {
   });
 });
 
-describe("the review contract is visible", () => {
-  it("does not invent documents or full-company collections", async () => {
+describe("unfinished-work copy stays off the screen", () => {
+  it("does not tell operators which DTO fields are missing", async () => {
     stubMe(APPROVER);
     watchQueue([company()]);
 
     const html = await render();
 
-    expect(html).toContain("İnceleme verisinin sınırı");
-    expect(html).toContain("CompanyReviewDto");
-    expect(html).toContain("belge koleksiyonu bu sözleşmede yoktur");
+    expect(html).not.toContain("İnceleme verisinin sınırı");
+    expect(html).not.toContain("sözleşmede yoktur");
   });
 
-  it("keeps the contract boundary visible when loading fails", async () => {
+  it("still loads a useful error without a contract lecture", async () => {
     stubMe(APPROVER);
     watchQueue([], () => HttpResponse.error());
 
     const html = await render();
 
     expect(html).toContain("Şirket kuyruğu yüklenemedi.");
-    expect(html).toContain("İnceleme verisinin sınırı");
+    expect(html).not.toContain("İnceleme verisinin sınırı");
   });
 });

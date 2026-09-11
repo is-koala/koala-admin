@@ -150,7 +150,6 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
           permission="company.approve"
           failure={classifyQueueFailure(error)}
         />
-        <ReviewContractNotice />
       </div>
     );
   }
@@ -224,8 +223,6 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
       )}
 
       <QueuePager window={pageWindow(page)} state={viewState} unit="şirket" />
-
-      <ReviewContractNotice />
     </div>
   );
 }
@@ -409,18 +406,5 @@ function DecisionDeliveryNotice() {
       <p className="text-sm font-semibold text-ink">Karar kaydı ve bildirim</p>
       <DecisionPersistenceNotice />
     </div>
-  );
-}
-
-function ReviewContractNotice() {
-  return (
-    <section className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3">
-      <h2 className="text-sm font-semibold text-ink">İnceleme verisinin sınırı</h2>
-      <p className="max-w-prose text-xs text-ink-muted">
-        Bu kuyruk yalnız <code className="font-mono">CompanyReviewDto</code> alanlarını gösterir.
-        Adres, galeri, şirket kişileri veya belge koleksiyonu bu sözleşmede yoktur; panel tam şirket
-        kaydını ya da kullanıcı varlığını istemciye taşımaz.
-      </p>
-    </section>
   );
 }

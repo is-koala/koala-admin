@@ -16,7 +16,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
-import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
+import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
 import {
   FINANCE_BRANCH_ROLES,
   TRUST_BRANCH_ROLES,
@@ -38,7 +38,6 @@ import {
   type SearchParams,
 } from "@/server/api/paging";
 import {
-  STAFF_BACKEND_GAPS,
   STAFF_MFA_NOTICE,
   STAFF_PASSWORD_MIN_LENGTH,
   STAFF_PAGING,
@@ -180,7 +179,6 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
           permission="staff.read"
           failure={classifyQueueFailure(error)}
         />
-        <BackendGaps />
       </div>
     );
   }
@@ -319,7 +317,6 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
 
       {canManage ? <CreateStaffSection /> : null}
       <StaffAuditPointer />
-      <BackendGaps />
     </div>
   );
 }
@@ -715,27 +712,5 @@ function StaffAuditPointer() {
       bir yönetim konsolunda <em>tutulamadığını</em> açıkça kayıp yazmıştı; ADR-0014 onu geri
       kazandırdı.
     </AuditPointer>
-  );
-}
-
-function BackendGaps() {
-  return (
-    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3">
-      <h2 className="text-sm font-semibold text-ink">
-        Backend&apos;in veremedikleri ({formatInteger(STAFF_BACKEND_GAPS.length)})
-      </h2>
-      <p className="max-w-prose text-xs text-ink-muted">
-        koala-admin#9&apos;un istediği ama <code className="font-mono">StaffMembersController</code>
-        &apos;ın bugün karşılayamadığı maddeler. Panel bunları taklit etmiyor.
-      </p>
-      <dl className="flex flex-col gap-2">
-        {STAFF_BACKEND_GAPS.map((gap) => (
-          <div key={gap.id} className="flex flex-col">
-            <dt className="text-sm font-medium text-ink">{gap.title}</dt>
-            <dd className="max-w-prose text-xs text-ink-muted">{gap.detail}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
   );
 }

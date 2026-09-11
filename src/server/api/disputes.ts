@@ -3,6 +3,7 @@ import "server-only";
 import type { Permission } from "@/server/authz/permissions";
 
 import { koalaApi } from "./koala";
+import type { PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import type { PageDto } from "./types";
 import { safeUserSchema } from "./users";
@@ -35,6 +36,16 @@ import { z } from "zod";
  */
 
 export const DISPUTES_PATH = "/admin/disputes";
+
+/**
+ * Liste ucu `sort` kabul etmez; `readPaging` yine de `sayfa`/`boyut` için
+ * kullanılır. Varsayılan 25, emanetteki N+1 özet okumasını sınırlamak için.
+ */
+export const DISPUTE_PAGING: PagingContract = {
+  sortable: [],
+  defaultSort: { field: "createdAt", direction: "desc" },
+  defaultSize: 25,
+};
 
 /** `entities/DisputeStatus.java`, member for member. */
 export const DISPUTE_STATUSES = ["OPEN", "UNDER_REVIEW", "RESOLVED"] as const;
@@ -192,7 +203,7 @@ export function getDisputes(
   return koalaApi.get({
     path: DISPUTES_PATH,
     schema: pageDtoSchema(disputeSchema),
-    query: { page: query.page ?? 0, size: query.size ?? 50 },
+    query: { page: query.page ?? 0, size: query.size ?? DISPUTE_PAGING.defaultSize ?? 25 },
     accessToken,
     cache: "no-store",
   });

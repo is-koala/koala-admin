@@ -417,8 +417,7 @@ describe("görev ayrılığı üyelik tarafında: gösteriliyor, uygulanmıyor",
     const html = await render();
 
     expect(html).toContain("Görev ayrılığı burada da gösterilir, uygulanmaz.");
-    expect(html).toContain("Görev ayrılığı üyelik yazımında da uygulanmıyor");
-    expect(html).toContain("koala-backend#133");
+    expect(html).not.toContain("Görev ayrılığı üyelik yazımında da uygulanmıyor");
   });
 });
 
@@ -504,22 +503,15 @@ describe("denetim kaydı ve eksikler", () => {
     expect(html).toContain("permission=staff.manage");
   });
 
-  it("ad ve e-postanın sonradan değiştirilemediğini söylüyor", async () => {
+  it("does not list backend gaps as unfinished work", async () => {
     stubMe(["staff.read"]);
     watchStaff();
 
     const html = await render();
 
-    expect(html).toContain("Ad ve e-posta sonradan değiştirilemiyor");
-  });
-
-  it("parolanın kişiye panel dışından iletilmesi gerektiğini söylüyor", async () => {
-    stubMe(["staff.read"]);
-    watchStaff();
-
-    const html = await render();
-
-    expect(html).toContain("Atanan parolayı kişiye panel iletmiyor");
+    expect(html).not.toContain("Ad ve e-posta sonradan değiştirilemiyor");
+    expect(html).not.toContain("Atanan parolayı kişiye panel iletmiyor");
+    expect(html).not.toContain("Backend&#x27;in veremedikleri");
   });
 
   it("liste okunamadığında sebebi ve eksikleri gösteriyor", async () => {
@@ -545,6 +537,6 @@ describe("denetim kaydı ve eksikler", () => {
     const html = await render();
 
     expect(html).toContain("rid-500");
-    expect(html).toContain("Personel kaydı silinemiyor");
+    expect(html).not.toContain("Personel kaydı silinemiyor");
   });
 });

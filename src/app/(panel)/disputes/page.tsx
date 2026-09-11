@@ -9,6 +9,7 @@ import {
 } from "@/components/escrow/escrow-operation-form";
 import { RecentOperationsList } from "@/components/escrow/recent-operations-list";
 import { PageHeader } from "@/components/panel/page-header";
+import { QueuePager } from "@/components/panel/queue";
 import {
   Badge,
   EmptyState,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/format";
 import {
   ACTIVE_DISPUTE_STATUSES,
+  DISPUTE_PAGING,
   DISPUTE_RESOLUTION_SPECS,
   getDisputeEvidence,
   getDisputes,
@@ -37,6 +39,7 @@ import {
   type DisputeEvidence,
   type DisputeStatus,
 } from "@/server/api/disputes";
+import { pageWindow, readPaging, type PageWindow, type SearchParams } from "@/server/api/paging";
 import { getEscrowSummary, type EscrowSummary } from "@/server/api/escrow";
 import { isKoalaApiError } from "@/server/api/errors";
 import { safeUserName } from "@/server/api/users";
@@ -130,9 +133,6 @@ const PAYMENT_STATUS_TONES: Record<string, BadgeTone> = {
   FAILED: "danger",
 };
 
-/** Bounded on purpose — see `loadSummaries`. */
-const QUEUE_PAGE_SIZE = 25;
-
 /** Derived from the same variant contract the Server Action enforces. */
 const RESOLVE_PERMISSION_NOTICE = DISPUTE_RESOLUTION_SPECS.map((spec) => {
   const permissions = [
@@ -143,11 +143,12 @@ const RESOLVE_PERMISSION_NOTICE = DISPUTE_RESOLUTION_SPECS.map((spec) => {
 }).join("; ");
 
 interface PageProps {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<SearchParams>;
 }
 
 export default async function DisputesPage({ searchParams }: PageProps) {
   const params = await searchParams;
+  const paging = readPaging(params, DISPUTE_PAGING);
 
   return (
     <div className="flex flex-col gap-6">
@@ -168,6 +169,7 @@ export default async function DisputesPage({ searchParams }: PageProps) {
         <DisputeWorkspace
           filter={readFilter(params.durum)}
           selectedId={readSingle(params.uyusmazlik)}
+          paging={paging}
         />
       </RequirePermission>
     </div>
@@ -179,7 +181,7 @@ export default async function DisputesPage({ searchParams }: PageProps) {
 /* -------------------------------------------------------------------------- */
 
 type QueueResult =
-  | { ok: true; disputes: Dispute[]; totalElements: number; truncated: boolean }
+  | { ok: true; disputes: Dispute[]; window: PageWindow }
   | {
       ok: false;
       title: string;
@@ -188,14 +190,16 @@ type QueueResult =
       requestId: string | null;
     };
 
-async function loadQueue(accessToken: string): Promise<QueueResult> {
+async function loadQueue(
+  accessToken: string,
+  paging: { page: number; size: number },
+): Promise<QueueResult> {
   try {
-    const page = await getDisputes(accessToken, { size: QUEUE_PAGE_SIZE });
+    const page = await getDisputes(accessToken, { page: paging.page, size: paging.size });
     return {
       ok: true,
       disputes: page.content,
-      totalElements: page.totalElements,
-      truncated: !page.last,
+      window: pageWindow(page),
     };
   } catch (error) {
     if (isKoalaApiError(error) && error.isForbidden) {
@@ -240,7 +244,7 @@ type EvidenceResult =
  * This is an N+1 and it is deliberate rather than overlooked. `DisputeDto`
  * carries no money at all, so the alternatives were: show no amount in the
  * queue (which koala-admin#6 asks for by name), or compute one in the panel
- * (which it forbids). The page size is bounded to {@link QUEUE_PAGE_SIZE} to
+ * (which it forbids). The page size is bounded to {@link DISPUTE_PAGING} to
  * keep the fan-out small, and the real fix is on the backend — either the
  * dispute list carries the assignment's escrow figures, or there is a bulk
  * read. Until then this is the honest shape.
@@ -311,12 +315,13 @@ async function loadEvidence(accessToken: string, disputeId: string): Promise<Evi
 interface WorkspaceProps {
   filter: StatusFilter;
   selectedId: string | null;
+  paging: { page: number; size: number };
 }
 
-async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
+async function DisputeWorkspace({ filter, selectedId, paging }: WorkspaceProps) {
   const context = await getStaffContext();
   const accessToken = await getKoalaAccessToken();
-  const queue = await loadQueue(accessToken);
+  const queue = await loadQueue(accessToken, paging);
 
   if (!queue.ok) {
     return (
@@ -384,7 +389,10 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
           {STATUS_FILTERS.map((candidate) => (
             <Link
               key={candidate}
-              href={{ pathname: "/disputes", query: filterQuery(candidate, selectedId) }}
+              href={{
+                pathname: "/disputes",
+                query: filterQuery(candidate, selectedId, queue.window.page),
+              }}
               aria-current={candidate === filter ? "page" : undefined}
               className={
                 candidate === filter
@@ -413,9 +421,11 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
         ) : (
           <>
             <p className="text-sm text-ink-muted">
-              Backend {formatInteger(queue.totalElements)} etkin uyuşmazlık bildirdi;{" "}
-              {formatInteger(visible.length)} tanesi listeleniyor.
-              {queue.truncated ? " Daha fazlası var — sayfalama sonraki dilimde." : ""}
+              Bu sayfada {formatInteger(visible.length)} kayıt
+              {filter === "ALL"
+                ? ""
+                : ` (${FILTER_LABELS[filter]} süzgeci, yüklenen ${formatInteger(queue.disputes.length)} satırın üstünde)`}
+              .
             </p>
 
             <Table caption="Etkin uyuşmazlıklar">
@@ -456,7 +466,10 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
                         <Link
                           href={{
                             pathname: "/disputes",
-                            query: { ...filterQuery(filter, null), uyusmazlik: dispute.id },
+                            query: {
+                              ...filterQuery(filter, null, queue.window.page),
+                              uyusmazlik: dispute.id,
+                            },
                           }}
                           className="text-sm font-medium text-brand hover:underline"
                         >
@@ -470,6 +483,18 @@ async function DisputeWorkspace({ filter, selectedId }: WorkspaceProps) {
             </Table>
           </>
         )}
+
+        {queue.window.totalElements > 0 ? (
+          <QueuePager
+            window={queue.window}
+            state={{
+              ...(filter !== "ALL" ? { durum: filter } : {}),
+              ...(selectedId !== null ? { uyusmazlik: selectedId } : {}),
+              boyut: String(paging.size),
+            }}
+            unit="uyuşmazlık"
+          />
+        ) : null}
       </section>
 
       {selected === null ? null : (
@@ -864,9 +889,14 @@ function readFilter(value: string | string[] | undefined): StatusFilter {
   return STATUS_FILTERS.find((entry) => entry === candidate) ?? "ALL";
 }
 
-function filterQuery(filter: StatusFilter, selectedId: string | null): Record<string, string> {
+function filterQuery(
+  filter: StatusFilter,
+  selectedId: string | null,
+  page = 0,
+): Record<string, string> {
   const query: Record<string, string> = {};
   if (filter !== "ALL") query.durum = filter;
   if (selectedId !== null) query.uyusmazlik = selectedId;
+  if (page > 0) query.sayfa = String(page);
   return query;
 }
