@@ -235,9 +235,10 @@ export const ROUTES = [
   },
   {
     /**
-     * koala-admin#48. Bekleyen doğrulamaları listeleyen uç yok; referans
-     * ekstre açıklamasından gelir. Kapı `bank.account.verify` — yazım da aynı
-     * izin, ve Server Action onu `guardDecision` ile yeniden çözer.
+     * koala-backend#202. Kuyruk `GET /admin/bank-account-verifications`
+     * (PENDING); onay hâlâ `POST .../{reference}/confirm`. Kapı
+     * `bank.account.verify` — yazım da aynı izin, ve Server Action onu
+     * `guardDecision` ile yeniden çözer. Ret ucu yoktur.
      */
     path: "/iban-verifications",
     title: "IBAN doğrulama",

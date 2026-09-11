@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 
 import { apiUrl, server } from "../../../test/msw";
 
-import { confirmIbanVerification, ibanVerificationConfirmPath } from "./iban-verification";
+import {
+  confirmIbanVerification,
+  getPendingIbanVerifications,
+  IBAN_PENDING_PATH,
+  IBAN_PENDING_PAGING,
+  ibanPendingAmountText,
+  ibanVerificationConfirmPath,
+} from "./iban-verification";
 
 const REFERENCE = "KOALA-9F3A2C";
 const CONFIRM = apiUrl(ibanVerificationConfirmPath(REFERENCE));
@@ -32,6 +39,85 @@ function success(data: unknown = ACCOUNT): Response {
     data,
   });
 }
+
+const PENDING = {
+  accountId: "7c000000-0000-4000-8000-000000000048",
+  user: { id: "u-1", firstName: "Ayşe", lastName: "Yılmaz", username: "ayse" },
+  maskedIban: "TR18***2315",
+  reference: REFERENCE,
+  amount: 0.17,
+  startedAt: "2026-09-11T12:00:00Z",
+  expiresAt: "2026-09-12T12:00:00Z",
+  createdAt: "2026-09-11T11:00:00Z",
+};
+
+function pageSuccess(content: unknown[] = [PENDING]): Response {
+  return HttpResponse.json({
+    success: true,
+    message: "Bekleyen doğrulamalar listelendi.",
+    httpStatus: "200 OK",
+    path: IBAN_PENDING_PATH,
+    requestId: "rid-iban-list",
+    timeStamp: "2026-09-11T15:00:00Z",
+    data: {
+      content,
+      page: 0,
+      size: 20,
+      totalElements: content.length,
+      totalPages: 1,
+      first: true,
+      last: true,
+    },
+  });
+}
+
+describe("the pending IBAN queue", () => {
+  it("asks for PENDING and the default verificationStartedAt sort", async () => {
+    let url: URL | null = null;
+    server.use(
+      http.get(apiUrl(IBAN_PENDING_PATH), ({ request }) => {
+        url = new URL(request.url);
+        return pageSuccess();
+      }),
+    );
+
+    const page = await getPendingIbanVerifications("ACCESS-TOKEN", {
+      page: 0,
+      size: 20,
+      sort: IBAN_PENDING_PAGING.defaultSort,
+    });
+
+    expect(url).not.toBeNull();
+    const params = url as unknown as URL;
+    expect(params.searchParams.get("status")).toBe("PENDING");
+    expect(params.searchParams.get("sort")).toBe("verificationStartedAt,desc");
+    expect(page.content[0]?.maskedIban).toBe("TR18***2315");
+    expect(page.content[0]).not.toHaveProperty("iban");
+  });
+
+  it("keeps a decimal amount as text so confirm-from-row does not invent precision", () => {
+    expect(ibanPendingAmountText(0.17)).toBe("0.17");
+    expect(ibanPendingAmountText("0.17")).toBe("0.17");
+    expect(ibanPendingAmountText(null)).toBe("");
+  });
+
+  it("drops a leaked full IBAN so the table cannot render it", async () => {
+    server.use(
+      http.get(apiUrl(IBAN_PENDING_PATH), () =>
+        pageSuccess([{ ...PENDING, iban: "TR180006200119000006672315" }]),
+      ),
+    );
+
+    const page = await getPendingIbanVerifications("ACCESS-TOKEN", {
+      page: 0,
+      size: 20,
+      sort: IBAN_PENDING_PAGING.defaultSort,
+    });
+
+    expect(page.content[0]).not.toHaveProperty("iban");
+    expect(page.content[0]?.maskedIban).toBe("TR18***2315");
+  });
+});
 
 describe("IBAN verification confirm transport", () => {
   it("posts decimal amount as text and keeps the masked IBAN", async () => {
