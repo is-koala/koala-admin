@@ -187,6 +187,18 @@ export const ROUTES = [
   },
   {
     /**
+     * koala-admin#48. Bekleyen doğrulamaları listeleyen uç yok; referans
+     * ekstre açıklamasından gelir. Kapı `bank.account.verify` — yazım da aynı
+     * izin, ve Server Action onu `guardDecision` ile yeniden çözer.
+     */
+    path: "/iban-verifications",
+    title: "IBAN doğrulama",
+    access: "permission",
+    permission: "bank.account.verify",
+    nav: { label: "IBAN doğrulama", order: 48 },
+  },
+  {
+    /**
      * Banka ekstresiyle mutabakat, escrow çıkışından ayrı bir operasyondur:
      * `payout.release` talimatı başlatır; `payout.reconcile` gerçekleşmiş banka
      * satırını kanıtlar. Backend de iki ucu ve iki izni ayrı tutar.
