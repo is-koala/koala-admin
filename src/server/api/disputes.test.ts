@@ -9,6 +9,7 @@ import {
   DISPUTE_RESOLUTION_SPECS,
   disputeEvidencePath,
   disputeResolvePath,
+  getDispute,
   getDisputeEvidence,
   getDisputes,
   isDisputeResolution,
@@ -113,6 +114,51 @@ describe("the queue endpoint", () => {
     expect(isKoalaApiError(error)).toBe(true);
     if (!isKoalaApiError(error)) throw new Error("unreachable");
     expect(error.errorCode).toBe("RESPONSE_SCHEMA_MISMATCH");
+  });
+});
+
+describe("the dispute object GET", () => {
+  it("loads GET /admin/disputes/{id} with the same DisputeDto as the queue", async () => {
+    let url: string | null = null;
+    let authorization: string | null = null;
+
+    server.use(
+      http.get(apiUrl(`${DISPUTES_PATH}/${DISPUTE_ID}`), ({ request }) => {
+        url = request.url;
+        authorization = request.headers.get("authorization");
+        return HttpResponse.json({
+          success: true,
+          message: "Uyuşmazlık getirildi.",
+          httpStatus: "200 OK",
+          path: `${DISPUTES_PATH}/${DISPUTE_ID}`,
+          requestId: "rid-dispute",
+          timeStamp: "2026-09-12T00:00:00.000000000Z",
+          data: DISPUTE,
+        });
+      }),
+    );
+
+    const dispute = await getDispute("ACCESS-TOKEN", DISPUTE_ID);
+
+    expect(url).toBe(apiUrl(`${DISPUTES_PATH}/${DISPUTE_ID}`));
+    expect(authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(dispute.id).toBe(DISPUTE_ID);
+    expect(dispute.jobAssignmentId).toBe(ASSIGNMENT_ID);
+    expect(dispute.openedBy?.firstName).toBe("Ayşe");
+  });
+
+  it("escapes the dispute id on the object path", async () => {
+    let url: string | null = null;
+    server.use(
+      http.get(apiUrl(`${DISPUTES_PATH}/*`), ({ request }) => {
+        url = request.url;
+        return HttpResponse.json({ success: false, message: "yok" }, { status: 404 });
+      }),
+    );
+
+    await getDispute("ACCESS-TOKEN", "a b").catch(() => undefined);
+
+    expect(url).toContain("a%20b");
   });
 });
 

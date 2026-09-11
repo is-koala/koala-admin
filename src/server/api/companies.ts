@@ -14,6 +14,7 @@ import type { PageDto } from "./types";
  *
  * ```java
  * GET  /admin/companies?status=PENDING|APPROVED|REJECTED&query=...
+ * GET  /admin/companies/{companyId}
  * GET  /admin/companies/{companyId}/images/{imageId}/download
  * POST /admin/companies/{companyId}/approve   { note }
  * POST /admin/companies/{companyId}/reject    { reason }
@@ -147,6 +148,20 @@ export function getCompanies(
       query: query.query?.trim() || undefined,
       ...pagingQuery(query.paging),
     },
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+export function companyDetailPath(companyId: string): string {
+  return `${COMPANIES_PATH}/${encodeURIComponent(companyId)}`;
+}
+
+/** `GET /admin/companies/{companyId}` — same CompanyReviewDto as the queue. */
+export function getCompany(accessToken: string, companyId: string): Promise<CompanyReview> {
+  return koalaApi.get({
+    path: companyDetailPath(companyId),
+    schema: companyReviewSchema,
     accessToken,
     cache: "no-store",
   });

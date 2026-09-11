@@ -16,12 +16,19 @@ import { decisionFailureFrom, guardDecision } from "@/server/queue/decisions";
 
 const RETURN_ORIGIN = "http://koala-admin.invalid";
 
+const COMPANY_OBJECT =
+  /^\/companies\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isCompanyReturnPath(pathname: string): boolean {
+  return pathname === "/companies" || COMPANY_OBJECT.test(pathname);
+}
+
 function successLocation(returnTo: string, decision: "APPROVE" | "REJECT"): Route {
   let location = new URL("/companies", RETURN_ORIGIN);
 
   try {
     const candidate = new URL(returnTo, RETURN_ORIGIN);
-    if (candidate.origin === RETURN_ORIGIN && candidate.pathname === "/companies") {
+    if (candidate.origin === RETURN_ORIGIN && isCompanyReturnPath(candidate.pathname)) {
       location = candidate;
     }
   } catch {
@@ -92,6 +99,7 @@ export async function submitCompanyDecision(
 
   try {
     revalidatePath("/companies");
+    revalidatePath(`/companies/${companyId}`);
   } catch {
     // The redirect performs a fresh Server Component load even if cache invalidation fails.
   }

@@ -11,6 +11,7 @@ import { safeUserSchema, type SafeUser } from "./users";
  *
  * ```java
  * GET /admin/users?query=  user.read  Pageable
+ * GET /admin/users/{userId} user.read
  * ```
  *
  * `query` boşsa herkes; doluysa e-posta ve ad+soyad `LIKE`. Yanıt
@@ -44,6 +45,20 @@ export function getMarketplaceUsers(
       query: query.query?.trim() || undefined,
       ...pagingQuery(query.paging),
     },
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+export function marketplaceUserPath(userId: string): string {
+  return `${MARKETPLACE_USERS_PATH}/${encodeURIComponent(userId)}`;
+}
+
+/** `GET /admin/users/{userId}` — same SafeUserDto as the directory. */
+export function getMarketplaceUser(accessToken: string, userId: string): Promise<MarketplaceUser> {
+  return koalaApi.get({
+    path: marketplaceUserPath(userId),
+    schema: safeUserSchema,
     accessToken,
     cache: "no-store",
   });

@@ -226,6 +226,22 @@ describe("the action, when it is allowed to act", () => {
     expect(redirect).toHaveBeenCalledWith("/companies?durum=PENDING&sayfa=1&sonuc=approved");
   });
 
+  it("keeps a successful decision on the company object page when that is the return target", async () => {
+    stubMe(["company.approve"]);
+    watchApprove();
+
+    await expect(
+      submit({
+        companyId: COMPANY_ID,
+        decision: "APPROVE",
+        note: GOOD_NOTE,
+        returnTo: `/companies/${COMPANY_ID}`,
+      }),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(redirect).toHaveBeenCalledWith(`/companies/${COMPANY_ID}?sonuc=approved`);
+  });
+
   it("rejects with the written reason and revalidates the queue", async () => {
     stubMe(["company.approve"]);
     const reject = watchReject();

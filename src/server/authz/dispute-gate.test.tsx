@@ -33,6 +33,7 @@ vi.mock("@/server/auth/session", () => ({
 }));
 
 const { default: DisputesPage } = await import("@/app/(panel)/disputes/page");
+const { default: DisputeDetailPage } = await import("@/app/(panel)/disputes/[id]/page");
 const { clearRecentOperations } = await import("@/server/escrow/recent-operations");
 
 const ASSIGNMENT = "9a1c0f10-0001-4c00-8000-0000000000aa";
@@ -233,6 +234,35 @@ function watchEvidence(respond: () => Response = evidenceOk) {
   };
 }
 
+const disputeOk = () =>
+  HttpResponse.json({
+    success: true,
+    message: "Uyuşmazlık getirildi.",
+    httpStatus: "200 OK",
+    path: `/admin/disputes/${DISPUTE}`,
+    requestId: "rid-dispute",
+    timeStamp: "2026-09-06T09:00:00.000000000Z",
+    data: DISPUTE_ROW,
+  });
+
+function watchDispute(respond: () => Response = disputeOk) {
+  let calls = 0;
+  server.use(
+    http.get(`${DISPUTES}/${DISPUTE}`, () => {
+      calls += 1;
+      return respond();
+    }),
+  );
+  return {
+    get calls() {
+      return calls;
+    },
+  };
+}
+
+const renderDetail = () =>
+  renderServerComponent(<DisputeDetailPage params={Promise.resolve({ id: DISPUTE })} />);
+
 const summaryForbidden = () =>
   HttpResponse.json(
     {
@@ -385,20 +415,17 @@ describe("an OWNER on the queue", () => {
 describe("the selected dispute", () => {
   it("shows both parties, the payment status, the price breakdown and the evidence", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
-    watchDisputes();
+    watchDispute();
     watchSummary();
     const evidence = watchEvidence();
 
-    const html = await renderServerComponent(
-      <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
-    );
+    const html = await renderDetail();
 
     expect(html).toContain("Uyuşmazlık detayı");
     expect(html).toContain("Garsonluk");
     expect(html).toContain("Ayşe Yılmaz");
     expect(html).toContain("Mehmet Demir");
     expect(html).toContain("HELD_IN_ESCROW");
-    // Price breakdown, every figure formatted through lib/format.
     expect(html).toContain("₺1.240,50");
     expect(html).toContain("₺137,83");
     expect(html).toContain("₺1.378,33");
@@ -411,20 +438,18 @@ describe("the selected dispute", () => {
     expect(html).toContain("İşçi · Ayşe Yılmaz");
     expect(html).toContain("05.09.2026 11:15");
     expect(html).toContain(`/api/disputes/${DISPUTE}/evidence/${EVIDENCE_ID}/download`);
+    expect(html).toContain(`/assignments?atama=${ASSIGNMENT}`);
     expect(html).not.toContain("koala-backend.test");
   });
 
-  it("keeps the queue and decision controls usable when no evidence was attached", async () => {
+  it("keeps decision controls usable when no evidence was attached", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
-    watchDisputes();
+    watchDispute();
     watchSummary();
     watchEvidence(emptyEvidence);
 
-    const html = await renderServerComponent(
-      <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
-    );
+    const html = await renderDetail();
 
-    expect(html).toContain("Etkin uyuşmazlıklar");
     expect(html).toContain("Bu uyuşmazlığa kanıt dosyası eklenmemiş.");
     expect(html).toContain("Kanıt olmadan da karar vermeye devam edebilirsiniz.");
     expect(html).toContain("Kararı gözden geçir");
@@ -432,15 +457,12 @@ describe("the selected dispute", () => {
 
   it("contains an evidence failure inside its panel and keeps the rest of the dispute usable", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
-    watchDisputes();
+    watchDispute();
     watchSummary();
     watchEvidence(evidenceFailed);
 
-    const html = await renderServerComponent(
-      <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
-    );
+    const html = await renderDetail();
 
-    expect(html).toContain("Etkin uyuşmazlıklar");
     expect(html).toContain("₺1.378,33");
     expect(html).toContain("Kararı gözden geçir");
     expect(html).toContain("Kanıt dosyaları yüklenemedi.");
@@ -451,13 +473,11 @@ describe("the selected dispute", () => {
 
   it("arms the resolution form and both escrow operations", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
-    watchDisputes();
+    watchDispute();
     watchSummary();
     watchEvidence();
 
-    const html = await renderServerComponent(
-      <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
-    );
+    const html = await renderDetail();
 
     expect(html).toContain("Kararı gözden geçir");
     expect(html).toContain("Çıkışı gözden geçir");
@@ -474,13 +494,11 @@ describe("the selected dispute", () => {
 
   it("does not request payment summaries for the current DISPUTE_HANDLER role", async () => {
     stubMe(DISPUTE_HANDLER_PERMISSIONS, ["DISPUTE_HANDLER"]);
-    watchDisputes();
+    watchDispute();
     const summary = watchSummary();
     watchEvidence();
 
-    const html = await renderServerComponent(
-      <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
-    );
+    const html = await renderDetail();
 
     expect(summary.calls).toBe(0);
     expect(html).toContain("Kararı gözden geçir");
@@ -496,13 +514,11 @@ describe("the selected dispute", () => {
 
   it("disables financial resolution choices when their current permissions are missing", async () => {
     stubMe(["dispute.resolve", "payment.read"], ["DISPUTE_HANDLER"]);
-    watchDisputes();
+    watchDispute();
     const summary = watchSummary();
     watchEvidence();
 
-    const html = await renderServerComponent(
-      <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
-    );
+    const html = await renderDetail();
 
     expect(summary.calls).toBe(1);
     expect(html).toContain('value="RELEASE_TO_WORKER" disabled=""');
@@ -516,23 +532,18 @@ describe("the selected dispute", () => {
 describe("when the panel cannot read the amount", () => {
   it("shows the dispute, withholds the money, and says which read failed", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
-    watchDisputes();
+    watchDispute();
     const summary = watchSummary(summaryForbidden);
     watchEvidence();
 
-    const html = await renderServerComponent(
-      <DisputesPage searchParams={params({ uyusmazlik: DISPUTE })} />,
-    );
+    const html = await renderDetail();
 
     expect(summary.calls).toBe(1);
     expect(html).toContain("Emanet tutarları okunamıyor");
     expect(html).toContain("Panel tutar uydurmayacağı");
-    // The dispute itself is still workable — a DISMISSED decision touches no
-    // money and stays available.
     expect(html).toContain("Uyuşmazlık detayı");
     expect(html).toContain("Reddet (emanete dokunma)");
     expect(html).toContain("İşçi · Ayşe Yılmaz");
-    // And the two money triggers are rendered disabled, with the reason.
     expect(html).toContain("Emanet özeti okunamadı");
     expect(html).toContain('data-testid="escrow-disabled-reason"');
   });
