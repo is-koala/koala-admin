@@ -27,9 +27,7 @@ export default async function SettingsPage() {
       <PageHeader
         title="Çalışma zamanı ayarları"
         description={
-          <>
-            Politika sayılarını deploy olmadan değiştirin. Oranlar 0 ile 1 arasında olmalıdır.
-          </>
+          <>Politika sayılarını deploy olmadan değiştirin. Oranlar 0 ile 1 arasında olmalıdır.</>
         }
       />
 

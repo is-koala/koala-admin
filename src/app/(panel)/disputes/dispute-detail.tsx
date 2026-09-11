@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { userHref } from "@/lib/panel-href";
+
 import {
   EscrowOperationForm,
   type MoneyMovement,
@@ -66,11 +68,11 @@ export interface SummaryFailure {
   readonly requestId: string | null;
 }
 
-export type SummaryEntry = { ok: true; summary: EscrowSummary } | { ok: false; failure: SummaryFailure };
+export type SummaryEntry =
+  { ok: true; summary: EscrowSummary } | { ok: false; failure: SummaryFailure };
 
 export type EvidenceResult =
-  | { ok: true; evidence: DisputeEvidence[] }
-  | { ok: false; failure: SummaryFailure };
+  { ok: true; evidence: DisputeEvidence[] } | { ok: false; failure: SummaryFailure };
 
 interface DetailProps {
   dispute: Dispute;
@@ -145,7 +147,18 @@ export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailP
               </Badge>
             }
           />
-          <Row label="Açan taraf" value={safeUserName(dispute.openedBy)} />
+          <Row
+            label="Açan taraf"
+            value={
+              dispute.openedBy === null ? (
+                "—"
+              ) : (
+                <Link href={userHref(dispute.openedBy.id)} className="text-brand hover:underline">
+                  {safeUserName(dispute.openedBy)}
+                </Link>
+              )
+            }
+          />
           <Row label="Açılış" value={formatDateTime(dispute.createdAt)} />
           <Row
             label="Atama"
@@ -165,8 +178,9 @@ export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailP
                 value={
                   dispute.resolution === null
                     ? "—"
-                    : (DISPUTE_RESOLUTION_SPECS.find((spec) => spec.resolution === dispute.resolution)
-                        ?.label ?? dispute.resolution)
+                    : (DISPUTE_RESOLUTION_SPECS.find(
+                        (spec) => spec.resolution === dispute.resolution,
+                      )?.label ?? dispute.resolution)
                 }
               />
               <Row label="Karar gerekçesi" value={dispute.resolutionNote ?? "—"} />
@@ -176,13 +190,26 @@ export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailP
           {summary === null ? null : (
             <>
               <Row label="İş" value={summary.jobTitle ?? "—"} />
-              <Row label="İşçi" value={safeUserName(summary.worker)} />
+              <Row
+                label="İşçi"
+                value={
+                  <Link href={userHref(summary.worker.id)} className="text-brand hover:underline">
+                    {safeUserName(summary.worker)}
+                  </Link>
+                }
+              />
               <Row
                 label="İşveren"
                 value={
-                  summary.companyName === null
-                    ? safeUserName(summary.employer)
-                    : `${safeUserName(summary.employer)} · ${summary.companyName}`
+                  <span className="flex flex-wrap justify-end gap-x-2">
+                    <Link
+                      href={userHref(summary.employer.id)}
+                      className="text-brand hover:underline"
+                    >
+                      {safeUserName(summary.employer)}
+                    </Link>
+                    {summary.companyName === null ? null : <span>{summary.companyName}</span>}
+                  </span>
                 }
               />
               <Row label="Atama durumu" value={summary.status} />

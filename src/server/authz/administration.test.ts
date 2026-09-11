@@ -168,7 +168,7 @@ describe("izin yoksa istek hiç yapılmıyor", () => {
     expect(grant.calls).toBe(0);
     expect(outcome.status).toBe("BLOCKED");
     expect(outcome.errorCode).toBe("PANEL_PERMISSION_DENIED");
-    expect(outcome.message).toContain("role.manage");
+    expect(outcome.message).toContain("Rol grafiğini yönet");
   });
 
   it("her dört rol yazımını da aynı şekilde durduruyor", async () => {
@@ -218,7 +218,7 @@ describe("izin yoksa istek hiç yapılmıyor", () => {
 
     expect(create.calls).toBe(0);
     expect(outcome.status).toBe("BLOCKED");
-    expect(outcome.message).toContain("staff.manage");
+    expect(outcome.message).toContain("Personel kayıtlarını yönet");
   });
 
   it("her beş personel yazımını da durduruyor", async () => {
@@ -728,7 +728,7 @@ describe("pazaryeri kullanıcı rolleri user.role.manage ister", () => {
     expect(grant.calls).toBe(0);
     expect(revoke.calls).toBe(0);
     expect(outcomes.map((outcome) => outcome.status)).toEqual(["BLOCKED", "BLOCKED"]);
-    expect(outcomes[0]?.message).toContain("user.role.manage");
+    expect(outcomes[0]?.message).toContain("Kullanıcı rollerini yönet");
   });
 
   it("personel rol izni pazaryeri yazımını açmaz", async () => {

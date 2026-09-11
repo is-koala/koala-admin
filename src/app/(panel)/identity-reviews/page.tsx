@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -15,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
+import { isUuid, userHref } from "@/lib/panel-href";
 import {
   IDENTITY_REVIEW_PAGING,
   IDENTITY_REVIEW_STATUSES,
@@ -223,7 +225,18 @@ function ReviewDetail({ review, returnTo }: { review: IdentityReview; returnTo: 
           <Row label="İnceleme" value={<span className="font-mono text-xs">{review.id}</span>} />
           <Row
             label="Kullanıcı"
-            value={<span className="font-mono text-xs">{review.userId ?? EMPTY_VALUE}</span>}
+            value={
+              review.userId !== null && isUuid(review.userId) ? (
+                <Link
+                  href={userHref(review.userId)}
+                  className="font-mono text-xs text-brand hover:underline"
+                >
+                  {review.userId}
+                </Link>
+              ) : (
+                <span className="font-mono text-xs">{review.userId ?? EMPTY_VALUE}</span>
+              )
+            }
           />
           <Row label="Ad soyad" value={displayName(review)} />
           <Row

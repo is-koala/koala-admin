@@ -98,8 +98,8 @@ export default async function RolesPage() {
         title="Roller ve izinler"
         description={
           <>
-            Rol grafiği ve roller arası kapsama. Değişiklik ilgili personelin bir sonraki
-            isteğinde geçerlidir.
+            Rol grafiği ve roller arası kapsama. Değişiklik ilgili personelin bir sonraki isteğinde
+            geçerlidir.
           </>
         }
       />

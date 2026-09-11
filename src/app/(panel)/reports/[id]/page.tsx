@@ -20,11 +20,7 @@ const OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
  * Şikayet nesne sayfası. Karar ve görsel kaldırma burada; kuyruk yalnız listeler.
  * Kapı `content.moderate`: izni olmayan kişide GET /admin/reports/{id} çıkmaz.
  */
-export default async function ReportDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   return (

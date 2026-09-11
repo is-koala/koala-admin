@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 
 import { apiUrl, server } from "../../../test/msw";
 
-import { reconcilePayout, type PayoutSettlementEvidence } from "./payout-reconciliation";
+import { readPaging } from "./paging";
+import {
+  getPayouts,
+  PAYOUT_PAGING,
+  PAYOUTS_PATH,
+  reconcilePayout,
+  type PayoutSettlementEvidence,
+} from "./payout-reconciliation";
 
 const PAYOUT_ID = "9c000000-0000-4000-8000-000000000033";
 const RECONCILE = apiUrl(`/admin/payouts/${PAYOUT_ID}/reconcile`);
@@ -38,6 +45,41 @@ function success(data: unknown = PAYOUT): Response {
     data,
   });
 }
+
+describe("the staff payout queue", () => {
+  it("omits status so the backend defaults to PROCESSING", async () => {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(PAYOUTS_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json({
+          success: true,
+          message: "Hakedişler listelendi.",
+          httpStatus: "200 OK",
+          path: PAYOUTS_PATH,
+          requestId: "rid-payouts",
+          timeStamp: "2026-09-09T09:31:00Z",
+          data: {
+            content: [{ ...PAYOUT, status: "PROCESSING", completedAt: null }],
+            page: 0,
+            size: 20,
+            totalElements: 1,
+            totalPages: 1,
+            first: true,
+            last: true,
+          },
+        });
+      }),
+    );
+
+    const page = await getPayouts("ACCESS-TOKEN", { paging: readPaging({}, PAYOUT_PAGING) });
+
+    expect(seen.url?.searchParams.has("status")).toBe(false);
+    expect(seen.url?.searchParams.get("page")).toBe("0");
+    expect(seen.url?.searchParams.get("size")).toBe("20");
+    expect(page.content[0]?.status).toBe("PROCESSING");
+  });
+});
 
 describe("payout settlement reconciliation transport", () => {
   it("posts the exact evidence without converting or rounding the amount", async () => {

@@ -12,11 +12,7 @@ import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
-import {
-  DisputeDetail,
-  type EvidenceResult,
-  type SummaryEntry,
-} from "../dispute-detail";
+import { DisputeDetail, type EvidenceResult, type SummaryEntry } from "../dispute-detail";
 
 export const metadata: Metadata = { title: "Uyuşmazlık" };
 
@@ -26,11 +22,7 @@ const OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
  * Uyuşmazlık nesne sayfası. Kanıt ve emanet burada; kuyruk yalnız listeler.
  * Kapı `dispute.resolve`: izni olmayan kişide GET /admin/disputes/{id} çıkmaz.
  */
-export default async function DisputeDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function DisputeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   return (
@@ -57,7 +49,9 @@ export default async function DisputeDetailPage({
 async function DisputeObject({ id }: { id: string }) {
   if (!OBJECT_ID.test(id)) {
     return (
-      <p className="text-sm text-ink-muted">Uyuşmazlık kimliği geçersiz. Kuyruktan bir satır açın.</p>
+      <p className="text-sm text-ink-muted">
+        Uyuşmazlık kimliği geçersiz. Kuyruktan bir satır açın.
+      </p>
     );
   }
 
@@ -79,7 +73,9 @@ async function DisputeObject({ id }: { id: string }) {
 
   const canReadSummaries = context.has("payment.read");
   const [entry, evidence] = await Promise.all([
-    canReadSummaries ? loadSummary(accessToken, dispute.jobAssignmentId) : Promise.resolve(undefined),
+    canReadSummaries
+      ? loadSummary(accessToken, dispute.jobAssignmentId)
+      : Promise.resolve(undefined),
     loadEvidence(accessToken, dispute.id),
   ]);
 

@@ -373,7 +373,7 @@ export async function runAuthorizationChange(
   const permission = PERMISSION_FOR[change.kind];
   if (!context.has(permission)) {
     return blocked(
-      `Bu işlem "${permissionLabel(permission)}" (${permission}) iznini gerektiriyor ve hesabınızda bu izin yok. İstek backend'e hiç gönderilmedi.`,
+      `Bu işlem "${permissionLabel(permission)}" iznini gerektiriyor ve hesabınızda bu izin yok. İstek backend'e hiç gönderilmedi.`,
       "PANEL_PERMISSION_DENIED",
     );
   }

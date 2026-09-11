@@ -142,6 +142,7 @@ describe("TCKK photos on the review page", () => {
     expect(html).not.toContain("ACCESS-TOKEN");
     expect(html).toContain("Kimliği onayla");
     expect(html).toContain("İncelemeyi reddet");
+    expect(html).toContain(`/users/${PENDING_REVIEW.userId}`);
   });
 
   it("keeps approve and reject when a document id is missing, without an img", async () => {

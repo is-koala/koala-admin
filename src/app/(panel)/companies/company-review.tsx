@@ -1,9 +1,9 @@
-import {
-  DecisionForm,
-  type DecisionOption,
-} from "@/components/panel/queue";
+import Link from "next/link";
+
+import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
+import { userHref } from "@/lib/panel-href";
 import {
   COMPANY_DECISION_MAX_NOTE_LENGTH,
   COMPANY_DECISION_MIN_NOTE_LENGTH,
@@ -62,8 +62,16 @@ export function CompanyReviewBody({
 
         <dt className="text-sm text-ink-muted">Oluşturan</dt>
         <dd className="text-sm">
-          {safeUserDisplayName(creator) ?? EMPTY_VALUE}
-          {creator?.username ? <span className="text-ink-muted"> · @{creator.username}</span> : null}
+          {creator === null ? (
+            EMPTY_VALUE
+          ) : (
+            <Link href={userHref(creator.id)} className="text-brand hover:underline">
+              {safeUserDisplayName(creator) ?? EMPTY_VALUE}
+            </Link>
+          )}
+          {creator?.username ? (
+            <span className="text-ink-muted"> · @{creator.username}</span>
+          ) : null}
         </dd>
 
         <dt className="text-sm text-ink-muted">Başvuru zamanı</dt>
@@ -130,7 +138,13 @@ function CompanyAddress({ address }: { address: CompanyReview["address"] }) {
   );
 }
 
-function CompanyGallery({ companyId, imageIds }: { companyId: string; imageIds: readonly string[] }) {
+function CompanyGallery({
+  companyId,
+  imageIds,
+}: {
+  companyId: string;
+  imageIds: readonly string[];
+}) {
   if (imageIds.length === 0) {
     return <span className="text-sm">{EMPTY_VALUE}</span>;
   }
@@ -139,7 +153,9 @@ function CompanyGallery({ companyId, imageIds }: { companyId: string; imageIds: 
     <div className="flex flex-wrap gap-3">
       {imageIds.map((imageId, index) => (
         <figure key={imageId} className="flex w-40 flex-col gap-1.5">
-          <figcaption className="text-xs font-medium text-ink-muted">Fotoğraf {index + 1}</figcaption>
+          <figcaption className="text-xs font-medium text-ink-muted">
+            Fotoğraf {index + 1}
+          </figcaption>
           {/* eslint-disable-next-line @next/next/no-img-element -- same-origin BFF personel çerezini ister; next/image göndermez. */}
           <img
             src={companyGallerySrc(companyId, imageId)}

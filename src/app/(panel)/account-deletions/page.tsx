@@ -282,8 +282,7 @@ function DeletionDetail({
           />
         ) : (
           <p className="text-sm text-ink-muted">
-            Bu talebi reddetmek için silme yönetimi yetkisi gerekir.
-            Listeyi görebilmek yetmez.
+            Bu talebi reddetmek için silme yönetimi yetkisi gerekir. Listeyi görebilmek yetmez.
           </p>
         )}
       </div>
