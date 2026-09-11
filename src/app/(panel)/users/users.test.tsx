@@ -18,6 +18,7 @@ vi.mock("next/cache", () => ({
 }));
 
 const { default: UsersPage } = await import("./page");
+const { default: UserDetailPage } = await import("./[id]/page");
 
 const ADMIN_ME = apiUrl("/admin/me");
 const USERS = apiUrl("/admin/users");
@@ -295,3 +296,55 @@ describe("marketplace roles sit on the directory", () => {
     expect(queue.roleCalls).toBe(0);
   });
 });
+
+describe("a bookmarked marketplace user", () => {
+  it("loads GET /admin/users/{id} and links their reports without a suspend control", async () => {
+    stubMe(READER);
+    const user = row();
+    let objectCalls = 0;
+    server.use(
+      http.get(`${USERS}/${user.id}`, () => {
+        objectCalls += 1;
+        return HttpResponse.json({
+          success: true,
+          message: "Kullanıcı getirildi.",
+          httpStatus: "200 OK",
+          path: `/admin/users/${user.id}`,
+          requestId: "rid-user",
+          timeStamp: "2026-09-11T13:00:00.000000000Z",
+          data: user,
+        });
+      }),
+      http.get(apiUrl("/admin/users/:userId/roles"), () =>
+        HttpResponse.json({
+          success: true,
+          message: "Roller listelendi.",
+          httpStatus: "200 OK",
+          path: `/admin/users/${user.id}/roles`,
+          requestId: "rid-user-roles",
+          timeStamp: "2026-09-11T13:00:00.000000000Z",
+          data: [
+            {
+              role: "ROLE_USER",
+              grantedAt: "2026-01-01T08:00:00.000000000Z",
+              grantedById: "00000000-0000-0000-0000-000000000001",
+              grantedByName: "Sistem",
+            },
+          ],
+        }),
+      ),
+    );
+
+    const html = (
+      await renderServerComponent(<UserDetailPage params={Promise.resolve({ id: user.id })} />)
+    ).replaceAll("<!-- -->", "");
+
+    expect(objectCalls).toBe(1);
+    expect(html).toContain("Ada Yılmaz");
+    expect(html).toContain("ROLE_USER");
+    expect(html).toContain(`kullanici=${user.id}`);
+    expect(html).not.toMatch(/>Askıya al</);
+    expect(html).not.toContain("suspend");
+  });
+});
+

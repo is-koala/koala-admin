@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
+import Link from "next/link";
+import type { Metadata, Route } from "next";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
-import { AuthorizationForm } from "@/components/panel/authz/authorization-form";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
@@ -13,7 +13,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
-import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
+import { EMPTY_VALUE } from "@/lib/format";
 import {
   pageWindow,
   readPaging,
@@ -22,18 +22,14 @@ import {
   type SearchParams,
 } from "@/server/api/paging";
 import { getMarketplaceUsers, USER_PAGING } from "@/server/api/marketplace-users";
-import {
-  getMarketplaceUserRoles,
-  MARKETPLACE_ROLES,
-  type RoleGrant,
-} from "@/server/api/marketplace-user-roles";
+import { getMarketplaceUserRoles } from "@/server/api/marketplace-user-roles";
 import { safeUserName, type SafeUser } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
-import { grantMarketplaceRole, revokeMarketplaceRole } from "./actions";
+import { UserRoleDetail, type UserGrants } from "./user-roles";
 
 export const metadata: Metadata = { title: "Kullanıcılar" };
 
@@ -86,10 +82,6 @@ const SORT_OPTIONS = [
   { value: "lastName,asc", label: "Soyada göre (A-Z)" },
   { value: "lastName,desc", label: "Soyada göre (Z-A)" },
 ];
-
-type LoadedGrants = { readonly status: "ok"; readonly grants: readonly RoleGrant[] };
-type FailedGrants = { readonly status: "failed" };
-type UserGrants = LoadedGrants | FailedGrants;
 
 async function UserDirectory({ params }: { params: SearchParams }) {
   const paging = readPaging(params, USER_PAGING);
@@ -183,9 +175,12 @@ async function UserDirectory({ params }: { params: SearchParams }) {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
-                    <a href={`#kullanici-${user.id}`} className="text-brand hover:underline">
+                    <Link
+                      href={`/users/${user.id}` as Route}
+                      className="text-brand hover:underline"
+                    >
                       {safeUserName(user)}
-                    </a>
+                    </Link>
                   </TableCell>
                   <TableCell>{user.username ?? EMPTY_VALUE}</TableCell>
                   <TableCell>
@@ -243,89 +238,6 @@ function roleSummary(loaded: UserGrants | undefined): string {
     return "Rolsüz";
   }
   return loaded.grants.map((grant) => grant.role).join(", ");
-}
-
-function UserRoleDetail({
-  user,
-  grants,
-  canManage,
-}: {
-  user: SafeUser;
-  grants: UserGrants | undefined;
-  canManage: boolean;
-}) {
-  const label = safeUserName(user);
-  const held =
-    grants !== undefined && grants.status === "ok" ? grants.grants.map((grant) => grant.role) : [];
-  const grantable = MARKETPLACE_ROLES.filter((role) => !held.includes(role));
-
-  return (
-    <article
-      id={`kullanici-${user.id}`}
-      className="flex flex-col gap-4 rounded-xl border border-border-subtle bg-surface p-4"
-    >
-      <header className="flex flex-col gap-1">
-        <h3 className="text-base font-semibold">{label}</h3>
-        <p className="font-mono text-xs break-all text-ink-muted">{user.id}</p>
-      </header>
-
-      {grants === undefined || grants.status === "failed" ? (
-        <p className="text-sm text-ink-muted">
-          Roller yüklenemedi. Liste duruyor; yazma formları bu kayıt için çizilmedi.
-        </p>
-      ) : grants.grants.length === 0 ? (
-        <p className="text-sm text-ink-muted">Bu kullanıcının hiç rolü yok.</p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {grants.grants.map((grant) => (
-            <li
-              key={grant.role}
-              className="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center"
-            >
-              <span className="font-mono text-sm">{grant.role}</span>
-              <span className="text-xs text-ink-muted">
-                {formatDateTime(grant.grantedAt)}
-                {" · "}
-                {grant.grantedByName ?? "Veren kayıtlı değil"}
-              </span>
-              {canManage ? (
-                <AuthorizationForm
-                  action={revokeMarketplaceRole}
-                  hiddenFields={{ userId: user.id, userLabel: label, role: grant.role }}
-                  submitLabel="Rolü geri al"
-                  layout="inline"
-                  tone="danger"
-                  idPrefix={`rol-al-${user.id}-${grant.role}`}
-                  consequence={`${grant.role} geri alınır. ROLE_USER, son ROLE_ADMIN, kendi admin rolü (köprü) ve sistem kullanıcısı backend'de 409 ile korunur.`}
-                />
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {canManage && grants?.status === "ok" ? (
-        <AuthorizationForm
-          action={grantMarketplaceRole}
-          hiddenFields={{ userId: user.id, userLabel: label }}
-          submitLabel="Rol ver"
-          idPrefix={`rol-ver-${user.id}`}
-          consequence="Seçilen pazaryeri rolü bu kullanıcıya verilir. Personel rolleri (OWNER vs.) burada değil."
-          fields={[
-            {
-              name: "role",
-              label: "Verilecek rol",
-              type: "select",
-              required: true,
-              options: grantable.map((role) => ({ value: role, label: role })),
-            },
-          ]}
-          disabled={grantable.length === 0}
-          disabledReason="Bu kullanıcı her pazaryeri rolünü zaten taşıyor."
-        />
-      ) : null}
-    </article>
-  );
 }
 
 function UserRoleAuditPointer() {

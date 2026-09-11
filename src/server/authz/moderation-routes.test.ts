@@ -40,6 +40,15 @@ describe("the report queue is gated on content.moderate", () => {
   it("is the only entry a MODERATOR sees", () => {
     expect(navigationFor(["content.moderate"]).map((entry) => entry.href)).toEqual(["/reports"]);
   });
+
+  it("registers the report object page without advertising it in the menu", () => {
+    const entry = entryFor("/reports/[id]");
+
+    expect(entry).toMatchObject({ permission: "content.moderate" });
+    expect(navigationFor(["content.moderate"]).map((entry) => entry.href)).not.toContain(
+      "/reports/[id]",
+    );
+  });
 });
 
 describe("the company approval queue is gated on company.approve", () => {
@@ -58,6 +67,15 @@ describe("the company approval queue is gated on company.approve", () => {
 
   it("is the only entry someone holding just company.approve sees", () => {
     expect(navigationFor(["company.approve"]).map((entry) => entry.href)).toEqual(["/companies"]);
+  });
+
+  it("registers the company object page without advertising it in the menu", () => {
+    const entry = entryFor("/companies/[id]");
+
+    expect(entry).toMatchObject({ permission: "company.approve" });
+    expect(navigationFor(["company.approve"]).map((entry) => entry.href)).not.toContain(
+      "/companies/[id]",
+    );
   });
 });
 
@@ -82,5 +100,14 @@ describe("the two together", () => {
     // The fail-closed path: `getStaffContext()` turns every failure into an
     // empty list, and an empty list has no branch that draws a queue.
     expect(navigationFor([])).toEqual([]);
+  });
+});
+
+describe("the dispute object page is gated on dispute.resolve", () => {
+  it("is registered and stays off the menu", () => {
+    const entry = entryFor("/disputes/[id]");
+
+    expect(entry).toMatchObject({ permission: "dispute.resolve" });
+    expect(navigationFor(["dispute.resolve"]).map((entry) => entry.href)).toEqual(["/disputes"]);
   });
 });

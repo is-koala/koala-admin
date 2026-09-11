@@ -1,0 +1,85 @@
+import Link from "next/link";
+import type { Metadata, Route } from "next";
+
+import { PageHeader } from "@/components/panel/page-header";
+import { QueueLoadFailure } from "@/components/panel/queue";
+import { Badge } from "@/components/ui";
+import { formatDateTime } from "@/lib/format";
+import { getReport, reportReasonLabel, reportStatusLabel } from "@/server/api/reports";
+import { getKoalaAccessToken } from "@/server/auth/session";
+import { RequirePermission } from "@/server/authz/require-permission";
+import { classifyQueueFailure } from "@/server/queue/decisions";
+
+import { ReportDecision, REPORT_STATUS_TONES } from "../report-decision";
+
+export const metadata: Metadata = { title: "Şikayet" };
+
+const OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Şikayet nesne sayfası. Karar ve görsel kaldırma burada; kuyruk yalnız listeler.
+ * Kapı `content.moderate`: izni olmayan kişide GET /admin/reports/{id} çıkmaz.
+ */
+export default async function ReportDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Şikayet"
+        description={
+          <>
+            Karar ve gerekçe denetim kaydına yazılır. Askıya alma yoktur.{" "}
+            <Link href={"/reports" as Route} className="text-brand hover:underline">
+              Kuyruğa dön
+            </Link>
+          </>
+        }
+      />
+
+      <RequirePermission permission="content.moderate">
+        <ReportObject id={id} />
+      </RequirePermission>
+    </div>
+  );
+}
+
+async function ReportObject({ id }: { id: string }) {
+  if (!OBJECT_ID.test(id)) {
+    return (
+      <p className="text-sm text-ink-muted">Şikayet kimliği geçersiz. Kuyruktan bir satır açın.</p>
+    );
+  }
+
+  let detail;
+  try {
+    detail = await getReport(await getKoalaAccessToken(), id);
+  } catch (error) {
+    return (
+      <QueueLoadFailure
+        subject="Şikayet detayı"
+        permission="content.moderate"
+        failure={classifyQueueFailure(error)}
+      />
+    );
+  }
+
+  const { report, content } = detail;
+
+  return (
+    <section className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface px-4 py-4">
+      <header className="flex flex-wrap items-center gap-2">
+        <Badge tone={REPORT_STATUS_TONES[report.status] ?? "neutral"}>
+          {reportStatusLabel(report.status)}
+        </Badge>
+        <span className="text-sm font-medium">{reportReasonLabel(report.reason)}</span>
+        <span className="text-sm text-ink-muted">{formatDateTime(report.createdAt)}</span>
+      </header>
+      <ReportDecision report={report} content={content} />
+    </section>
+  );
+}

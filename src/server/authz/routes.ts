@@ -153,6 +153,12 @@ export const ROUTES = [
     nav: { label: "Şikayetler", order: 20, group: "operasyon" },
   },
   {
+    path: "/reports/[id]",
+    title: "Şikayet",
+    access: "permission",
+    permission: "content.moderate",
+  },
+  {
     /**
      * koala-admin#39. Liste `user.read_pii` ister çünkü DTO `subjectId`
      * taşır. Ret ayrı: `user.deletion.manage`, form ve action'da.
@@ -177,6 +183,12 @@ export const ROUTES = [
     nav: { label: "Kullanıcılar", order: 26, group: "operasyon" },
   },
   {
+    path: "/users/[id]",
+    title: "Kullanıcı",
+    access: "permission",
+    permission: "user.read",
+  },
+  {
     /**
      * koala-admin#8. Approval is irreversible and is the gate in front of a
      * company posting jobs at all, so it gets its own permission rather than
@@ -189,6 +201,12 @@ export const ROUTES = [
     nav: { label: "Şirket onayları", order: 30, group: "operasyon" },
   },
   {
+    path: "/companies/[id]",
+    title: "Şirket",
+    access: "permission",
+    permission: "company.approve",
+  },
+  {
     path: "/identity-reviews",
     title: "Kimlik incelemeleri",
     access: "permission",
@@ -197,17 +215,20 @@ export const ROUTES = [
   },
   {
     /**
-     * The queue *and* the detail *and* the escrow operations, on one path.
-     * There is no `GET /admin/disputes/{id}` to build a detail route on — see
-     * the comment at the top of `src/app/(panel)/disputes/page.tsx` — so the
-     * selected dispute travels in `?uyusmazlik=`, which needs no second entry
-     * here and no second gate to keep in step with this one.
+     * Kuyruk `GET /admin/disputes`; nesne `GET /admin/disputes/{id}`. İkisi de
+     * `dispute.resolve`. Detay menüde yok — kuyruktan açılır.
      */
     path: "/disputes",
     title: "Uyuşmazlıklar",
     access: "permission",
     permission: "dispute.resolve",
     nav: { label: "Uyuşmazlıklar", order: 40, group: "operasyon" },
+  },
+  {
+    path: "/disputes/[id]",
+    title: "Uyuşmazlık",
+    access: "permission",
+    permission: "dispute.resolve",
   },
   {
     /**

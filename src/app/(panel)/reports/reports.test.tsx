@@ -25,6 +25,7 @@ vi.mock("@/server/auth/session", () => ({
 }));
 
 const { default: ReportsPage } = await import("./page");
+const { default: ReportDetailPage } = await import("./[id]/page");
 
 const ADMIN_ME = apiUrl("/admin/me");
 const REPORTS = apiUrl("/admin/reports");
@@ -170,6 +171,30 @@ const render = async (params: Record<string, string> = {}) =>
     "",
   );
 
+const renderDetail = async (id: string = row().id) =>
+  (
+    await renderServerComponent(<ReportDetailPage params={Promise.resolve({ id })} />)
+  ).replaceAll("<!-- -->", "");
+
+function watchDetail(
+  report: ReportRow = row(),
+  content: unknown = { jobTitle: null, messageBody: null, imageUrl: null },
+) {
+  server.use(
+    http.get(`${REPORTS}/:reportId`, () =>
+      HttpResponse.json({
+        success: true,
+        message: "Şikayet getirildi.",
+        httpStatus: "200 OK",
+        path: `/admin/reports/${report.id}`,
+        requestId: "rid-detail",
+        timeStamp: "2026-09-06T09:32:00.000000000Z",
+        data: { report, content },
+      }),
+    ),
+  );
+}
+
 describe("who can see the queue", () => {
   it("refuses a CATALOG_EDITOR and never asks the backend for reports", async () => {
     stubMe(CATALOG_EDITOR, ["CATALOG_EDITOR"]);
@@ -203,7 +228,8 @@ describe("who can see the queue", () => {
 
     expect(queue.calls).toBe(1);
     expect(html).not.toContain("403 — Bu sayfa için yetkiniz yok");
-    expect(html).toContain("Mesajlarda hakaret etti.");
+    expect(html).toContain("Taciz");
+    expect(html).toContain(`/reports/${row().id}`);
   });
 });
 
@@ -307,9 +333,9 @@ describe("what the queue shows", () => {
 describe("the detail, and what it refuses to make up", () => {
   it("shows the reason, the text and every target identifier", async () => {
     stubMe(MODERATOR);
-    watchQueue([row({ imageId: "cccccccc-0000-4000-8000-000000000003" })]);
+    watchDetail(row({ imageId: "cccccccc-0000-4000-8000-000000000003" }));
 
-    const html = await render();
+    const html = await renderDetail();
 
     expect(html).toContain("Mesajlarda hakaret etti.");
     expect(html).toContain("aaaaaaaa-0000-4000-8000-000000000001");
@@ -318,9 +344,9 @@ describe("the detail, and what it refuses to make up", () => {
 
   it("names the reporter and the table-wide prior count from the DTO", async () => {
     stubMe(MODERATOR);
-    watchQueue([row()]);
+    watchDetail();
 
-    const html = await render();
+    const html = await renderDetail();
 
     expect(html).toContain("Şikayet eden");
     expect(html).toContain("Ayşe Kaya");
@@ -331,15 +357,14 @@ describe("the detail, and what it refuses to make up", () => {
     expect(html).not.toContain("Aynı kullanıcı bu sayfada");
   });
 
-  it("groups the same reported user through a bookmarkable query, not the current page", async () => {
+  it("links the reported user to their object page and a bookmarkable reports filter", async () => {
     stubMe(MODERATOR);
-    const queue = watchQueue([row()]);
+    watchQueue([row()]);
 
     const html = await render();
 
-    expect(html).toContain(`kullanici=${REPORTED.id}`);
+    expect(html).toContain(`/users/${REPORTED.id}`);
     expect(html).not.toContain("Aynı kullanıcı bu sayfada 2 kez");
-    expect(queue.url?.searchParams.has("reportedUserId")).toBe(false);
   });
 
   it("sends reportedUserId when the URL asks to group that user", async () => {
@@ -355,7 +380,6 @@ describe("the detail, and what it refuses to make up", () => {
 describe("a bookmarked report", () => {
   it("loads GET /admin/reports/{id} and shows the targeted content", async () => {
     stubMe(MODERATOR);
-    watchQueue([row({ jobId: "bbbbbbbb-0000-4000-8000-000000000002" })]);
     const seen: string[] = [];
     server.use(
       http.get(`${REPORTS}/:reportId`, ({ params }) => {
@@ -379,7 +403,7 @@ describe("a bookmarked report", () => {
       }),
     );
 
-    const html = await render({ id: row().id });
+    const html = await renderDetail(row().id);
 
     expect(seen).toEqual([row().id]);
     expect(html).toContain("Akşam barista");
@@ -407,9 +431,9 @@ describe("a bookmarked report", () => {
 describe("the decision", () => {
   it("offers haklı, haksız and ek bilgi, each with what it will do", async () => {
     stubMe(MODERATOR);
-    watchQueue([row()]);
+    watchDetail();
 
-    const html = await render();
+    const html = await renderDetail();
 
     expect(html).toContain("Haklı bulundu");
     expect(html).toContain("Haksız bulundu");
@@ -419,9 +443,9 @@ describe("the decision", () => {
 
   it("requires a written reason and says the rule is the panel's, not the backend's", async () => {
     stubMe(MODERATOR);
-    watchQueue([row()]);
+    watchDetail();
 
-    const html = await render();
+    const html = await renderDetail();
 
     expect(html).toContain("Karar gerekçesi");
     expect(html).toContain("En az");
@@ -429,15 +453,15 @@ describe("the decision", () => {
 
   it("closes the form on a report the backend would answer 409 for", async () => {
     stubMe(MODERATOR);
-    watchQueue([
+    watchDetail(
       row({
         status: "ACTIONED",
         reviewNote: "Kayıtlar doğruladı.",
         reviewedAt: "2026-09-02T10:00:00Z",
       }),
-    ]);
+    );
 
-    const html = await render();
+    const html = await renderDetail();
 
     expect(html).toContain("olarak sonuçlandırılmış");
     expect(html).toContain("Kayıtlar doğruladı.");
@@ -446,9 +470,9 @@ describe("the decision", () => {
 
   it("says a verdict does not remove content or close an account", async () => {
     stubMe(MODERATOR);
-    watchQueue([row()]);
+    watchDetail();
 
-    const html = await render();
+    const html = await renderDetail();
 
     expect(html).toContain("Bu karar içeriği kaldırmaz ve hesabı kapatmaz");
     expect(html).not.toContain("henüz yok");
@@ -458,9 +482,9 @@ describe("the decision", () => {
 
   it("offers image removal only when the report names an IMAGE target", async () => {
     stubMe(MODERATOR);
-    watchQueue([row({ imageId: "cccccccc-0000-4000-8000-000000000003" })]);
+    watchDetail(row({ imageId: "cccccccc-0000-4000-8000-000000000003" }));
 
-    const html = await render();
+    const html = await renderDetail();
 
     expect(html).toContain("Görseli kaldır");
     expect(html).toContain("cccccccc-0000-4000-8000-000000000003");

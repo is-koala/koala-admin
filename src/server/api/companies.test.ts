@@ -12,6 +12,7 @@ import {
   companyImageDownloadPath,
   companyTypeLabel,
   getCompanies,
+  getCompany,
   rejectCompany,
   safeUserDisplayName,
 } from "./companies";
@@ -182,6 +183,49 @@ describe("the queue asks the backend for the page it is showing", () => {
     expect(JSON.stringify(review)).not.toContain("store.test");
     expect(JSON.stringify(review)).not.toContain("storageKey");
     expect(JSON.stringify(review)).not.toContain("s3://");
+  });
+});
+
+describe("the company object GET", () => {
+  it("loads GET /admin/companies/{id} with the same review DTO as the queue", async () => {
+    let url: string | null = null;
+    let authorization: string | null = null;
+
+    server.use(
+      http.get(`${COMPANIES}/:companyId`, ({ request }) => {
+        url = request.url;
+        authorization = request.headers.get("authorization");
+        return HttpResponse.json({
+          success: true,
+          message: "Şirket getirildi.",
+          httpStatus: "200 OK",
+          path: `/admin/companies/${COMPANY_ID}`,
+          requestId: "rid-company",
+          timeStamp: "2026-09-12T00:00:00.000000000Z",
+          data: REVIEW_COMPANY,
+        });
+      }),
+    );
+
+    const company = await getCompany("ACCESS-TOKEN", COMPANY_ID);
+
+    expect(url).toBe(`${COMPANIES}/${COMPANY_ID}`);
+    expect(authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(company).toEqual(SAFE_REVIEW_COMPANY);
+  });
+
+  it("escapes the company id on the object path", async () => {
+    let url: string | null = null;
+    server.use(
+      http.get(`${COMPANIES}/*`, ({ request }) => {
+        url = request.url;
+        return HttpResponse.json({ success: false, message: "yok" }, { status: 404 });
+      }),
+    );
+
+    await getCompany("ACCESS-TOKEN", "../../me").catch(() => undefined);
+
+    expect(url).toContain("%2F");
   });
 });
 

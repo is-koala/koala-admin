@@ -24,7 +24,9 @@ import { z } from "zod";
  *     on `dispute.resolve`.
  *  2. **It is gated by `dispute.resolve`, not by a read permission.**
  *     `@RequiresPermission(StaffPermission.DISPUTE_RESOLVE)` sits on the list
- *     handler too, so there is no read-only view of the queue to give someone.
+ *     and the object GET too, so there is no read-only view of the queue.
+ *  3. **`GET /admin/disputes/{id}` returns the same DisputeDto.** Amounts are
+ *     still on `GET /admin/job-assignments/{id}` (`payment.read`).
  *
  * And what `DisputeDto` does *not* carry, which is the single most consequential
  * fact for this screen: **no amount, no payment status, no parties beyond
@@ -208,6 +210,20 @@ export function getDisputes(
       size: query.size ?? DISPUTE_PAGING.defaultSize ?? 25,
       ...(query.status ? { status: query.status } : {}),
     },
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+export function disputeDetailPath(disputeId: string): string {
+  return `${DISPUTES_PATH}/${encodeURIComponent(disputeId)}`;
+}
+
+/** `GET /admin/disputes/{disputeId}` — same DisputeDto as the queue. Amounts stay on the assignment GET. */
+export function getDispute(accessToken: string, disputeId: string): Promise<Dispute> {
+  return koalaApi.get({
+    path: disputeDetailPath(disputeId),
+    schema: disputeSchema,
     accessToken,
     cache: "no-store",
   });
