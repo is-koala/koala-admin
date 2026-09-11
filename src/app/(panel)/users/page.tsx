@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { AuthorizationForm } from "@/components/panel/authz/authorization-form";
+import { PageHeader } from "@/components/panel/page-header";
 import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
   EmptyState,
@@ -60,14 +61,17 @@ export default async function UsersPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Kullanıcılar</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Pazaryeri kullanıcıları. Liste <code className="font-mono">user.read</code> ister; rol
-          vermek ve geri almak <code className="font-mono">user.role.manage</code>. E-posta aramada
-          kullanılır, yanıtta yoktur — tabloda yalnız ad, kullanıcı adı, kimlik ve roller görünür.
-        </p>
-      </header>
+      <PageHeader
+        title="Kullanıcılar"
+        description={
+          <>
+            Pazaryeri kullanıcıları. Liste <code className="font-mono">user.read</code> ister; rol
+            vermek ve geri almak <code className="font-mono">user.role.manage</code>. E-posta
+            aramada kullanılır, yanıtta yoktur — tabloda yalnız ad, kullanıcı adı, kimlik ve roller
+            görünür.
+          </>
+        }
+      />
 
       <RequirePermission permission="user.read">
         <UserDirectory params={params} />

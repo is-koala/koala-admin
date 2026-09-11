@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PageHeader } from "@/components/panel/page-header";
 import {
   DecisionForm,
   QueueFilters,
@@ -79,14 +80,16 @@ export default async function ReportsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Şikayet inceleme kuyruğu</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Mobil uygulamadan açılan kullanıcı ve içerik şikayetleri.{" "}
-          <code className="font-mono">content.moderate</code> izni gerektirir. Karar veren personel
-          ve karar zamanı backend&apos;in denetim kaydına yazılır (koala-backend#15).
-        </p>
-      </header>
+      <PageHeader
+        title="Şikayet inceleme kuyruğu"
+        description={
+          <>
+            Mobil uygulamadan açılan kullanıcı ve içerik şikayetleri.{" "}
+            <code className="font-mono">content.moderate</code> izni gerektirir. Karar veren
+            personel ve karar zamanı backend&apos;in denetim kaydına yazılır (koala-backend#15).
+          </>
+        }
+      />
 
       <RequirePermission permission="content.moderate">
         <ReportQueue params={params} />

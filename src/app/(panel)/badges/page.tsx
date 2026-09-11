@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
+import { PageHeader } from "@/components/panel/page-header";
 import { ErrorState } from "@/components/ui";
 import { isKoalaApiError } from "@/server/api/errors";
 import { getManagedBadges, type AdminBadge } from "@/server/api/badges";
@@ -27,14 +28,16 @@ export const metadata: Metadata = { title: "Rozetler" };
 export default async function BadgesPage() {
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Rozetler</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Katalogdaki rozetleri oluşturun, düzenleyin, ikon yükleyin veya pasifleştirin. Pasif rozet
-          yeni kimseye verilmez; sahiplerinde kalır. <code className="font-mono">badge.manage</code>{" "}
-          izni gerekir.
-        </p>
-      </header>
+      <PageHeader
+        title="Rozetler"
+        description={
+          <>
+            Katalogdaki rozetleri oluşturun, düzenleyin, ikon yükleyin veya pasifleştirin. Pasif
+            rozet yeni kimseye verilmez; sahiplerinde kalır.{" "}
+            <code className="font-mono">badge.manage</code> izni gerekir.
+          </>
+        }
+      />
 
       <RequirePermission permission="badge.manage">
         <BadgeTable />

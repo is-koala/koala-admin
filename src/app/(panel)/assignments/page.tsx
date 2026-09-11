@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge, EmptyState, FormField, TextInput, type BadgeTone } from "@/components/ui";
 import {
@@ -51,14 +52,16 @@ export default async function AssignmentsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Atama özeti</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Tek atamayı kimliğiyle açın. Liste yoktur; kimliği uyuşmazlık kaydından veya ödeme
-          runbook&apos;undan alın. <code className="font-mono">payment.read</code> izni gerekir —{" "}
-          <code className="font-mono">dispute.resolve</code> bu ekranı açmaz.
-        </p>
-      </header>
+      <PageHeader
+        title="Atama özeti"
+        description={
+          <>
+            Tek atamayı kimliğiyle açın. Liste yoktur; kimliği uyuşmazlık kaydından veya ödeme
+            runbook&apos;undan alın. <code className="font-mono">payment.read</code> izni gerekir —{" "}
+            <code className="font-mono">dispute.resolve</code> bu ekranı açmaz.
+          </>
+        }
+      />
 
       <RequirePermission permission="payment.read">
         <AssignmentLookup params={params} />

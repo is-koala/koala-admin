@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { AuthorizationForm } from "@/components/panel/authz/authorization-form";
 import { SeparationBadge } from "@/components/panel/authz/separation";
+import { PageHeader } from "@/components/panel/page-header";
 import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
   Badge,
@@ -98,15 +99,17 @@ export default async function StaffPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Personel</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Personel kayıtları ve rol üyeliği. Listeyi görmek{" "}
-          <code className="font-mono">staff.read</code>, değiştirmek{" "}
-          <code className="font-mono">staff.manage</code> izni gerektirir. Rol iptali anında
-          geçerlidir: üyelik her istekte veritabanından okunur (ADR-0014).
-        </p>
-      </header>
+      <PageHeader
+        title="Personel"
+        description={
+          <>
+            Personel kayıtları ve rol üyeliği. Listeyi görmek{" "}
+            <code className="font-mono">staff.read</code>, değiştirmek{" "}
+            <code className="font-mono">staff.manage</code> izni gerektirir. Rol iptali anında
+            geçerlidir: üyelik her istekte veritabanından okunur (ADR-0014).
+          </>
+        }
+      />
 
       <RequirePermission permission="staff.read">
         <StaffDirectory params={params} />

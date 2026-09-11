@@ -56,7 +56,7 @@ export function QueueFilters({
   return (
     <form
       method="get"
-      className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface px-4 py-3"
+      className="flex flex-col gap-3 border border-border-subtle bg-surface px-3 py-2.5"
     >
       {/* A new filter always starts at the first page. */}
       <input type="hidden" name="sayfa" value="0" />
@@ -67,14 +67,14 @@ export function QueueFilters({
       <div className="flex flex-wrap items-end gap-3">
         {filters.map((filter) => (
           <div key={filter.name} className="flex min-w-44 flex-col gap-1.5">
-            <label htmlFor={`filter-${filter.name}`} className="text-sm font-medium text-ink">
+            <label htmlFor={`filter-${filter.name}`} className="text-xs font-medium text-ink-muted">
               {filter.label}
             </label>
             <select
               id={`filter-${filter.name}`}
               name={filter.name}
               defaultValue={filter.value}
-              className="w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink"
+              className="w-full rounded-sm border border-border-strong bg-surface px-2.5 py-1.5 text-sm text-ink"
             >
               {filter.options.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -87,7 +87,7 @@ export function QueueFilters({
 
         <button
           type="submit"
-          className="rounded-md border border-border-strong px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
+          className="rounded-sm border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
         >
           {submitLabel}
         </button>

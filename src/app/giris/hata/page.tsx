@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AuthShell } from "@/components/panel/auth-shell";
 import { ErrorState } from "@/components/ui";
 import { isAuthFailureCode, type AuthFailureCode } from "@/server/auth/errors";
 
@@ -76,36 +77,38 @@ export default async function SignInErrorPage({
   const explanation = EXPLANATIONS[code];
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-6 px-6 py-16">
-      <ErrorState
-        title={explanation.title}
-        description={explanation.description}
-        errorCode={code}
-        action={
-          <p className="text-sm text-ink">
-            <span className="font-medium">Ne yapmalı: </span>
-            {explanation.nextStep}
-          </p>
-        }
-      />
+    <AuthShell>
+      <main className="flex flex-col gap-6">
+        <ErrorState
+          title={explanation.title}
+          description={explanation.description}
+          errorCode={code}
+          action={
+            <p className="text-sm text-ink">
+              <span className="font-medium">Ne yapmalı: </span>
+              {explanation.nextStep}
+            </p>
+          }
+        />
 
-      {code === "PASSWORD_CHANGE_REQUIRED" ? (
-        <Link
-          href="/giris/parola"
-          className="self-start rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-strong"
-        >
-          Parola değiştirme ekranına git
-        </Link>
-      ) : null}
+        {code === "PASSWORD_CHANGE_REQUIRED" ? (
+          <Link
+            href="/giris/parola"
+            className="self-start rounded-sm bg-brand px-4 py-2 text-sm font-medium text-surface hover:bg-brand-strong"
+          >
+            Parola değiştirme ekranına git
+          </Link>
+        ) : null}
 
-      {explanation.retry ? (
-        <Link
-          href="/giris"
-          className="self-start rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-strong"
-        >
-          Giriş sayfasına dön
-        </Link>
-      ) : null}
-    </main>
+        {explanation.retry ? (
+          <Link
+            href="/giris"
+            className="self-start rounded-sm bg-brand px-4 py-2 text-sm font-medium text-surface hover:bg-brand-strong"
+          >
+            Giriş sayfasına dön
+          </Link>
+        ) : null}
+      </main>
+    </AuthShell>
   );
 }

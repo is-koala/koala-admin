@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { AuthorizationForm } from "@/components/panel/authz/authorization-form";
 import { SeparationBadge } from "@/components/panel/authz/separation";
+import { PageHeader } from "@/components/panel/page-header";
 import {
   Badge,
   EmptyState,
@@ -94,15 +95,17 @@ export const metadata: Metadata = { title: "Roller ve izinler" };
 export default async function RolesPage() {
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Roller ve izinler</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Rol→izin grafiği ve roller arası kapsama (DAG).{" "}
-          <code className="font-mono">role.manage</code> izni gerektirir. İzinler token&apos;a
-          gömülmez; her istekte veritabanından çözülür, bu yüzden burada yapılan bir değişiklik
-          ilgili personelin <strong>bir sonraki isteğinde</strong> geçerlidir.
-        </p>
-      </header>
+      <PageHeader
+        title="Roller ve izinler"
+        description={
+          <>
+            Rol→izin grafiği ve roller arası kapsama (DAG).{" "}
+            <code className="font-mono">role.manage</code> izni gerektirir. İzinler token&apos;a
+            gömülmez; her istekte veritabanından çözülür, bu yüzden burada yapılan bir değişiklik
+            ilgili personelin <strong>bir sonraki isteğinde</strong> geçerlidir.
+          </>
+        }
+      />
 
       <RequirePermission permission="role.manage">
         <RoleGraph />
