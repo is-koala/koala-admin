@@ -60,8 +60,18 @@ function stubMe(permissions: readonly string[], roles: readonly string[] = ["MOD
   );
 }
 
+interface ReportPerson {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  username: string | null;
+  profilePictureUrl: string | null;
+}
+
 interface ReportRow {
   id: string;
+  reporter: ReportPerson | null;
+  reportedUser: ReportPerson | null;
   reportedUserId: string | null;
   jobId: string | null;
   messageId: string | null;
@@ -69,24 +79,46 @@ interface ReportRow {
   reason: string;
   description: string | null;
   status: string;
+  reviewedBy: ReportPerson | null;
   reviewNote: string | null;
   reviewedAt: string | null;
   createdAt: string;
+  reportedUserReportCount: number;
 }
+
+const REPORTER: ReportPerson = {
+  id: "dddddddd-0000-4000-8000-000000000004",
+  firstName: "Ayşe",
+  lastName: "Kaya",
+  username: "ayse",
+  profilePictureUrl: null,
+};
+
+const REPORTED: ReportPerson = {
+  id: "aaaaaaaa-0000-4000-8000-000000000001",
+  firstName: "Berk",
+  lastName: "Yılmaz",
+  username: "berk",
+  profilePictureUrl: null,
+};
 
 function row(overrides: Partial<ReportRow> = {}): ReportRow {
   return {
     id: "11111111-1111-4111-8111-111111111111",
-    reportedUserId: "aaaaaaaa-0000-4000-8000-000000000001",
+    reporter: REPORTER,
+    reportedUser: REPORTED,
+    reportedUserId: REPORTED.id,
     jobId: null,
     messageId: null,
     imageId: null,
     reason: "HARASSMENT",
     description: "Mesajlarda hakaret etti.",
     status: "OPEN",
+    reviewedBy: null,
     reviewNote: null,
     reviewedAt: null,
     createdAt: "2026-09-01T08:00:00Z",
+    reportedUserReportCount: 3,
     ...overrides,
   };
 }
@@ -284,28 +316,91 @@ describe("the detail, and what it refuses to make up", () => {
     expect(html).toContain("cccccccc-0000-4000-8000-000000000003");
   });
 
-  it("does not lecture that the reporter is missing from the DTO", async () => {
+  it("names the reporter and the table-wide prior count from the DTO", async () => {
     stubMe(MODERATOR);
     watchQueue([row()]);
 
     const html = await render();
 
     expect(html).toContain("Şikayet eden");
+    expect(html).toContain("Ayşe Kaya");
+    expect(html).toContain("Berk Yılmaz");
+    expect(html).toContain("Geçmiş şikayet");
+    expect(html).toContain("3");
     expect(html).not.toContain("Backend döndürmüyor");
-    expect(html).not.toContain("Geçmiş şikayet sayısı");
+    expect(html).not.toContain("Aynı kullanıcı bu sayfada");
   });
 
-  it("marks repeats on the page as page-scoped, never as a total", async () => {
+  it("groups the same reported user through a bookmarkable query, not the current page", async () => {
     stubMe(MODERATOR);
-    watchQueue([
-      row({ id: "11111111-1111-4111-8111-111111111111" }),
-      row({ id: "22222222-2222-4222-8222-222222222222", description: "Yine aynı kişi." }),
-    ]);
+    const queue = watchQueue([row()]);
 
     const html = await render();
 
-    expect(html).toContain("Aynı kullanıcı bu sayfada 2 kez");
-    expect(html).not.toContain("kuyruğun tamamı için bir");
+    expect(html).toContain(`kullanici=${REPORTED.id}`);
+    expect(html).not.toContain("Aynı kullanıcı bu sayfada 2 kez");
+    expect(queue.url?.searchParams.has("reportedUserId")).toBe(false);
+  });
+
+  it("sends reportedUserId when the URL asks to group that user", async () => {
+    stubMe(MODERATOR);
+    const queue = watchQueue([row()]);
+
+    await render({ kullanici: REPORTED.id });
+
+    expect(queue.url?.searchParams.get("reportedUserId")).toBe(REPORTED.id);
+  });
+});
+
+describe("a bookmarked report", () => {
+  it("loads GET /admin/reports/{id} and shows the targeted content", async () => {
+    stubMe(MODERATOR);
+    watchQueue([row({ jobId: "bbbbbbbb-0000-4000-8000-000000000002" })]);
+    const seen: string[] = [];
+    server.use(
+      http.get(`${REPORTS}/:reportId`, ({ params }) => {
+        seen.push(String(params.reportId));
+        return HttpResponse.json({
+          success: true,
+          message: "Şikayet getirildi.",
+          httpStatus: "200 OK",
+          path: `/admin/reports/${row().id}`,
+          requestId: "rid-detail",
+          timeStamp: "2026-09-06T09:32:00.000000000Z",
+          data: {
+            report: row({ jobId: "bbbbbbbb-0000-4000-8000-000000000002" }),
+            content: {
+              jobTitle: "Akşam barista",
+              messageBody: "Gelme, nakit ödeyeceğiz.",
+              imageUrl: "https://cdn.example/reported.jpg",
+            },
+          },
+        });
+      }),
+    );
+
+    const html = await render({ id: row().id });
+
+    expect(seen).toEqual([row().id]);
+    expect(html).toContain("Akşam barista");
+    expect(html).toContain("Gelme, nakit ödeyeceğiz.");
+    expect(html).toContain("https://cdn.example/reported.jpg");
+  });
+
+  it("does not invent a detail request when the URL has no id", async () => {
+    stubMe(MODERATOR);
+    watchQueue([row()]);
+    let detailCalls = 0;
+    server.use(
+      http.get(`${REPORTS}/:reportId`, () => {
+        detailCalls += 1;
+        return HttpResponse.json({ success: false, message: "yok" }, { status: 404 });
+      }),
+    );
+
+    await render();
+
+    expect(detailCalls).toBe(0);
   });
 });
 

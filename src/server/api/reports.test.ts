@@ -6,6 +6,7 @@ import { apiUrl, server } from "../../../test/msw";
 import { readPaging } from "./paging";
 import {
   REPORT_PAGING,
+  getReport,
   getReports,
   reportReasonLabel,
   reportStatusLabel,
@@ -167,6 +168,140 @@ describe("the queue asks the backend for the page it is showing", () => {
     expect(page.content[0]?.reason).toBe("IMPERSONATION");
     expect(reportReasonLabel("IMPERSONATION")).toBe("IMPERSONATION");
   });
+
+  it("sends reportedUserId when grouping the same target", async () => {
+    const seen = watchQueue();
+
+    await getReports("ACCESS-TOKEN", {
+      status: "OPEN",
+      reportedUserId: "aaaaaaaa-0000-4000-8000-000000000001",
+      paging: readPaging({}, REPORT_PAGING),
+    });
+
+    expect(seen.url?.searchParams.get("reportedUserId")).toBe(
+      "aaaaaaaa-0000-4000-8000-000000000001",
+    );
+  });
+
+  it("omits reportedUserId rather than sending an empty filter", async () => {
+    const seen = watchQueue();
+
+    await getReports("ACCESS-TOKEN", {
+      status: "OPEN",
+      paging: readPaging({}, REPORT_PAGING),
+    });
+
+    expect(seen.url?.searchParams.has("reportedUserId")).toBe(false);
+  });
+
+  it("keeps the reporter identity and the prior-count the backend sent", async () => {
+    watchQueue([
+      {
+        id: "r-1",
+        reporter: {
+          id: "rep-1",
+          firstName: "Ayşe",
+          lastName: "Kaya",
+          username: "ayse",
+          profilePictureUrl: null,
+        },
+        reportedUser: {
+          id: "u-1",
+          firstName: "Berk",
+          lastName: "Yılmaz",
+          username: "berk",
+          profilePictureUrl: null,
+        },
+        reportedUserId: "u-1",
+        jobId: null,
+        messageId: null,
+        imageId: null,
+        reason: "HARASSMENT",
+        description: "Küfür etti.",
+        status: "OPEN",
+        reviewNote: null,
+        reviewedAt: null,
+        createdAt: "2026-09-01T08:00:00Z",
+        reportedUserReportCount: 3,
+      },
+    ]);
+
+    const page = await getReports("ACCESS-TOKEN", {
+      status: "OPEN",
+      paging: readPaging({}, REPORT_PAGING),
+    });
+
+    expect(page.content[0]?.reporter?.firstName).toBe("Ayşe");
+    expect(page.content[0]?.reportedUserReportCount).toBe(3);
+  });
+});
+
+describe("opening one report", () => {
+  it("asks GET /admin/reports/{id} for the content preview", async () => {
+    let href: string | null = null;
+    server.use(
+      http.get(`${REPORTS}/:reportId`, ({ request }) => {
+        href = request.url;
+        return HttpResponse.json({
+          success: true,
+          message: "Şikayet getirildi.",
+          httpStatus: "200 OK",
+          path: "/admin/reports/r-1",
+          requestId: "rid-detail",
+          timeStamp: "2026-09-06T09:32:00.000000000Z",
+          data: {
+            report: {
+              id: "r-1",
+              reporter: {
+                id: "rep-1",
+                firstName: "Ayşe",
+                lastName: "Kaya",
+                username: "ayse",
+                profilePictureUrl: null,
+              },
+              reportedUser: null,
+              reportedUserId: null,
+              jobId: "job-1",
+              messageId: null,
+              imageId: null,
+              reason: "SPAM",
+              description: null,
+              status: "OPEN",
+              reviewNote: null,
+              reviewedAt: null,
+              createdAt: "2026-09-01T08:00:00Z",
+              reportedUserReportCount: 0,
+            },
+            content: {
+              jobTitle: "Akşam barista",
+              messageBody: null,
+              imageUrl: null,
+            },
+          },
+        });
+      }),
+    );
+
+    const detail = await getReport("ACCESS-TOKEN", "r-1");
+
+    expect(href).toContain("/admin/reports/r-1");
+    expect(detail.report.id).toBe("r-1");
+    expect(detail.content.jobTitle).toBe("Akşam barista");
+  });
+
+  it("escapes the report id on the detail path", async () => {
+    let url: string | null = null;
+    server.use(
+      http.get(`${REPORTS}/*`, ({ request }) => {
+        url = request.url;
+        return HttpResponse.json({ success: false, message: "yok" }, { status: 404 });
+      }),
+    );
+
+    await getReport("ACCESS-TOKEN", "../me").catch(() => undefined);
+
+    expect(url).toContain("%2F");
+  });
 });
 
 describe("submitting a verdict", () => {
@@ -232,6 +367,8 @@ describe("submitting a verdict", () => {
 describe("what a report points at", () => {
   const base: Report = {
     id: "r-1",
+    reporter: null,
+    reportedUser: null,
     reportedUserId: null,
     jobId: null,
     messageId: null,
@@ -239,9 +376,11 @@ describe("what a report points at", () => {
     reason: "SPAM",
     description: null,
     status: "OPEN",
+    reviewedBy: null,
     reviewNote: null,
     reviewedAt: null,
     createdAt: "2026-09-01T08:00:00Z",
+    reportedUserReportCount: 0,
   };
 
   it("lists every target, because one report can name more than one", () => {
