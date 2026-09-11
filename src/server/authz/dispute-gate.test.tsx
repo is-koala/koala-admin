@@ -324,6 +324,45 @@ describe("an OWNER on the queue", () => {
     expect(html).toContain("Bu süzgeçle eşleşen uyuşmazlık yok.");
   });
 
+  it("pages through GET /admin/disputes instead of truncating the first slice", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    let requestedPage: string | null = null;
+    server.use(
+      http.get(DISPUTES, ({ request }) => {
+        requestedPage = new URL(request.url).searchParams.get("page");
+        return HttpResponse.json({
+          success: true,
+          message: "Uyuşmazlıklar listelendi.",
+          httpStatus: "200 OK",
+          path: "/admin/disputes",
+          requestId: "rid-queue",
+          timeStamp: "2026-09-06T09:00:00.000000000Z",
+          data: {
+            content: [DISPUTE_ROW],
+            page: 1,
+            size: 25,
+            totalElements: 26,
+            totalPages: 2,
+            first: false,
+            last: true,
+          },
+        });
+      }),
+    );
+    watchSummary();
+
+    const html = (
+      await renderServerComponent(<DisputesPage searchParams={params({ sayfa: "1" })} />)
+    ).replaceAll("<!-- -->", "");
+
+    expect(requestedPage).toBe("1");
+    expect(html).toContain("Sayfa 2 / 2");
+    expect(html).toContain("26");
+    expect(html).toContain("uyuşmazlık");
+    expect(html).not.toContain("sonraki dilimde");
+    expect(html).not.toContain("İlk 25 kayıt");
+  });
+
   it("says the queue is empty rather than that it failed", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes(emptyQueue);

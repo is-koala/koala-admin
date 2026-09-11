@@ -30,7 +30,6 @@ import {
 import { roleOptionValue, type RoleCode } from "@/lib/role-identity";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import {
-  ROLE_GRAPH_BACKEND_GAPS,
   getStaffPermissionCatalog,
   getStaffRoles,
   type StaffPermissionEntry,
@@ -137,7 +136,6 @@ async function RoleGraph() {
           permission="role.manage"
           failure={classifyQueueFailure(error)}
         />
-        <BackendGaps />
       </div>
     );
   }
@@ -230,7 +228,6 @@ async function RoleGraph() {
       )}
 
       <RoleAuditPointer />
-      <BackendGaps />
     </div>
   );
 }
@@ -583,28 +580,5 @@ function RoleAuditPointer() {
       yazımları ayrıca <strong>öncesini ve sonrasını</strong> da damgalıyor (
       <code className="font-mono">permissions=[…]; includes=[…]</code>).
     </AuditPointer>
-  );
-}
-
-function BackendGaps() {
-  return (
-    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3">
-      <h2 className="text-sm font-semibold text-ink">
-        Backend&apos;in veremedikleri ({formatInteger(ROLE_GRAPH_BACKEND_GAPS.length)})
-      </h2>
-      <p className="max-w-prose text-xs text-ink-muted">
-        koala-admin#9&apos;un istediği ama <code className="font-mono">StaffRolesController</code>{" "}
-        ve <code className="font-mono">StaffAuthorizationManager</code>&apos;ın bugün
-        karşılayamadığı maddeler. Panel bunları taklit etmiyor.
-      </p>
-      <dl className="flex flex-col gap-2">
-        {ROLE_GRAPH_BACKEND_GAPS.map((gap) => (
-          <div key={gap.id} className="flex flex-col">
-            <dt className="text-sm font-medium text-ink">{gap.title}</dt>
-            <dd className="max-w-prose text-xs text-ink-muted">{gap.detail}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
   );
 }

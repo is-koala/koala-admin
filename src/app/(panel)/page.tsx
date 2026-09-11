@@ -2,46 +2,52 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/panel/page-header";
 import { Badge } from "@/components/ui";
-import { requireStaffSession } from "@/server/auth/session";
+import { formatInteger } from "@/lib/format";
+import { loadOpsSnapshot } from "@/server/api/ops-snapshot";
+import { getKoalaAccessToken, requireStaffSession } from "@/server/auth/session";
 import { permissionLabel } from "@/server/authz/permissions";
 import { navigationFor } from "@/server/authz/routes";
 import { getStaffContext } from "@/server/authz/staff-context";
 
 /**
- * The landing page, and the one screen that is deliberately not
- * permission-gated (`src/server/authz/routes.ts` records why).
- *
- * It shows the two answers side by side because confusing them is the mistake
- * ADR-0010 exists to prevent — and ADR-0014 kept that half untouched even after
- * identity came back into Koala. Role membership says *who you are*; the
- * permissions resolved from the role graph say *what you may do*. Both arrive
- * from `GET /admin/me` on this request, and neither is derived from the other
- * here: the panel prints the backend's answer rather than computing one.
- *
- * When the permission side cannot be resolved, the shell above renders the
- * explanation and this page shows an empty list — which is the honest picture:
- * signed in, and permitted nothing.
+ * Operatör evi. Rol/izin kartları durur çünkü menü onlara bağlıdır; asıl iş
+ * bekleyen kuyruk sayılarıdır. Doğrulama sayfası reklam edilmez.
  */
 export default async function PanelHomePage() {
-  // The second lock. `src/proxy.ts` already turned anonymous requests away; this
-  // catches a session that died in the gap between the gate and the render.
-  // Its return value is deliberately unused: nothing about a person is in the
-  // session cookie, and everything printed below comes from the backend.
   await requireStaffSession();
   const context = await getStaffContext();
   const reachable = navigationFor(context.permissions);
+  const queues = await loadOpsSnapshot(await getKoalaAccessToken(), context.permissions);
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Güncel durum"
-        description="Kim olduğunuzu rol üyeliğiniz, ne yapabildiğinizi rol grafiğinden çözülen izinler söyler. Panel ikisini de her istekte backend'e sorar ve hiçbirini saklamaz."
+        description="Bugün sizin açabileceğiniz kuyruklar. Sayılar her açılışta backend'den gelir."
       />
+
+      {queues.length > 0 ? (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {queues.map((tile) => (
+            <Link
+              key={tile.href}
+              href={tile.href}
+              className="flex flex-col gap-1 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm hover:bg-surface-muted"
+            >
+              <span className="text-xs font-medium text-ink-muted">{tile.label}</span>
+              <span className="text-2xl font-semibold tracking-tight text-ink">
+                {tile.count === null ? "—" : formatInteger(tile.count)}
+              </span>
+              <span className="text-xs text-ink-subtle">Kuyruğu aç</span>
+            </Link>
+          ))}
+        </section>
+      ) : null}
 
       <section className="grid gap-4 md:grid-cols-2">
         <article className="flex flex-col gap-3 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm">
           <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-semibold">Kimlik, rol üyeliği</h2>
+            <h2 className="text-sm font-semibold">Oturum</h2>
             <p className="text-sm text-ink">{context.staff?.displayName ?? "—"}</p>
             <p className="text-xs text-ink-muted">{context.staff?.email ?? "—"}</p>
           </div>
@@ -57,23 +63,16 @@ export default async function PanelHomePage() {
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-ink-subtle">
-              Kapsanan roller de dâhil, backend&apos;in çözdüğü üyelik. Hangi işlemi açtığı buradan
-              okunmaz.
-            </p>
           </div>
         </article>
 
         <article className="flex flex-col gap-3 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm">
           <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-semibold">Yetki, rol grafiği</h2>
-            <p className="text-sm text-ink">
-              {context.staff === null ? "Personel kaydı çözülemedi" : "Her istekte yeniden çözüldü"}
-            </p>
+            <h2 className="text-sm font-semibold">İzinler</h2>
             <p className="text-xs text-ink-muted">
               {context.staff === null
-                ? "GET /admin/me yanıt vermedi; izin listesi boş kabul edildi."
-                : "İzinler token'da taşınmaz; bir rol geri alındığında anında düşer."}
+                ? "Personel kaydı okunamadı; menü boş kabul edildi."
+                : "Her istekte yeniden çözülür. Token'da taşınmaz."}
             </p>
           </div>
 
@@ -103,10 +102,10 @@ export default async function PanelHomePage() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold">Erişebildiğiniz ekranlar</h2>
+        <h2 className="text-sm font-semibold">Ekranlar</h2>
         {reachable.length === 0 ? (
           <p className="max-w-prose text-sm text-ink-muted">
-            Şu an açık bir ekran yok. Menü de bu yüzden boş: panel, izniniz olduğunu varsaymaz.
+            Şu an açık bir ekran yok. Menü de bu yüzden boş.
           </p>
         ) : (
           <ul className="divide-y divide-border-subtle overflow-hidden rounded-2xl border border-border-subtle bg-surface shadow-sm">
@@ -122,20 +121,6 @@ export default async function PanelHomePage() {
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="flex flex-col gap-2 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm">
-        <h2 className="text-sm font-semibold">Doğrulama</h2>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Sunucu tarafı API katmanının canlı backend&apos;e karşı çalıştığını gösteren sayfa; izin
-          çözümünden bağımsız çalışır.
-        </p>
-        <Link
-          href="/verification/job-categories"
-          className="self-start text-sm font-medium text-brand hover:underline"
-        >
-          İş kategorileri (doğrulama)
-        </Link>
       </section>
     </div>
   );

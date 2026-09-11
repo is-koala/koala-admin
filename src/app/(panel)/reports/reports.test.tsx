@@ -209,13 +209,14 @@ describe("the filter and the page are query parameters", () => {
     expect(queue.url?.searchParams.get("status")).toBe("OPEN");
   });
 
-  it("says out loud that reason and reporter cannot be filtered at all", async () => {
+  it("does not advertise missing filters as unfinished work", async () => {
     stubMe(MODERATOR);
     watchQueue([row()]);
 
     const html = await render();
 
-    expect(html).toContain("Şikayet türüne, gerekçeye ya da şikayet edene göre süzme yok");
+    expect(html).toContain("Durum ve sıralama kuyruğu süzer");
+    expect(html).not.toContain("Backend&#x27;in veremedikleri");
   });
 });
 
@@ -283,30 +284,18 @@ describe("the detail, and what it refuses to make up", () => {
     expect(html).toContain("cccccccc-0000-4000-8000-000000000003");
   });
 
-  it("says the reporter is not returned instead of showing a blank field", async () => {
+  it("does not lecture that the reporter is missing from the DTO", async () => {
     stubMe(MODERATOR);
     watchQueue([row()]);
 
     const html = await render();
 
     expect(html).toContain("Şikayet eden");
-    expect(html).toContain("Backend döndürmüyor.");
-  });
-
-  it("refuses to invent a prior-report count", async () => {
-    stubMe(MODERATOR);
-    watchQueue([row()]);
-
-    const html = await render();
-
-    expect(html).toContain("Geçmiş şikayet sayısı");
-    expect(html).toContain("panel bir sayı uydurmuyor");
+    expect(html).not.toContain("Backend döndürmüyor");
+    expect(html).not.toContain("Geçmiş şikayet sayısı");
   });
 
   it("marks repeats on the page as page-scoped, never as a total", async () => {
-    // Grouping needs a filter by reported user, which the endpoint does not
-    // have. A count over twenty rows presented as a total is a lie an operator
-    // would act on, so the words "bu sayfada" are part of the contract.
     stubMe(MODERATOR);
     watchQueue([
       row({ id: "11111111-1111-4111-8111-111111111111" }),
@@ -316,7 +305,7 @@ describe("the detail, and what it refuses to make up", () => {
     const html = await render();
 
     expect(html).toContain("Aynı kullanıcı bu sayfada 2 kez");
-    expect(html).toContain("kuyruğun tamamı için bir");
+    expect(html).not.toContain("kuyruğun tamamı için bir");
   });
 });
 
@@ -340,7 +329,7 @@ describe("the decision", () => {
     const html = await render();
 
     expect(html).toContain("Karar gerekçesi");
-    expect(html).toContain("Backend boş not kabul ediyor; bu kural panelin.");
+    expect(html).toContain("En az");
   });
 
   it("closes the form on a report the backend would answer 409 for", async () => {
@@ -360,50 +349,30 @@ describe("the decision", () => {
     expect(html).not.toContain("Kararı gönder");
   });
 
-  it("names the follow-up steps, including the ones that have no endpoint", async () => {
+  it("says a verdict does not remove content or close an account", async () => {
     stubMe(MODERATOR);
     watchQueue([row()]);
 
     const html = await render();
 
-    expect(html).toContain("koala-backend&#x27;de böyle bir uç yok");
-    expect(html).toContain("kapsam dışı");
-  });
-
-  it("names the image takedown endpoint only when the report is about an image", async () => {
-    stubMe(MODERATOR);
-    watchQueue([row({ reportedUserId: null, imageId: "cccccccc-0000-4000-8000-000000000003" })]);
-
-    const withImage = await render();
-    expect(withImage).toContain("ucu var");
-
-    server.resetHandlers();
-    stubMe(MODERATOR);
-    watchQueue([row()]);
-
-    const withoutImage = await render();
-    expect(withoutImage).toContain("uygulanabilir bir kaldırma adımı yok");
+    expect(html).toContain("Bu karar içeriği kaldırmaz ve hesabı kapatmaz");
+    expect(html).not.toContain("henüz yok");
+    expect(html).not.toContain("kapsam dışı");
   });
 });
 
-describe("the gaps are on the screen, not only in a hand-off note", () => {
-  it("lists what ReportsController cannot answer", async () => {
+describe("unfinished-work copy stays off the screen", () => {
+  it("does not list backend gaps on a loaded or failed queue", async () => {
     stubMe(MODERATOR);
     watchQueue([row()]);
+    const loaded = await render();
+    expect(loaded).not.toContain("Backend&#x27;in veremedikleri");
 
-    const html = await render();
-
-    expect(html).toContain("Backend&#x27;in veremedikleri");
-    expect(html).toContain("Tek bir şikayeti getiren uç yok");
-  });
-
-  it("still lists them when the queue itself could not be loaded", async () => {
+    server.resetHandlers();
     stubMe(MODERATOR);
     watchQueue([], () => HttpResponse.error());
-
-    const html = await render();
-
-    expect(html).toContain("Şikayet kuyruğu yüklenemedi.");
-    expect(html).toContain("Backend&#x27;in veremedikleri");
+    const failed = await render();
+    expect(failed).toContain("Şikayet kuyruğu yüklenemedi.");
+    expect(failed).not.toContain("Backend&#x27;in veremedikleri");
   });
 });

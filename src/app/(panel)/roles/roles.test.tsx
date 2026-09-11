@@ -471,13 +471,14 @@ describe("denetim kaydı ve eksikler", () => {
     expect(html).toContain("permission=role.manage");
   });
 
-  it("rol yaratma ucunun olmadığını söylüyor", async () => {
+  it("does not list backend gaps as unfinished work", async () => {
     stubMe(["role.manage"]);
     watchGraph();
 
     const html = await render();
 
-    expect(html).toContain("Rol yaratma, adlandırma ve silme ucu yok");
+    expect(html).not.toContain("Rol yaratma, adlandırma ve silme ucu yok");
+    expect(html).not.toContain("Backend&#x27;in veremedikleri");
   });
 
   it("grafik okunamadığında eksikleri yine de gösteriyor ve sebebi söylüyor", async () => {
@@ -506,6 +507,6 @@ describe("denetim kaydı ve eksikler", () => {
     const html = await render();
 
     expect(html).toContain("rid-500");
-    expect(html).toContain("Görev ayrılığı kuralı çalışma anında uygulanmıyor");
+    expect(html).not.toContain("Görev ayrılığı kuralı çalışma anında uygulanmıyor");
   });
 });
