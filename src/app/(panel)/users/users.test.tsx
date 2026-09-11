@@ -6,9 +6,15 @@ import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+const backendSaysPasswordMustChange = vi.fn<() => Promise<boolean | null>>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
+  backendSaysPasswordMustChange: () => backendSaysPasswordMustChange(),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
 }));
 
 const { default: UsersPage } = await import("./page");
@@ -21,12 +27,14 @@ const MODERATOR = ["content.moderate"];
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  backendSaysPasswordMustChange.mockResolvedValue(false);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   getKoalaAccessToken.mockReset();
+  backendSaysPasswordMustChange.mockReset();
 });
 
 function stubMe(permissions: readonly string[], roles: readonly string[] = ["SUPPORT_AGENT"]) {
@@ -61,8 +69,14 @@ function row(overrides: Partial<UserRow> = {}): UserRow {
 }
 
 function watchQueue(rows: UserRow[]) {
-  const seen: { calls: number; url: URL | null; authorization: string | null } = {
+  const seen: {
+    calls: number;
+    roleCalls: number;
+    url: URL | null;
+    authorization: string | null;
+  } = {
     calls: 0,
+    roleCalls: 0,
     url: null,
     authorization: null,
   };
@@ -90,6 +104,26 @@ function watchQueue(rows: UserRow[]) {
         },
       });
     }),
+    http.get(apiUrl("/admin/users/:userId/roles"), ({ request }) => {
+      seen.roleCalls += 1;
+      const userId = new URL(request.url).pathname.split("/")[3] ?? "";
+      return HttpResponse.json({
+        success: true,
+        message: "Roller listelendi.",
+        httpStatus: "200 OK",
+        path: `/admin/users/${userId}/roles`,
+        requestId: "rid-user-roles",
+        timeStamp: "2026-09-11T13:00:00.000000000Z",
+        data: [
+          {
+            role: "ROLE_USER",
+            grantedAt: "2026-01-01T08:00:00.000000000Z",
+            grantedById: "00000000-0000-0000-0000-000000000001",
+            grantedByName: "Sistem",
+          },
+        ],
+      });
+    }),
   );
 
   return seen;
@@ -109,6 +143,7 @@ describe("who can see the directory", () => {
     const html = await render();
 
     expect(queue.calls).toBe(0);
+    expect(queue.roleCalls).toBe(0);
     expect(html).toContain("403 — Bu sayfa için yetkiniz yok");
     expect(html).toContain("Kullanıcıları görüntüle");
     expect(html).not.toContain("Ada Yılmaz");
@@ -220,5 +255,43 @@ describe("the safe user projection", () => {
     expect(seen.calls).toBe(1);
     expect(html).toContain("Backend bu işlem için yetki vermedi.");
     expect(html).toContain("rid-403");
+  });
+});
+
+describe("marketplace roles sit on the directory", () => {
+  it("lets user.read list grants and does not draw write forms", async () => {
+    stubMe(READER);
+    const queue = watchQueue([row()]);
+
+    const html = await render();
+
+    expect(queue.roleCalls).toBe(1);
+    expect(html).toContain("ROLE_USER");
+    expect(html).toContain("Sistem");
+    expect(html).toContain("Yalnız okuma");
+    expect(html).not.toContain("Rol ver");
+    expect(html).not.toContain("Rolü geri al");
+  });
+
+  it("draws grant and revoke only when user.role.manage is held", async () => {
+    stubMe(["user.read", "user.role.manage"]);
+    watchQueue([row()]);
+
+    const html = await render();
+
+    expect(html).toContain("Rol ver");
+    expect(html).toContain("Rolü geri al");
+    expect(html).toContain("ROLE_ADMIN");
+    expect(html).not.toContain("Yalnız okuma");
+  });
+
+  it("does not ask for roles when the directory itself is empty", async () => {
+    stubMe(READER);
+    const queue = watchQueue([]);
+
+    await render();
+
+    expect(queue.calls).toBe(1);
+    expect(queue.roleCalls).toBe(0);
   });
 });

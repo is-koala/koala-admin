@@ -148,9 +148,10 @@ export const ROUTES = [
   },
   {
     /**
-     * koala-admin#46. Pazaryeri `users` tablosu, personel değil.
-     * Kapı `user.read`: `GET /admin/users` onu ister. Rol yazımı
-     * `user.role.manage` ve ayrı issue — bu sayfa salt okunur.
+     * koala-admin#46/#47. Pazaryeri `users` tablosu, personel değil.
+     * Kapı `user.read`: `GET /admin/users` ve roller onu ister. Rol yazımı
+     * `user.role.manage` ve `runAuthorizationChange` her gönderimde yeniden
+     * çözer — sayfanın kapısı Server Action'ı korumaz.
      */
     path: "/users",
     title: "Kullanıcılar",

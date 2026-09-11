@@ -85,6 +85,9 @@ export interface AuthorizationHiddenFields {
   readonly staffId?: string;
   readonly staffLabel?: string;
   readonly active?: string;
+  readonly userId?: string;
+  readonly userLabel?: string;
+  readonly role?: string;
 }
 
 export interface AuthorizationFormProps {
