@@ -94,7 +94,7 @@ export default async function SignInErrorPage({
         {code === "PASSWORD_CHANGE_REQUIRED" ? (
           <Link
             href="/giris/parola"
-            className="self-start rounded-sm bg-brand px-4 py-2 text-sm font-medium text-surface hover:bg-brand-strong"
+            className="self-start rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-brand hover:bg-brand-strong"
           >
             Parola değiştirme ekranına git
           </Link>
@@ -103,7 +103,7 @@ export default async function SignInErrorPage({
         {explanation.retry ? (
           <Link
             href="/giris"
-            className="self-start rounded-sm bg-brand px-4 py-2 text-sm font-medium text-surface hover:bg-brand-strong"
+            className="self-start rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-brand hover:bg-brand-strong"
           >
             Giriş sayfasına dön
           </Link>

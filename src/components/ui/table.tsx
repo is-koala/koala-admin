@@ -11,7 +11,12 @@ export interface TableProps {
 
 export function Table({ caption, children, className }: TableProps) {
   return (
-    <div className={cn("overflow-x-auto border border-border-subtle bg-surface", className)}>
+    <div
+      className={cn(
+        "overflow-x-auto rounded-xl border border-border-subtle bg-surface shadow-sm",
+        className,
+      )}
+    >
       <table className="w-full border-collapse text-sm">
         {caption ? <caption className="sr-only">{caption}</caption> : null}
         {children}

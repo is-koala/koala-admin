@@ -15,18 +15,12 @@ export interface PageHeaderProps {
 /**
  * The title row of a panel screen.
  *
- * An admin console is a stack of work surfaces, not a marketing page: the
- * heading is left-aligned, dense, and sits on a hairline rather than in a
- * card. Copy stays the page's job; this component only places it.
+ * Merchant panels lead with a calm title and a short status line, not a
+ * marketing hero. Copy stays the page's job; this component only places it.
  */
 export function PageHeader({ title, description, children, className }: PageHeaderProps) {
   return (
-    <header
-      className={cn(
-        "flex flex-wrap items-start justify-between gap-3 border-b border-border-subtle pb-4",
-        className,
-      )}
-    >
+    <header className={cn("flex flex-wrap items-start justify-between gap-3", className)}>
       <div className="flex min-w-0 flex-col gap-1">
         <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
         {description ? (

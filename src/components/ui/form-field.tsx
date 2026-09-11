@@ -3,7 +3,7 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react
 import { cn } from "@/lib/cn";
 
 const CONTROL_CLASSES =
-  "w-full rounded-sm border border-border-strong bg-surface px-2.5 py-1.5 text-sm text-ink " +
+  "w-full rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 text-sm text-ink " +
   "placeholder:text-ink-subtle disabled:cursor-not-allowed disabled:bg-surface-sunken " +
   "aria-[invalid=true]:border-danger";
 

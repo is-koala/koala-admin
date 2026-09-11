@@ -38,6 +38,16 @@ vi.mock("@/server/auth/actions", () => ({
   signOut: async () => undefined,
 }));
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+}));
+
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: () => undefined,
+  }),
+}));
+
 const { default: PanelLayout } = await import("@/app/(panel)/layout");
 
 const ADMIN_ME = apiUrl("/admin/me");

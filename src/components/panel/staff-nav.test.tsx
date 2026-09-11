@@ -59,4 +59,15 @@ describe("StaffNav groups the screens it was handed", () => {
     );
     expect(screen.queryByText("Katalog")).not.toBeInTheDocument();
   });
+
+  it("draws identity reviews in Operasyon and can mark them current", () => {
+    render(
+      <StaffNav entries={navigationFor(["identity.review"])} currentPath="/identity-reviews" />,
+    );
+
+    const link = screen.getByRole("link", { name: "Kimlik incelemeleri" });
+    expect(link).toHaveAttribute("href", "/identity-reviews");
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Operasyon")).toBeInTheDocument();
+  });
 });

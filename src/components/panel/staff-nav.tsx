@@ -1,6 +1,9 @@
 import Link from "next/link";
+import type { Route } from "next";
 
-import type { NavEntry, NavGroupId } from "@/server/authz/routes";
+import type { DrawnNavEntry } from "./nav-types";
+import { NavIcon } from "./nav-icons";
+import { navItemClass } from "./nav-item";
 
 export interface StaffNavProps {
   /**
@@ -8,20 +11,20 @@ export interface StaffNavProps {
    * it is handed and decides nothing — the permission→menu mapping lives in the
    * route registry, in one place, and must not grow a second home here.
    */
-  entries: readonly NavEntry[];
+  entries: readonly DrawnNavEntry[];
   /** True when `/admin/me` could not be resolved, so the emptiness is explained. */
   unresolved?: boolean;
+  /** Pathname of the open screen, so the current item can be marked. */
+  currentPath?: string;
+  /** Icon-only rail, matching the merchant-panel collapse. */
+  collapsed?: boolean;
 }
 
 /**
  * The labels the operator reads. Ids stay in the registry; Turkish copy lives
  * next to the drawing so a new group cannot appear as an English identifier.
- *
- * Sentence case on purpose: tracked-out all-caps group labels are the generic
- * admin-template tell, and they do not encode anything the heading is not
- * already saying.
  */
-const NAV_GROUP_LABELS: Record<NavGroupId, string> = {
+const NAV_GROUP_LABELS: Record<DrawnNavEntry["group"], string> = {
   katalog: "Katalog",
   operasyon: "Operasyon",
   finans: "Finans",
@@ -29,9 +32,9 @@ const NAV_GROUP_LABELS: Record<NavGroupId, string> = {
 };
 
 interface NavGroup {
-  readonly id: NavGroupId;
+  readonly id: DrawnNavEntry["group"];
   readonly label: string;
-  readonly entries: readonly NavEntry[];
+  readonly entries: readonly DrawnNavEntry[];
 }
 
 /**
@@ -39,7 +42,7 @@ interface NavGroup {
  * group become one heading; a later return to the same group would paint it
  * twice, which `routes.test.ts` forbids by requiring contiguity.
  */
-function groupNavEntries(entries: readonly NavEntry[]): readonly NavGroup[] {
+function groupNavEntries(entries: readonly DrawnNavEntry[]): readonly NavGroup[] {
   const groups: NavGroup[] = [];
 
   for (const entry of entries) {
@@ -74,13 +77,18 @@ function groupNavEntries(entries: readonly NavEntry[]): readonly NavGroup[] {
  * Presentational and synchronous, so a test can render it directly. Nothing
  * here reads a session, a cookie or a role.
  */
-export function StaffNav({ entries, unresolved = false }: StaffNavProps) {
+export function StaffNav({
+  entries,
+  unresolved = false,
+  currentPath,
+  collapsed = false,
+}: StaffNavProps) {
   const groups = groupNavEntries(entries);
 
   return (
     <nav aria-label="Panel menüsü" className="flex flex-col gap-4">
       {entries.length === 0 ? (
-        <p className="px-2 py-1.5 text-xs text-bark-muted" data-testid="staff-nav-empty">
+        <p className="px-3 py-1.5 text-xs text-ink-muted" data-testid="staff-nav-empty">
           {unresolved
             ? "İzinler çözülemedi, bu yüzden menü boş. Aşağıdaki açıklamaya bakın."
             : "Erişebileceğiniz bir ekran yok."}
@@ -88,20 +96,34 @@ export function StaffNav({ entries, unresolved = false }: StaffNavProps) {
       ) : (
         groups.map((group) => (
           <div key={group.id} className="flex flex-col gap-1">
-            <p id={`nav-${group.id}`} className="px-2 text-xs font-medium text-bark-muted">
-              {group.label}
-            </p>
-            <ul className="flex flex-col" aria-labelledby={`nav-${group.id}`}>
-              {group.entries.map((entry) => (
-                <li key={entry.href}>
-                  <Link
-                    href={entry.href}
-                    className="block rounded-sm px-2 py-1.5 text-sm text-bark-ink hover:bg-bark-hover"
-                  >
-                    {entry.label}
-                  </Link>
-                </li>
-              ))}
+            {collapsed ? (
+              <p id={`nav-${group.id}`} className="sr-only">
+                {group.label}
+              </p>
+            ) : (
+              <p id={`nav-${group.id}`} className="px-3 text-xs font-medium text-ink-subtle">
+                {group.label}
+              </p>
+            )}
+            <ul className="flex flex-col gap-0.5" aria-labelledby={`nav-${group.id}`}>
+              {group.entries.map((entry) => {
+                const active = currentPath === entry.href;
+                return (
+                  <li key={entry.href}>
+                    <Link
+                      // DrawnNavEntry.href string çünkü chrome `@/server`'a
+                      // bağlanmıyor; href'lerin kaynağı hâlâ yalnız kayıt.
+                      href={entry.href as Route}
+                      aria-current={active ? "page" : undefined}
+                      title={entry.label}
+                      className={navItemClass(active)}
+                    >
+                      <NavIcon href={entry.href} />
+                      {collapsed ? <span className="sr-only">{entry.label}</span> : entry.label}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ))
