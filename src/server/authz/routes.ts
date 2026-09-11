@@ -125,6 +125,17 @@ export const ROUTES = [
   },
   {
     /**
+     * koala-admin#39. Liste `user.read_pii` ister çünkü DTO `subjectId`
+     * taşır. Ret ayrı: `user.deletion.manage`, form ve action'da.
+     */
+    path: "/account-deletions",
+    title: "Hesap silme talepleri",
+    access: "permission",
+    permission: "user.read_pii",
+    nav: { label: "Hesap silme", order: 25 },
+  },
+  {
+    /**
      * koala-admin#8. Approval is irreversible and is the gate in front of a
      * company posting jobs at all, so it gets its own permission rather than
      * riding along with anything else — `COMPANY_APPROVE` on the backend.
