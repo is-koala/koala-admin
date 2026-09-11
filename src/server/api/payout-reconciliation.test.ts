@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 
 import { apiUrl, server } from "../../../test/msw";
 
-import { reconcilePayout, type PayoutSettlementEvidence } from "./payout-reconciliation";
+import {
+  ADMIN_PAYOUTS_PATH,
+  PAYOUT_QUEUE_PAGING,
+  getAdminPayouts,
+  reconcilePayout,
+  type PayoutSettlementEvidence,
+} from "./payout-reconciliation";
 
 const PAYOUT_ID = "9c000000-0000-4000-8000-000000000033";
 const RECONCILE = apiUrl(`/admin/payouts/${PAYOUT_ID}/reconcile`);
@@ -132,6 +138,75 @@ describe("payout settlement reconciliation transport", () => {
       errorCode: "PAYOUT_SETTLEMENT_EVIDENCE_MISMATCH",
       message: "Ekstre tutarı hakediş tutarıyla eşleşmiyor.",
       requestId: "rid-mismatch",
+    });
+  });
+});
+
+const PROCESSING = {
+  ...PAYOUT,
+  status: "PROCESSING" as const,
+  completedAt: null,
+};
+
+function pageSuccess(content: unknown[] = [PROCESSING]): Response {
+  return HttpResponse.json({
+    success: true,
+    message: "Hakedişler listelendi.",
+    httpStatus: "200 OK",
+    path: ADMIN_PAYOUTS_PATH,
+    requestId: "rid-payout-list",
+    timeStamp: "2026-09-12T00:00:00Z",
+    data: {
+      content,
+      page: 0,
+      size: 20,
+      totalElements: content.length,
+      totalPages: 1,
+      first: true,
+      last: true,
+    },
+  });
+}
+
+describe("the pending payout settlement queue", () => {
+  it("pages /admin/payouts without a status so the backend keeps PROCESSING-only", async () => {
+    let url: URL | null = null;
+    server.use(
+      http.get(apiUrl(ADMIN_PAYOUTS_PATH), ({ request }) => {
+        url = new URL(request.url);
+        return pageSuccess();
+      }),
+    );
+
+    const page = await getAdminPayouts("ACCESS-TOKEN", {
+      page: 0,
+      size: 20,
+      sort: PAYOUT_QUEUE_PAGING.defaultSort,
+    });
+
+    expect(url).not.toBeNull();
+    const params = url as unknown as URL;
+    expect(params.searchParams.get("status")).toBeNull();
+    expect(params.searchParams.get("sort")).toBe("createdAt,desc");
+    expect(page.content[0]?.id).toBe(PAYOUT_ID);
+    expect(page.content[0]?.status).toBe("PROCESSING");
+    expect(typeof page.content[0]?.amount).toBe("string");
+  });
+
+  it("rejects a queue row that turns the payout amount into a number", async () => {
+    server.use(
+      http.get(apiUrl(ADMIN_PAYOUTS_PATH), () => pageSuccess([{ ...PROCESSING, amount: 12.34 }])),
+    );
+
+    await expect(
+      getAdminPayouts("ACCESS-TOKEN", {
+        page: 0,
+        size: 20,
+        sort: PAYOUT_QUEUE_PAGING.defaultSort,
+      }),
+    ).rejects.toMatchObject({
+      errorCode: "RESPONSE_SCHEMA_MISMATCH",
+      requestId: "rid-payout-list",
     });
   });
 });

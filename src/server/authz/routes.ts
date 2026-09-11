@@ -270,9 +270,10 @@ export const ROUTES = [
   },
   {
     /**
-     * Banka ekstresiyle mutabakat, escrow çıkışından ayrı bir operasyondur:
-     * `payout.release` talimatı başlatır; `payout.reconcile` gerçekleşmiş banka
-     * satırını kanıtlar. Backend de iki ucu ve iki izni ayrı tutar.
+     * koala-backend#210 / #211. Kuyruk `GET /admin/payouts` (PROCESSING);
+     * onay hâlâ `POST .../{id}/reconcile`. Kapı `payout.reconcile` — yazım da
+     * aynı izin, ve Server Action onu `guardDecision` ile yeniden çözer.
+     * UUID formu yedek; nesne GET yok.
      */
     path: "/payout-reconciliation",
     title: "Hakediş banka mutabakatı",

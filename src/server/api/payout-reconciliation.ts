@@ -3,6 +3,9 @@ import "server-only";
 import { z } from "zod";
 
 import { koalaApi } from "./koala";
+import { pagingQuery, type Paging, type PagingContract } from "./paging";
+import { pageDtoSchema } from "./schemas";
+import type { PageDto } from "./types";
 
 /** `PayoutStatus.java`, verbatim. */
 export const PAYOUT_STATUSES = ["PENDING", "PROCESSING", "COMPLETED", "FAILED"] as const;
@@ -39,6 +42,29 @@ export interface PayoutSettlementEvidence {
   readonly amount: string;
   readonly currency: string;
   readonly settledAt: string;
+}
+
+export const ADMIN_PAYOUTS_PATH = "/admin/payouts";
+
+/**
+ * koala-backend#210 / #211. Manager istemci sıralamasını yok sayıp
+ * `createdAt DESC` zorlar; boyut 50'de kesilir. Status bilinçli olarak
+ * gönderilmez: boş `status=` yalnız PROCESSING döner. COMPLETED gönderilirse
+ * operatörün mutabık kılamayacağı satırlar listelenir.
+ */
+export const PAYOUT_QUEUE_PAGING: PagingContract = {
+  sortable: ["createdAt"],
+  defaultSort: { field: "createdAt", direction: "desc" },
+};
+
+export function getAdminPayouts(accessToken: string, paging: Paging): Promise<PageDto<Payout>> {
+  return koalaApi.get({
+    path: ADMIN_PAYOUTS_PATH,
+    schema: pageDtoSchema(payoutSchema),
+    query: pagingQuery(paging),
+    accessToken,
+    cache: "no-store",
+  });
 }
 
 export async function reconcilePayout(

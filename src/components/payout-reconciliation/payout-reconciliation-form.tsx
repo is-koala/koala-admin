@@ -29,9 +29,15 @@ const EMPTY: EvidenceValues = {
   settledAt: "",
 };
 
-export function PayoutReconciliationForm({ action }: { action: PayoutReconciliationAction }) {
+export function PayoutReconciliationForm({
+  action,
+  defaults,
+}: {
+  action: PayoutReconciliationAction;
+  defaults?: Partial<EvidenceValues>;
+}) {
   const [state, formAction, pending] = useActionState(action, INITIAL_PAYOUT_RECONCILIATION_STATE);
-  const [values, setValues] = useState<EvidenceValues>(EMPTY);
+  const [values, setValues] = useState<EvidenceValues>({ ...EMPTY, ...defaults });
   const [open, setOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const busy = useRef(false);

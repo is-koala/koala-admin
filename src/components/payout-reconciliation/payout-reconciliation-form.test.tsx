@@ -46,6 +46,26 @@ async function fillForm() {
 const idleAction: PayoutReconciliationAction = async () => INITIAL_PAYOUT_RECONCILIATION_STATE;
 
 describe("the two-step evidence confirmation", () => {
+  it("prefills payout id, amount and currency from a queue row", () => {
+    render(
+      <PayoutReconciliationForm
+        action={idleAction}
+        defaults={{
+          payoutId: VALUES.payoutId,
+          amount: VALUES.amount,
+          currency: VALUES.currency,
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText(/^Hakediş kimliği/)).toHaveValue(VALUES.payoutId);
+    expect(screen.getByLabelText(/^Tutar/)).toHaveValue(VALUES.amount);
+    expect(screen.getByLabelText(/^Para birimi/)).toHaveValue(VALUES.currency);
+    expect(screen.getByLabelText(/^Ekstre satırı referansı/)).toHaveValue("");
+    expect(screen.getByLabelText(/^Sağlayıcı referansı/)).toHaveValue("");
+    expect(screen.getByLabelText(/^Gerçekleşme anı/)).toHaveValue("");
+  });
+
   it("marks all six inputs as required for forms and assistive technology", () => {
     render(<PayoutReconciliationForm action={idleAction} />);
 
