@@ -25,9 +25,15 @@ const EMPTY: Values = {
   senderName: "",
 };
 
-export function IbanVerificationForm({ action }: { action: IbanVerificationAction }) {
+export function IbanVerificationForm({
+  action,
+  defaults,
+}: {
+  action: IbanVerificationAction;
+  defaults?: Partial<Values>;
+}) {
   const [state, formAction, pending] = useActionState(action, INITIAL_IBAN_VERIFICATION_STATE);
-  const [values, setValues] = useState<Values>(EMPTY);
+  const [values, setValues] = useState<Values>({ ...EMPTY, ...defaults });
   const [open, setOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const busy = useRef(false);

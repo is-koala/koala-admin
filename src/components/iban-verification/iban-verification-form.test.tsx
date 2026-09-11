@@ -40,6 +40,19 @@ async function fillRequired() {
 const idleAction: IbanVerificationAction = async () => INITIAL_IBAN_VERIFICATION_STATE;
 
 describe("the two-step statement confirmation", () => {
+  it("prefills reference and amount from a queue row", () => {
+    render(
+      <IbanVerificationForm
+        action={idleAction}
+        defaults={{ reference: VALUES.reference, amount: VALUES.amount }}
+      />,
+    );
+
+    expect(screen.getByLabelText(/^Ekstre referansı/)).toHaveValue(VALUES.reference);
+    expect(screen.getByLabelText(/^Tutar/)).toHaveValue(VALUES.amount);
+    expect(screen.getByLabelText(/^Gönderen IBAN/)).toHaveValue("");
+  });
+
   it("does not require a sender name", () => {
     render(<IbanVerificationForm action={idleAction} />);
 
