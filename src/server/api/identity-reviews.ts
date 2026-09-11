@@ -13,12 +13,14 @@ import type { PageDto } from "./types";
  *
  * ```
  * GET  /admin/identity-verifications?status=PENDING|APPROVED|REJECTED
+ * GET  /admin/identity-verifications/{id}/documents/{documentId}/download
  * POST /admin/identity-verifications/{id}/approve
  * POST /admin/identity-verifications/{id}/reject  { reason }
  * ```
  *
  * Onay gövdesizdir ve `identityVerified` damgasını çip olmadan koyar.
- * Fotoğraflar bu dilimde yalnız belge kimliği olarak gelir; imzalı indirme yok.
+ * Kuyruk DTO'su depo anahtarı taşımaz; fotoğraf baytları same-origin BFF'den
+ * okunur (`/api/identity-verifications/.../download`).
  */
 
 export const IDENTITY_REVIEWS_PATH = "/admin/identity-verifications";
@@ -89,6 +91,10 @@ export function getIdentityReviews(
 
 export const IDENTITY_REJECTION_MIN_REASON_LENGTH = 10;
 export const IDENTITY_REJECTION_MAX_REASON_LENGTH = 1000;
+
+export function identityDocumentDownloadPath(reviewId: string, documentId: string): string {
+  return `${IDENTITY_REVIEWS_PATH}/${encodeURIComponent(reviewId)}/documents/${encodeURIComponent(documentId)}/download`;
+}
 
 export function approveIdentityReview(
   accessToken: string,

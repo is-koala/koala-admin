@@ -72,9 +72,9 @@ const serverEnvSchema = z.object({
     .default(15_000),
 
   /**
-   * Origins the evidence-download BFF may server-follow after the backend
-   * returns a signed redirect. Empty is fail-closed and still supports the
-   * local-storage 200 stream contract.
+   * Origins the same-origin download BFF may server-follow after the backend
+   * returns a signed redirect (uyuşmazlık kanıtı ve TCKK fotoğrafı). Empty
+   * is fail-closed and still supports the local-storage 200 stream contract.
    */
   EVIDENCE_DOWNLOAD_ALLOWED_ORIGINS: originAllowlist(),
 

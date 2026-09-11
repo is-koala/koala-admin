@@ -338,6 +338,12 @@ export const ROUTE_HANDLERS = [
     access: "permission",
     permission: "dispute.resolve",
   },
+  {
+    path: "/api/identity-verifications/[reviewId]/documents/[documentId]/download",
+    title: "Kimlik belgesi fotoğrafı",
+    access: "permission",
+    permission: "identity.review",
+  },
 ] as const satisfies readonly (RouteIdentity & RouteGate)[];
 
 export type RouteHandlerEntry = (typeof ROUTE_HANDLERS)[number];

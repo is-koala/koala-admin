@@ -34,8 +34,7 @@ export function IdentityReviewDecision({
         <input type="hidden" name="returnTo" value={returnTo} />
         <input type="hidden" name="decision" value="APPROVE" />
         <p className="text-sm text-ink-muted">
-          Onay, kullanıcının <code className="font-mono">identityVerified</code> damgasını çip
-          olmadan koyar. TCKN benzersizliği backend&apos;de durur. Geri alınamaz.
+          Onay kimlik damgasını çip olmadan koyar. Aynı TCKN ikinci kez onaylanamaz. Geri alınamaz.
         </p>
         <button
           type="submit"
