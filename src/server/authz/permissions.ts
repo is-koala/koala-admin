@@ -22,7 +22,8 @@
  * `content.moderate`, `badge.manage`, `settings.manage` and `user.role.manage`.
  * Sonraki dalgalar üç tane daha ekledi ve panel bunları bilmiyordu:
  * `user.deletion.manage`, `bank.account.verify` ve `staff.read`. Banka
- * mutabakatı da `payout.reconcile` ile ayrı bir finans kapısıdır. Bugün yirmi.
+ * mutabakatı da `payout.reconcile` ile ayrı bir finans kapısıdır. Kimlik
+ * belge kuyruğu `identity.review` ile yirmi bir.
  *
  * Eksik kalan bir ad, "izin verilmiş gibi görünmek" değil, **adlandırılamamak**
  * demekti: `partitionPermissions` onu `unknownPermissions`'a atıyor, yani o izne
@@ -72,6 +73,12 @@ const CATALOGUE = [
     mutating: false,
     sensitivity: "PERSONAL_DATA",
     label: "Kullanıcı kimlik bilgilerini görüntüle",
+  },
+  {
+    name: "identity.review",
+    mutating: true,
+    sensitivity: "PERSONAL_DATA",
+    label: "Kimlik belgelerini incele",
   },
   {
     name: "user.deletion.manage",

@@ -72,7 +72,7 @@ export type StaffRoleRef = z.infer<typeof roleRefSchema>;
  * kaldırdığını sanıp kalıtımla geri geldiğini görmemek demek.
  *
  * İzin adları `z.string()`, daraltılmış `Permission` birleşimi değil:
- * `audit.ts`'teki gerekçenin aynısı. Backend yirmi birinci bir izni tanımladığı gün
+ * `audit.ts`'teki gerekçenin aynısı. Backend yirmi ikinci bir izni tanımladığı gün
  * bu sayfa satırı yine çizmeli, bilmediği bir ad yüzünden tamamen boşalmamalı.
  */
 export const staffRoleSchema = z.object({
