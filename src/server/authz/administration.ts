@@ -8,6 +8,11 @@ import {
 } from "@/lib/authorization-change";
 import type { RoleCode, RoleId } from "@/lib/role-identity";
 import {
+  grantMarketplaceUserRole,
+  isMarketplaceRole,
+  revokeMarketplaceUserRole,
+} from "@/server/api/marketplace-user-roles";
+import {
   STAFF_PASSWORD_MAX_BYTES,
   STAFF_PASSWORD_MIN_LENGTH,
   createStaffMember,
@@ -31,10 +36,10 @@ import { getStaffContext } from "./staff-context";
 /**
  * Yetkilendirmeyi değiştiren her yazım, tek kapıdan.
  *
- * Dokuz işlem var ve bir kapı. `runEscrowOperation`'ın para tarafında yaptığını
+ * On bir işlem var ve bir kapı. `runEscrowOperation`'ın para tarafında yaptığını
  * bu, yetki tarafında yapıyor ve sebebi aynı: izin yeniden çözümü, girdi
  * doğrulaması ve backend reddinin Türkçeye çevrilmesi **bir kere** yazılsın ki
- * onuncu işlemi ekleyen kişi bunlardan birini atlayamasın.
+ * on ikinci işlemi ekleyen kişi bunlardan birini atlayamasın.
  *
  * `server-actions.test.ts`'in `ACTION_GATES` listesindeki üçüncü giriş budur.
  * O liste bilerek kısa: yeni bir kapı eklemek, gerekçesiyle birlikte
@@ -129,6 +134,18 @@ export type AuthorizationChange =
       readonly staffId: string;
       readonly staffLabel: string;
       readonly password: string;
+    }
+  | {
+      readonly kind: "USER_ROLE_GRANT";
+      readonly userId: string;
+      readonly userLabel: string;
+      readonly role: string;
+    }
+  | {
+      readonly kind: "USER_ROLE_REVOKE";
+      readonly userId: string;
+      readonly userLabel: string;
+      readonly role: string;
     };
 
 export type AuthorizationChangeKind = AuthorizationChange["kind"];
@@ -136,9 +153,9 @@ export type AuthorizationChangeKind = AuthorizationChange["kind"];
 /**
  * Hangi işlem hangi izni istiyor — `@RequiresPermission`'dan kopyalanmış.
  *
- * Rol grafiğinin dört yazımı `role.manage`, personelin beşi `staff.manage`.
- * Okumalar burada yok: `GET /admin/staff` `staff.read` istiyor ve o bir sayfa
- * kapısı (`routes.ts`), bir eylem kapısı değil.
+ * Rol grafiğinin dört yazımı `role.manage`, personelin beşi `staff.manage`,
+ * pazaryeri kullanıcı rolleri `user.role.manage`. Okumalar burada yok:
+ * `GET /admin/users/{id}/roles` `user.read` istiyor ve o bir sayfa kapısı.
  */
 const PERMISSION_FOR: Record<AuthorizationChangeKind, Permission> = {
   ROLE_PERMISSION_GRANT: "role.manage",
@@ -150,6 +167,8 @@ const PERMISSION_FOR: Record<AuthorizationChangeKind, Permission> = {
   STAFF_ROLE_GRANT: "staff.manage",
   STAFF_ROLE_REVOKE: "staff.manage",
   STAFF_PASSWORD_RESET: "staff.manage",
+  USER_ROLE_GRANT: "user.role.manage",
+  USER_ROLE_REVOKE: "user.role.manage",
 };
 
 /**
@@ -170,6 +189,8 @@ export const AUDIT_ACTION_FOR: Record<AuthorizationChangeKind, string> = {
   STAFF_ROLE_GRANT: "staff.member.role.grant",
   STAFF_ROLE_REVOKE: "staff.member.role.revoke",
   STAFF_PASSWORD_RESET: "staff.member.password.reset",
+  USER_ROLE_GRANT: "user.role.grant",
+  USER_ROLE_REVOKE: "user.role.revoke",
 };
 
 /**
@@ -274,6 +295,19 @@ function validate(change: AuthorizationChange): AuthorizationChangeOutcome | nul
       if (change.roleCode.trim().length === 0) return missing("Rol kodu", "roleCode");
       return null;
     }
+
+    case "USER_ROLE_GRANT":
+    case "USER_ROLE_REVOKE": {
+      if (change.userId.trim().length === 0) return missing("Kullanıcı kimliği");
+      if (!isMarketplaceRole(change.role)) {
+        return blocked(
+          "Pazaryeri rolü ROLE_USER ya da ROLE_ADMIN olmalı.",
+          "PANEL_VALIDATION_FAILED",
+          "role",
+        );
+      }
+      return null;
+    }
   }
 }
 
@@ -372,7 +406,7 @@ export async function runAuthorizationChange(
   }
 }
 
-/** Tek `switch`, dokuz uç. Her dal bir başarı cümlesi döndürür. */
+/** Tek `switch`, on bir uç. Her dal bir başarı cümlesi döndürür. */
 async function send(accessToken: string, change: AuthorizationChange): Promise<string> {
   const recorded = `Değişiklik denetim kaydına "${AUDIT_ACTION_FOR[change.kind]}" adıyla yazıldı.`;
 
@@ -427,6 +461,22 @@ async function send(accessToken: string, change: AuthorizationChange): Promise<s
       await resetStaffPassword(accessToken, change.staffId, change.password);
       return `${change.staffLabel} için yeni parola atandı: hesap "ilk girişte değiştir" bayrağını aldı, kilidi temizlendi ve açık oturumları sonlandırıldı. Parolayı kişiye panel dışından iletin; panel onu bir daha göstermez. ${recorded}`;
     }
+
+    case "USER_ROLE_GRANT": {
+      if (!isMarketplaceRole(change.role)) {
+        throw new Error("Pazaryeri rolü validate'den geçmemiş.");
+      }
+      await grantMarketplaceUserRole(accessToken, change.userId, change.role);
+      return `${change.role} rolü ${change.userLabel} kullanıcısına verildi. Personel rollerinden ayrı: bu, pazaryeri users tablosundaki bir yetki satırı. ${recorded}`;
+    }
+
+    case "USER_ROLE_REVOKE": {
+      if (!isMarketplaceRole(change.role)) {
+        throw new Error("Pazaryeri rolü validate'den geçmemiş.");
+      }
+      await revokeMarketplaceUserRole(accessToken, change.userId, change.role);
+      return `${change.role} rolü ${change.userLabel} kullanıcısından geri alındı. ROLE_USER, son ROLE_ADMIN ve sistem kullanıcısı 409 ile korunur. ${recorded}`;
+    }
   }
 }
 
@@ -461,6 +511,14 @@ const EXPLANATION_FOR: Record<string, string> = {
   STAFF_RECORD_NOT_FOUND: "Personel kaydı bulunamadı; listeyi yenileyin.",
   PAGE_SORT_FIELD_NOT_ALLOWED:
     "Backend yalnız createdAt, email ve displayName alanlarına göre sıralıyor.",
+  ADMIN_USER_ROLE_SYSTEM_PROTECTED:
+    "Sistem kullanıcısının rolleri değiştirilemez. Bu hesap bildirim ve anonimleştirme satırlarını tutar; rol formu onu bir UUID kutusu sanmamalı.",
+  ADMIN_USER_ROLE_LAST_ADMIN_PROTECTED:
+    "Sistemdeki son ROLE_ADMIN geri alınamaz. Personel aktör marketplace admini olmadığı için bu kural artık gerçekten ateşler — sıfır adminli sistem uçlardan kurtarılamaz.",
+  ADMIN_USER_ROLE_OWN_ADMIN_PROTECTED:
+    "Köprü yolundaki bir yönetici kendi ROLE_ADMIN rolünü geri alamaz. Personel aktör users satırı taşımadığı için bu kural ona işlemez; son admin kuralı işler.",
+  ADMIN_USER_ROLE_MEMBERSHIP_PROTECTED:
+    "ROLE_USER pazaryeri üyeliğinin taşıyıcısıdır; bu uçtan geri alınamaz.",
 };
 
 function refusalFrom(error: unknown): AuthorizationChangeOutcome {

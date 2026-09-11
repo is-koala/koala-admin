@@ -60,6 +60,9 @@ const CREATE_STAFF = apiUrl("/admin/staff");
 const PATCH_STAFF = apiUrl(`/admin/staff/${STAFF_ID}`);
 const STAFF_ROLE = apiUrl(`/admin/staff/${STAFF_ID}/roles/:roleCode`);
 const STAFF_PASSWORD = apiUrl(`/admin/staff/${STAFF_ID}/password`);
+const MARKETPLACE_USER_ID = "aaaaaaaa-1111-4111-8111-111111111111";
+const USER_ROLES = apiUrl(`/admin/users/${MARKETPLACE_USER_ID}/roles`);
+const USER_ROLE = apiUrl(`/admin/users/${MARKETPLACE_USER_ID}/roles/:role`);
 
 const GOOD_PASSWORD = "kedi-koala-2026!";
 
@@ -669,5 +672,152 @@ describe("görev ayrılığı burada bir kural değil", () => {
 
     expect(grant.calls).toBe(1);
     expect(outcome.status).toBe("SUCCEEDED");
+  });
+});
+
+const GRANT_USER_ADMIN = {
+  kind: "USER_ROLE_GRANT",
+  userId: MARKETPLACE_USER_ID,
+  userLabel: "Ada Yılmaz",
+  role: "ROLE_ADMIN",
+} as const;
+
+const REVOKE_USER_ADMIN = {
+  kind: "USER_ROLE_REVOKE",
+  userId: MARKETPLACE_USER_ID,
+  userLabel: "Ada Yılmaz",
+  role: "ROLE_ADMIN",
+} as const;
+
+function grantsOk(): Response {
+  return HttpResponse.json({
+    success: true,
+    message: "Rol verildi.",
+    httpStatus: "200 OK",
+    path: `/admin/users/${MARKETPLACE_USER_ID}/roles`,
+    requestId: "rid-user-role",
+    timeStamp: "2026-09-11T14:00:00.000000000Z",
+    data: [
+      {
+        role: "ROLE_USER",
+        grantedAt: "2026-01-01T08:00:00Z",
+        grantedById: null,
+        grantedByName: null,
+      },
+      {
+        role: "ROLE_ADMIN",
+        grantedAt: "2026-09-11T14:00:00Z",
+        grantedById: null,
+        grantedByName: null,
+      },
+    ],
+  });
+}
+
+describe("pazaryeri kullanıcı rolleri user.role.manage ister", () => {
+  it("user.read taşıyan ama user.role.manage taşımayan biri grant/revoke göndermez", async () => {
+    stubMe(["user.read"]);
+    const grant = watch("post", USER_ROLES, grantsOk);
+    const revoke = watch("delete", USER_ROLE);
+
+    const outcomes = await Promise.all([
+      runAuthorizationChange(GRANT_USER_ADMIN),
+      runAuthorizationChange(REVOKE_USER_ADMIN),
+    ]);
+
+    expect(grant.calls).toBe(0);
+    expect(revoke.calls).toBe(0);
+    expect(outcomes.map((outcome) => outcome.status)).toEqual(["BLOCKED", "BLOCKED"]);
+    expect(outcomes[0]?.message).toContain("user.role.manage");
+  });
+
+  it("personel rol izni pazaryeri yazımını açmaz", async () => {
+    stubMe(["staff.manage", "role.manage"]);
+    const grant = watch("post", USER_ROLES, grantsOk);
+
+    const outcome = await runAuthorizationChange(GRANT_USER_ADMIN);
+
+    expect(grant.calls).toBe(0);
+    expect(outcome.status).toBe("BLOCKED");
+  });
+
+  it("bilinmeyen bir rol adını backend'e hiç göndermez", async () => {
+    const grant = watch("post", USER_ROLES, grantsOk);
+
+    const outcome = await runAuthorizationChange({
+      ...GRANT_USER_ADMIN,
+      role: "OWNER",
+    });
+
+    expect(grant.calls).toBe(0);
+    expect(outcome.status).toBe("BLOCKED");
+    expect(outcome.field).toBe("role");
+  });
+
+  it("GrantRoleDto gövdesini { role } olarak gönderir", async () => {
+    stubMe(["user.role.manage"]);
+    const grant = watch("post", USER_ROLES, grantsOk);
+
+    const outcome = await runAuthorizationChange(GRANT_USER_ADMIN);
+
+    expect(grant.calls).toBe(1);
+    expect(JSON.parse(grant.body ?? "{}")).toEqual({ role: "ROLE_ADMIN" });
+    expect(outcome.status).toBe("SUCCEEDED");
+    expect(outcome.message).toContain("user.role.grant");
+  });
+
+  it("geri almayı path'teki enum adıyla yapar", async () => {
+    stubMe(["user.role.manage"]);
+    let path = "";
+    server.use(
+      http.delete(USER_ROLE, ({ request }) => {
+        path = new URL(request.url).pathname;
+        return ok();
+      }),
+    );
+
+    const outcome = await runAuthorizationChange(REVOKE_USER_ADMIN);
+
+    expect(path).toBe(`/admin/users/${MARKETPLACE_USER_ID}/roles/ROLE_ADMIN`);
+    expect(outcome.status).toBe("SUCCEEDED");
+    expect(outcome.message).toContain("user.role.revoke");
+  });
+});
+
+describe("korunan pazaryeri rolleri 409'u operatör dilinde gösterir", () => {
+  it.each([
+    [
+      "ADMIN_USER_ROLE_SYSTEM_PROTECTED",
+      "Sistem kullanıcısının rolleri değiştirilemez.",
+      "bildirim ve anonimleştirme",
+    ],
+    [
+      "ADMIN_USER_ROLE_LAST_ADMIN_PROTECTED",
+      "Sistemdeki son yönetici rolü geri alınamaz.",
+      "sıfır adminli sistem",
+    ],
+    [
+      "ADMIN_USER_ROLE_OWN_ADMIN_PROTECTED",
+      "Bir yönetici kendi yönetici rolünü geri alamaz.",
+      "Personel aktör",
+    ],
+    [
+      "ADMIN_USER_ROLE_MEMBERSHIP_PROTECTED",
+      "Üyelik rolü bu uçtan geri alınamaz.",
+      "ROLE_USER pazaryeri üyeliğinin taşıyıcısıdır",
+    ],
+  ] as const)("explains %s", async (errorCode, backendMessage, explanation) => {
+    stubMe(["user.role.manage"]);
+    watch("delete", USER_ROLE, () => refusal(409, errorCode, backendMessage));
+
+    const outcome = await runAuthorizationChange({
+      ...REVOKE_USER_ADMIN,
+      role: errorCode === "ADMIN_USER_ROLE_MEMBERSHIP_PROTECTED" ? "ROLE_USER" : "ROLE_ADMIN",
+    });
+
+    expect(outcome.status).toBe("REFUSED");
+    expect(outcome.message).toContain(backendMessage);
+    expect(outcome.message).toContain(explanation);
+    expect(outcome.errorCode).toBe(errorCode);
   });
 });
