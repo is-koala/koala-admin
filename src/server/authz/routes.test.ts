@@ -175,6 +175,11 @@ describe("the menu is drawn from the registry and from permissions only", () => 
     expect(entries.map((entry) => entry.href)).toEqual(["/job-categories"]);
   });
 
+  it("advertises the badge catalogue only to badge.manage holders", () => {
+    expect(navigationFor(["badge.manage"]).map((entry) => entry.href)).toEqual(["/badges"]);
+    expect(navigationFor(["category.manage"]).map((entry) => entry.href)).not.toContain("/badges");
+  });
+
   it("shows both entries to someone holding both permissions", () => {
     const entries = navigationFor(["audit.read", "category.manage"]);
 

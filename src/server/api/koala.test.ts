@@ -273,4 +273,50 @@ describe("koalaRequest", () => {
 
     expect((error as KoalaApiError).errorCode).toBe("RESPONSE_SCHEMA_MISMATCH");
   });
+
+  it("sends a multipart body without inventing application/json", async () => {
+    let contentType: string | null = "unset";
+    let partName: string | null = null;
+    let fileName: string | null = null;
+    let authorization: string | null = null;
+
+    server.use(
+      http.put(
+        apiUrl("/admin/badges/ba000000-0000-4000-8000-000000000001/icon"),
+        async ({ request }) => {
+          contentType = request.headers.get("content-type");
+          authorization = request.headers.get("authorization");
+          const incoming = await request.formData();
+          const icon = incoming.get("icon");
+          partName = incoming.has("icon") ? "icon" : null;
+          fileName = icon instanceof File ? icon.name : null;
+          return HttpResponse.json({
+            success: true,
+            message: "Rozet görseli güncellendi.",
+            httpStatus: "200 OK",
+            path: "/admin/badges/ba000000-0000-4000-8000-000000000001/icon",
+            requestId: "rid-icon",
+            timeStamp: "2026-09-11T12:00:00.000000000Z",
+            data: { ok: true },
+          });
+        },
+      ),
+    );
+
+    const body = new FormData();
+    body.set("icon", new File([new Uint8Array([137, 80, 78])], "rozet.png", { type: "image/png" }));
+
+    await koalaApi.put({
+      path: "/admin/badges/ba000000-0000-4000-8000-000000000001/icon",
+      body,
+      schema: z.object({ ok: z.boolean() }),
+      accessToken: "token-123",
+    });
+
+    expect(authorization).toBe("Bearer token-123");
+    expect(contentType).toMatch(/multipart\/form-data/i);
+    expect(contentType).not.toContain("application/json");
+    expect(partName).toBe("icon");
+    expect(fileName).toBe("rozet.png");
+  });
 });

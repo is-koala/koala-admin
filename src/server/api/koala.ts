@@ -44,7 +44,11 @@ export interface KoalaRequestOptions {
   path: string;
   method?: KoalaHttpMethod;
   query?: Record<string, KoalaQueryValue>;
-  /** Serialised as JSON. Omit for GET/DELETE. */
+  /**
+   * JSON nesnesi ya da `FormData`. `FormData` iken `Content-Type` yazılmaz:
+   * sınır (boundary) fetch'in işi, elle `application/json` koymak parçayı
+   * okunamaz kılar. Rozet ikonu `PUT /admin/badges/{id}/icon` bunu ister.
+   */
   body?: unknown;
   /**
    * Access token for `/admin/**` calls. Resolved server-side by the auth slice
@@ -184,12 +188,17 @@ async function readBody(response: Response): Promise<unknown> {
   }
 }
 
+function isFormDataBody(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
 async function execute(
   options: KoalaRequestOptions,
   context: EnvelopeContext,
 ): Promise<{ status: number; body: unknown }> {
   const method = options.method ?? "GET";
-  const hasJsonBody = options.body !== undefined && method !== "GET";
+  const formBody = isFormDataBody(options.body) ? options.body : null;
+  const hasJsonBody = options.body !== undefined && method !== "GET" && formBody === null;
 
   const next: NextFetchOptions = {};
   if (options.revalidate !== undefined) next.revalidate = options.revalidate;
@@ -199,7 +208,11 @@ async function execute(
     method,
     headers: buildKoalaHeaders({ accessToken: options.accessToken, hasJsonBody }),
     signal: resolveSignal(options),
-    ...(hasJsonBody ? { body: JSON.stringify(options.body) } : {}),
+    ...(hasJsonBody
+      ? { body: JSON.stringify(options.body) }
+      : formBody !== null && method !== "GET"
+        ? { body: formBody }
+        : {}),
     ...(options.cache !== undefined ? { cache: options.cache } : {}),
     ...(Object.keys(next).length > 0 ? { next } : {}),
   };
