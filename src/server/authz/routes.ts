@@ -148,6 +148,18 @@ export const ROUTES = [
   },
   {
     /**
+     * koala-admin#46. Pazaryeri `users` tablosu, personel değil.
+     * Kapı `user.read`: `GET /admin/users` onu ister. Rol yazımı
+     * `user.role.manage` ve ayrı issue — bu sayfa salt okunur.
+     */
+    path: "/users",
+    title: "Kullanıcılar",
+    access: "permission",
+    permission: "user.read",
+    nav: { label: "Kullanıcılar", order: 26 },
+  },
+  {
+    /**
      * koala-admin#8. Approval is irreversible and is the gate in front of a
      * company posting jobs at all, so it gets its own permission rather than
      * riding along with anything else — `COMPANY_APPROVE` on the backend.
