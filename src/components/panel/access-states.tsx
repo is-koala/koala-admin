@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 
 import { ErrorState } from "@/components/ui";
 import { permissionLabel, type Permission } from "@/server/authz/permissions";
@@ -96,6 +97,11 @@ const EXPLANATIONS: Record<StaffContextFailureKind, Explanation> = {
   },
 };
 
+function authFailureHref(authCode: string): Route {
+  if (authCode === "SESSION_REQUIRED") return "/giris";
+  return `/giris/hata?kod=${encodeURIComponent(authCode)}` as Route;
+}
+
 export interface StaffContextUnavailableProps {
   failure: StaffContextFailure;
 }
@@ -117,11 +123,7 @@ export function StaffContextUnavailable({ failure }: StaffContextUnavailableProp
           </p>
           {failure.authCode === null ? null : (
             <Link
-              href={
-                failure.authCode === "SESSION_REQUIRED"
-                  ? "/giris"
-                  : `/giris/hata?kod=${encodeURIComponent(failure.authCode)}`
-              }
+              href={authFailureHref(failure.authCode)}
               className="self-start text-sm font-medium text-brand hover:underline"
             >
               Giriş hatası ayrıntısı
