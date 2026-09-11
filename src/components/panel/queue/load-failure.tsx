@@ -1,4 +1,5 @@
 import { ErrorState } from "@/components/ui";
+import { isPermission, permissionLabel } from "@/server/authz/permissions";
 
 /**
  * What a queue shows when the backend would not give it the queue.
@@ -35,12 +36,16 @@ export interface QueueLoadFailureProps {
   failure: QueueFailure;
 }
 
+function namedPermission(permission: string): string {
+  return isPermission(permission) ? permissionLabel(permission) : permission;
+}
+
 export function QueueLoadFailure({ subject, permission, failure }: QueueLoadFailureProps) {
   if (failure.kind === "forbidden") {
     return (
       <ErrorState
         title="Backend bu işlem için yetki vermedi."
-        description={`Panel sayfayı açtı, backend ${subject.toLocaleLowerCase("tr")} vermeyi reddetti. Yetki kararını backend verir (${permission}); paneldeki menü ve kapılar yalnız gereksiz istekleri önler. Uç henüz yayına alınmamışsa da aynı cevap gelir — koala-backend eşlenmemiş bir /admin yolunu 404 ile değil 403 ile reddeder.`}
+        description={`Panel sayfayı açtı, backend ${subject.toLocaleLowerCase("tr")} vermeyi reddetti. Bu ekran "${namedPermission(permission)}" iznini ister; yetki kararını backend verir.`}
         errorCode={failure.errorCode}
         requestId={failure.requestId}
       />

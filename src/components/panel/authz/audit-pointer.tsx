@@ -17,23 +17,28 @@ import type { Permission } from "@/server/authz/permissions";
 export function AuditPointer({
   permission,
   linkLabel,
+  resourceId,
   children,
 }: {
   /** Denetim kaydı süzgecine geçirilecek izin. */
   permission: Permission;
   linkLabel: string;
+  /** Varsa yalnız bu kaydın satırları. */
+  resourceId?: string;
   /** Bu ekranın kayda ne yazdırdığı, kendi cümlesiyle. */
   children: ReactNode;
 }) {
+  const query: Record<string, string> = { permission };
+  if (resourceId !== undefined && resourceId.length > 0) {
+    query.resourceId = resourceId;
+  }
+
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3">
       <h2 className="text-sm font-semibold text-ink">Her değişiklik denetim kaydında</h2>
       <p className="max-w-prose text-xs text-ink-muted">{children}</p>
       <p className="text-xs text-ink-muted">
-        <Link
-          href={{ pathname: "/audit-log", query: { permission } }}
-          className="text-brand hover:underline"
-        >
+        <Link href={{ pathname: "/audit-log", query }} className="text-brand hover:underline">
           {linkLabel}
         </Link>
         .

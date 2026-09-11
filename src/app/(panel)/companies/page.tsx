@@ -2,11 +2,7 @@ import Link from "next/link";
 import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
-import {
-  QueueFilters,
-  QueueLoadFailure,
-  QueuePager,
-} from "@/components/panel/queue";
+import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
   EmptyState,
   Table,
@@ -38,11 +34,7 @@ import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
-import {
-  ApprovalStatusBadge,
-  CompanyDetail,
-  DecisionDeliveryNotice,
-} from "./company-review";
+import { ApprovalStatusBadge, CompanyDetail, DecisionDeliveryNotice } from "./company-review";
 
 export const metadata: Metadata = { title: "Şirket onayları" };
 

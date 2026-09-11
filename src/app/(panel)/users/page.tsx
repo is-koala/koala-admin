@@ -1,7 +1,6 @@
 import Link from "next/link";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 
-import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
@@ -14,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE } from "@/lib/format";
+import { userHref } from "@/lib/panel-href";
 import {
   pageWindow,
   readPaging,
@@ -29,7 +29,7 @@ import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
-import { UserRoleDetail, type UserGrants } from "./user-roles";
+import { type UserGrants } from "./user-roles";
 
 export const metadata: Metadata = { title: "Kullanıcılar" };
 
@@ -145,9 +145,9 @@ async function UserDirectory({ params }: { params: SearchParams }) {
 
       {canManage ? null : (
         <p className="rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3 text-sm text-ink-muted">
-          Yalnız okuma: hesabınızda <code className="font-mono">user.role.manage</code> izni yok, bu
-          yüzden rol verme ve geri alma formları çizilmedi. Bu bir gizleme değil bir yansıma —
-          backend o uçları zaten 403 ile reddeder.
+          Yalnız okuma: hesabınızda kullanıcı rollerini yönetme izni yok, bu yüzden rol verme ve
+          geri alma formları çizilmedi. Bu bir gizleme değil bir yansıma — backend o uçları zaten
+          reddeder.
         </p>
       )}
 
@@ -175,10 +175,7 @@ async function UserDirectory({ params }: { params: SearchParams }) {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
-                    <Link
-                      href={`/users/${user.id}` as Route}
-                      className="text-brand hover:underline"
-                    >
+                    <Link href={userHref(user.id)} className="text-brand hover:underline">
                       {safeUserName(user)}
                     </Link>
                   </TableCell>
@@ -191,23 +188,10 @@ async function UserDirectory({ params }: { params: SearchParams }) {
               ))}
             </TableBody>
           </Table>
-
-          <section className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold">Rol kayıtları</h2>
-            {users.map((user) => (
-              <UserRoleDetail
-                key={user.id}
-                user={user}
-                grants={grantsByUser.get(user.id)}
-                canManage={canManage}
-              />
-            ))}
-          </section>
         </>
       )}
 
       <QueuePager window={pageWindow(page)} state={viewState} unit="kullanıcı" />
-      {canManage ? <UserRoleAuditPointer /> : null}
     </div>
   );
 }
@@ -238,16 +222,6 @@ function roleSummary(loaded: UserGrants | undefined): string {
     return "Rolsüz";
   }
   return loaded.grants.map((grant) => grant.role).join(", ");
-}
-
-function UserRoleAuditPointer() {
-  return (
-    <AuditPointer permission="user.role.manage" linkLabel="Kullanıcı rol kayıtlarını aç">
-      Backend başarılı vermeyi <code className="font-mono">user.role.grant</code>, geri almayı{" "}
-      <code className="font-mono">user.role.revoke</code> adıyla kaydeder. Personel üyelik
-      yazımlarından ayrı izin — <code className="font-mono">staff.manage</code> bu uçları açmaz.
-    </AuditPointer>
-  );
 }
 
 function UserSearch({

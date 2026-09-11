@@ -171,7 +171,7 @@ describe("a queue the backend would not hand over", () => {
 
     expect(screen.getByText("Backend bu işlem için yetki vermedi.")).toBeInTheDocument();
     expect(screen.getByText("rid-403")).toBeInTheDocument();
-    expect(screen.getByText(/content.moderate/)).toBeInTheDocument();
+    expect(screen.getByText(/İçerik denetle/)).toBeInTheDocument();
   });
 
   it("keeps an ordinary failure distinguishable from a refusal", () => {

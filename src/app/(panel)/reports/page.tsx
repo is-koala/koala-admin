@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
+import { reportHref, userHref } from "@/lib/panel-href";
 import {
   pageWindow,
   readEnumParam,
@@ -212,7 +213,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
                       EMPTY_VALUE
                     ) : (
                       <Link
-                        href={`/users/${report.reportedUserId}` as Route}
+                        href={userHref(report.reportedUserId)}
                         className="text-brand hover:underline"
                       >
                         {reportPartyName(report.reportedUser)}
@@ -235,10 +236,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
                     </span>
                   </TableCell>
                   <TableCell>
-                    <Link
-                      href={`/reports/${report.id}` as Route}
-                      className="text-brand hover:underline"
-                    >
+                    <Link href={reportHref(report.id)} className="text-brand hover:underline">
                       İncele
                     </Link>
                   </TableCell>

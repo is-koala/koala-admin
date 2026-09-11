@@ -101,9 +101,7 @@ export default async function StaffPage({
       <PageHeader
         title="Personel"
         description={
-          <>
-            Personel kayıtları ve rol üyeliği. Rol değişikliği bir sonraki istekte geçerlidir.
-          </>
+          <>Personel kayıtları ve rol üyeliği. Rol değişikliği bir sonraki istekte geçerlidir.</>
         }
       />
 

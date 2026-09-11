@@ -268,21 +268,20 @@ describe("marketplace roles sit on the directory", () => {
 
     expect(queue.roleCalls).toBe(1);
     expect(html).toContain("ROLE_USER");
-    expect(html).toContain("Sistem");
     expect(html).toContain("Yalnız okuma");
     expect(html).not.toContain("Rol ver");
     expect(html).not.toContain("Rolü geri al");
   });
 
-  it("draws grant and revoke only when user.role.manage is held", async () => {
+  it("keeps grant and revoke off the directory even when user.role.manage is held", async () => {
     stubMe(["user.read", "user.role.manage"]);
     watchQueue([row()]);
 
     const html = await render();
 
-    expect(html).toContain("Rol ver");
-    expect(html).toContain("Rolü geri al");
-    expect(html).toContain("ROLE_ADMIN");
+    expect(html).toContain("ROLE_USER");
+    expect(html).not.toContain("Rol ver");
+    expect(html).not.toContain("Rolü geri al");
     expect(html).not.toContain("Yalnız okuma");
   });
 
@@ -298,10 +297,9 @@ describe("marketplace roles sit on the directory", () => {
 });
 
 describe("a bookmarked marketplace user", () => {
-  it("loads GET /admin/users/{id} and links their reports without a suspend control", async () => {
-    stubMe(READER);
-    const user = row();
+  function stubUser(user: UserRow) {
     let objectCalls = 0;
+    let reportCalls = 0;
     server.use(
       http.get(`${USERS}/${user.id}`, () => {
         objectCalls += 1;
@@ -333,18 +331,80 @@ describe("a bookmarked marketplace user", () => {
           ],
         }),
       ),
+      http.get(apiUrl("/admin/reports"), () => {
+        reportCalls += 1;
+        return HttpResponse.json({
+          success: true,
+          message: "Şikayetler listelendi.",
+          httpStatus: "200 OK",
+          path: "/admin/reports",
+          requestId: "rid-reports",
+          timeStamp: "2026-09-11T13:00:00.000000000Z",
+          data: {
+            content: [],
+            page: 0,
+            size: 20,
+            totalElements: 0,
+            totalPages: 0,
+            first: true,
+            last: true,
+          },
+        });
+      }),
     );
+    return {
+      get objectCalls() {
+        return objectCalls;
+      },
+      get reportCalls() {
+        return reportCalls;
+      },
+    };
+  }
+
+  it("loads GET /admin/users/{id} without a suspend control or a reports fetch", async () => {
+    stubMe(READER);
+    const user = row();
+    const seen = stubUser(user);
 
     const html = (
       await renderServerComponent(<UserDetailPage params={Promise.resolve({ id: user.id })} />)
     ).replaceAll("<!-- -->", "");
 
-    expect(objectCalls).toBe(1);
+    expect(seen.objectCalls).toBe(1);
+    expect(seen.reportCalls).toBe(0);
     expect(html).toContain("Ada Yılmaz");
     expect(html).toContain("ROLE_USER");
-    expect(html).toContain(`kullanici=${user.id}`);
+    expect(html).toContain("Sistem");
+    expect(html).not.toContain(`kullanici=${user.id}`);
     expect(html).not.toMatch(/>Askıya al</);
     expect(html).not.toContain("suspend");
   });
-});
 
+  it("draws grant and revoke on the object page when user.role.manage is held", async () => {
+    stubMe(["user.read", "user.role.manage"]);
+    stubUser(row());
+
+    const html = (
+      await renderServerComponent(<UserDetailPage params={Promise.resolve({ id: row().id })} />)
+    ).replaceAll("<!-- -->", "");
+
+    expect(html).toContain("Rol ver");
+    expect(html).toContain("Rolü geri al");
+    expect(html).toContain("ROLE_ADMIN");
+  });
+
+  it("loads open reports only when content.moderate is held", async () => {
+    stubMe(["user.read", "content.moderate"]);
+    const user = row();
+    const seen = stubUser(user);
+
+    const html = (
+      await renderServerComponent(<UserDetailPage params={Promise.resolve({ id: user.id })} />)
+    ).replaceAll("<!-- -->", "");
+
+    expect(seen.reportCalls).toBe(1);
+    expect(html).toContain("Açık şikayetler");
+    expect(html).toContain(`kullanici=${user.id}`);
+  });
+});

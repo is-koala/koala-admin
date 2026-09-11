@@ -172,9 +172,10 @@ const render = async (params: Record<string, string> = {}) =>
   );
 
 const renderDetail = async (id: string = row().id) =>
-  (
-    await renderServerComponent(<ReportDetailPage params={Promise.resolve({ id })} />)
-  ).replaceAll("<!-- -->", "");
+  (await renderServerComponent(<ReportDetailPage params={Promise.resolve({ id })} />)).replaceAll(
+    "<!-- -->",
+    "",
+  );
 
 function watchDetail(
   report: ReportRow = row(),

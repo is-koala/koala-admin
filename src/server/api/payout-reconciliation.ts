@@ -3,6 +3,9 @@ import "server-only";
 import { z } from "zod";
 
 import { koalaApi } from "./koala";
+import { pagingQuery, type Paging, type PagingContract } from "./paging";
+import { pageDtoSchema } from "./schemas";
+import type { PageDto } from "./types";
 
 /** `PayoutStatus.java`, verbatim. */
 export const PAYOUT_STATUSES = ["PENDING", "PROCESSING", "COMPLETED", "FAILED"] as const;
@@ -20,6 +23,17 @@ export interface Payout {
   readonly completedAt: string | null;
   readonly createdAt: string;
 }
+
+export const PAYOUTS_PATH = "/admin/payouts";
+
+/**
+ * Liste ucu client sort'u yok sayar; `createdAt,desc` yedek olarak gider.
+ * Boyut tavanı backend'de 50 — PageableSanitizer yok.
+ */
+export const PAYOUT_PAGING: PagingContract = {
+  sortable: ["createdAt"],
+  defaultSort: { field: "createdAt", direction: "desc" },
+};
 
 const payoutSchema = z.object({
   id: z.uuid(),
@@ -39,6 +53,22 @@ export interface PayoutSettlementEvidence {
   readonly amount: string;
   readonly currency: string;
   readonly settledAt: string;
+}
+
+export function getPayouts(
+  accessToken: string,
+  query: { readonly paging: Paging; readonly status?: PayoutStatus | null },
+): Promise<PageDto<Payout>> {
+  return koalaApi.get({
+    path: PAYOUTS_PATH,
+    schema: pageDtoSchema(payoutSchema),
+    query: {
+      ...(query.status ? { status: query.status } : {}),
+      ...pagingQuery(query.paging),
+    },
+    accessToken,
+    cache: "no-store",
+  });
 }
 
 export async function reconcilePayout(

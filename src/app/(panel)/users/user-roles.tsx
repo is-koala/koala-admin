@@ -1,9 +1,6 @@
 import { AuthorizationForm } from "@/components/panel/authz/authorization-form";
 import { formatDateTime } from "@/lib/format";
-import {
-  MARKETPLACE_ROLES,
-  type RoleGrant,
-} from "@/server/api/marketplace-user-roles";
+import { MARKETPLACE_ROLES, type RoleGrant } from "@/server/api/marketplace-user-roles";
 import { safeUserName, type SafeUser } from "@/server/api/users";
 
 import { grantMarketplaceRole, revokeMarketplaceRole } from "./actions";

@@ -1,12 +1,9 @@
 import Link from "next/link";
-import type { Route } from "next";
 
-import {
-  DecisionForm,
-  type DecisionOption,
-} from "@/components/panel/queue";
+import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
 import { Badge, type BadgeTone } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
+import { reportsForUserHref, userHref } from "@/lib/panel-href";
 import {
   REVIEW_MIN_NOTE_LENGTH,
   reportPartyName,
@@ -91,14 +88,11 @@ export function ReportDecision({
             EMPTY_VALUE
           ) : (
             <span className="flex flex-wrap gap-x-3 gap-y-1">
-              <Link
-                href={`/users/${report.reportedUserId}` as Route}
-                className="text-brand hover:underline"
-              >
+              <Link href={userHref(report.reportedUserId)} className="text-brand hover:underline">
                 {reportPartyName(report.reportedUser)}
               </Link>
               <Link
-                href={{ pathname: "/reports", query: { kullanici: report.reportedUserId } }}
+                href={reportsForUserHref(report.reportedUserId)}
                 className="text-brand hover:underline"
               >
                 Bu kullanıcının şikayetleri

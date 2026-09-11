@@ -26,11 +26,7 @@ import { getStaffContext } from "@/server/authz/staff-context";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { recentOperations } from "@/server/escrow/recent-operations";
 
-import {
-  DISPUTE_STATUS_LABELS,
-  DISPUTE_STATUS_TONES,
-  type SummaryEntry,
-} from "./dispute-detail";
+import { DISPUTE_STATUS_LABELS, DISPUTE_STATUS_TONES, type SummaryEntry } from "./dispute-detail";
 
 export const metadata: Metadata = { title: "Uyuşmazlıklar" };
 
@@ -66,8 +62,8 @@ export default async function DisputesPage({ searchParams }: PageProps) {
         title="Uyuşmazlıklar ve emanet"
         description={
           <>
-            Açık ve çözülmüş uyuşmazlıkları sayfalar. Emanetteki parayı işçiye çıkarır veya
-            işverene iade eder; kısmi iade yoktur. Tutarlar atama özetinden gelir.
+            Açık ve çözülmüş uyuşmazlıkları sayfalar. Emanetteki parayı işçiye çıkarır veya işverene
+            iade eder; kısmi iade yoktur. Tutarlar atama özetinden gelir.
           </>
         }
       />
@@ -239,10 +235,9 @@ async function DisputeWorkspace({ filter, paging }: WorkspaceProps) {
             Kuyruk
           </h2>
           <p className="max-w-prose text-xs text-ink-muted">
-            <code className="font-mono">GET /admin/disputes</code> durum verilmezse bekleyen
-            kuyruğu (OPEN ve UNDER_REVIEW) döner. Çözüldü süzgeci kapalı kayıtları sayfalar;
-            DISMISSED bir çözüm türüdür, ayrı bir kuyruk durumu değildir. Tutarlar atama
-            özetinden gelir.
+            <code className="font-mono">GET /admin/disputes</code> durum verilmezse bekleyen kuyruğu
+            (OPEN ve UNDER_REVIEW) döner. Çözüldü süzgeci kapalı kayıtları sayfalar; DISMISSED bir
+            çözüm türüdür, ayrı bir kuyruk durumu değildir. Tutarlar atama özetinden gelir.
           </p>
         </div>
 
@@ -286,7 +281,9 @@ async function DisputeWorkspace({ filter, paging }: WorkspaceProps) {
               {filter === "ALL" ? "" : ` (${FILTER_LABELS[filter]})`}.
             </p>
 
-            <Table caption={filter === "RESOLVED" ? "Çözülmüş uyuşmazlıklar" : "Etkin uyuşmazlıklar"}>
+            <Table
+              caption={filter === "RESOLVED" ? "Çözülmüş uyuşmazlıklar" : "Etkin uyuşmazlıklar"}
+            >
               <TableHead>
                 <TableRow>
                   <TableHeaderCell>Durum</TableHeaderCell>

@@ -61,8 +61,8 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
         title="Denetim kaydı"
         description={
           <>
-            Personelin yaptığı işlemlerin kaydı — reddedilen denemeler dâhil. Kayıt salt
-            okunurdur: buradan düzenlenemez, silinemez.
+            Personelin yaptığı işlemlerin kaydı — reddedilen denemeler dâhil. Kayıt salt okunurdur:
+            buradan düzenlenemez, silinemez.
           </>
         }
       />
