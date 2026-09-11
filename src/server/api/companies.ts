@@ -10,10 +10,11 @@ import type { PageDto } from "./types";
 /**
  * The company approval queue's contract with `webAPI/AdminController.java`.
  *
- * The three endpoints, in full:
+ * The four endpoints, in full:
  *
  * ```java
  * GET  /admin/companies?status=PENDING|APPROVED|REJECTED&query=...
+ * GET  /admin/companies/{companyId}/images/{imageId}/download
  * POST /admin/companies/{companyId}/approve   { note }
  * POST /admin/companies/{companyId}/reject    { reason }
  * ```
@@ -47,12 +48,25 @@ const safeUserSchema = z.object({
 });
 
 /**
+ * `core/dtos/address/response/AddressDto.java`, only the names operators read.
+ * Position, components and ids stay off the page.
+ */
+const companyAddressSchema = z
+  .object({
+    displayAddress: nullableString,
+    countryName: nullableString,
+    cityName: nullableString,
+    districtName: nullableString,
+  })
+  .nullish()
+  .transform((value) => value ?? null);
+
+/**
  * `core/dtos/company/response/CompanyReviewDto.java`.
  *
- * This is intentionally narrower than `CompanyDto`: the review queue does not
- * return address, contacts, gallery or description collections. Zod strips
- * unknown fields, including any accidental expansion of `createdBy`, so the
- * page can only render the backend's safe user projection.
+ * Address and gallery image ids are on the review DTO; contacts and storage
+ * keys are not. Zod strips unknown fields, including any accidental expansion of
+ * `createdBy`, so the page can only render the backend's safe projection.
  */
 export const companyReviewSchema = z.object({
   id: z.string(),
@@ -67,6 +81,11 @@ export const companyReviewSchema = z.object({
   approvalDecidedAt: nullableString,
   createdAt: nullableString,
   createdBy: safeUserSchema.nullish().transform((value) => value ?? null),
+  address: companyAddressSchema,
+  galleryImageIds: z
+    .array(z.string())
+    .nullish()
+    .transform((value) => value ?? []),
 });
 
 export type CompanyReview = z.infer<typeof companyReviewSchema>;
@@ -160,6 +179,10 @@ export function approveCompany(
     accessToken,
     cache: "no-store",
   });
+}
+
+export function companyImageDownloadPath(companyId: string, imageId: string): string {
+  return `${COMPANIES_PATH}/${encodeURIComponent(companyId)}/images/${encodeURIComponent(imageId)}/download`;
 }
 
 export function rejectCompany(

@@ -9,6 +9,7 @@ import {
   COMPANY_PAGING,
   approveCompany,
   companyApprovalStatusLabel,
+  companyImageDownloadPath,
   companyTypeLabel,
   getCompanies,
   rejectCompany,
@@ -41,7 +42,12 @@ const REVIEW_COMPANY = {
     passwordHash: "never-render-this",
   },
   companyContacts: [{ id: "must-be-stripped" }],
-  images: [{ id: "must-be-stripped" }],
+  images: [{ id: "must-be-stripped", storageKey: "s3://secret", fileUrl: "https://store.test/x" }],
+  address: {
+    ...SAFE_REVIEW_COMPANY.address,
+    fileUrl: "https://store.test/must-not-parse",
+    storageKey: "companies/secret",
+  },
 };
 
 function watchQueue(content: unknown[] = [REVIEW_COMPANY]) {
@@ -157,6 +163,33 @@ describe("the queue asks the backend for the page it is showing", () => {
     expect(page.content[0]?.approvalDecidedAt).toBeNull();
     expect(page.content[0]?.createdAt).toBeNull();
     expect(page.content[0]?.createdBy).toBeNull();
+    expect(page.content[0]?.address).toBeNull();
+    expect(page.content[0]?.galleryImageIds).toEqual([]);
+  });
+
+  it("keeps the registered address and gallery ids and drops storage keys", async () => {
+    watchQueue([REVIEW_COMPANY]);
+
+    const page = await getCompanies("ACCESS-TOKEN", {
+      status: "PENDING",
+      query: null,
+      paging: readPaging({}, COMPANY_PAGING),
+    });
+
+    const review = page.content[0];
+    expect(review?.address).toEqual(SAFE_REVIEW_COMPANY.address);
+    expect(review?.galleryImageIds).toEqual(SAFE_REVIEW_COMPANY.galleryImageIds);
+    expect(JSON.stringify(review)).not.toContain("store.test");
+    expect(JSON.stringify(review)).not.toContain("storageKey");
+    expect(JSON.stringify(review)).not.toContain("s3://");
+  });
+});
+
+describe("the staff gallery download path", () => {
+  it("encodes both identifiers instead of interpolating them", () => {
+    expect(companyImageDownloadPath("../../me", "x/y")).toBe(
+      "/admin/companies/..%2F..%2Fme/images/x%2Fy/download",
+    );
   });
 });
 
