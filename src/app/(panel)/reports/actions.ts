@@ -5,6 +5,7 @@ import {
   decisionSucceeded,
   type DecisionState,
 } from "@/components/panel/queue/decision-state";
+import { removeAdminImage } from "@/server/api/admin-images";
 import {
   REVIEW_MIN_NOTE_LENGTH,
   reportStatusLabel,
@@ -100,5 +101,29 @@ export async function submitReportReview(
     );
   } catch (error) {
     return decisionFailureFrom(error, "Karar gönderilemedi.");
+  }
+}
+
+/**
+ * Şikayet kararı görseli silmez. Bu eylem `DELETE /admin/images/{id}` çağırır;
+ * sayfa kapısı yetmez, izin burada yeniden çözülür.
+ */
+export async function submitImageRemoval(
+  _state: DecisionState,
+  formData: FormData,
+): Promise<DecisionState> {
+  const denied = await guardDecision("content.moderate");
+  if (denied !== null) return denied;
+
+  const imageId = field(formData, "imageId").trim();
+  if (imageId === "") {
+    return decisionRejected("Görsel kimliği gelmedi. Sayfayı yenileyip tekrar deneyin.");
+  }
+
+  try {
+    await removeAdminImage(await getKoalaAccessToken(), imageId);
+    return decisionSucceeded("Görsel kaldırıldı. İlan ve şirket galerilerinden düştü.");
+  } catch (error) {
+    return decisionFailureFrom(error, "Görsel kaldırılamadı.");
   }
 }
