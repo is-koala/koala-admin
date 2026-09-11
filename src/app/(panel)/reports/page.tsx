@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
 import {
@@ -112,13 +112,16 @@ function readUuidParam(params: SearchParams, key: string): string | null {
   return raw !== null && REPORT_ID.test(raw) ? raw : null;
 }
 
-function reportsHref(state: Record<string, string>, extras: Record<string, string | null> = {}) {
+function reportsHref(
+  state: Record<string, string>,
+  extras: Record<string, string | null> = {},
+): Route {
   const query = new URLSearchParams();
   for (const [name, value] of Object.entries({ ...state, ...extras })) {
     if (value !== null && value.length > 0) query.set(name, value);
   }
   const encoded = query.toString();
-  return encoded.length > 0 ? `/reports?${encoded}` : "/reports";
+  return (encoded.length > 0 ? `/reports?${encoded}` : "/reports") as Route;
 }
 
 async function ReportQueue({ params }: { params: SearchParams }) {
