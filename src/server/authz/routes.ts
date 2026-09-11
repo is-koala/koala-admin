@@ -111,6 +111,18 @@ export const ROUTES = [
   },
   {
     /**
+     * koala-admin#41. Backend `BadgesController` dört yazma ucunu
+     * `badge.manage` ile koruyor; kapı aynı izin. Katalog okuması da bu
+     * izne bağlı — public `GET /reference/badges` yalnız aktifleri verir.
+     */
+    path: "/badges",
+    title: "Rozetler",
+    access: "permission",
+    permission: "badge.manage",
+    nav: { label: "Rozetler", order: 15 },
+  },
+  {
+    /**
      * koala-admin#7. `content.moderate`, deliberately not `dispute.resolve`:
      * a DISPUTE_HANDLER settling money disputes has no business taking images
      * down, and the backend draws the same line
