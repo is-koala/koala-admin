@@ -223,9 +223,10 @@ export const ROUTES = [
   },
   {
     /**
-     * koala-admin#49. Liste ucu yok; bakış UUID ile. Uç `payment.read` ister,
-     * uyuşmazlık kuyruğu `dispute.resolve` — FINANCE_ANALYST atamayı buradan
-     * açar. Fetch kapının içinde: izni olmayan kişide GET hiç çıkmaz.
+     * koala-backend#203. Liste `GET /admin/job-assignments`; bakış hâlâ
+     * `GET /admin/job-assignments/{id}`. Uç `payment.read` ister, uyuşmazlık
+     * kuyruğu `dispute.resolve` — FINANCE_ANALYST atamayı buradan açar. Fetch
+     * kapının içinde: izni olmayan kişide GET hiç çıkmaz.
      */
     path: "/assignments",
     title: "Atama özeti",

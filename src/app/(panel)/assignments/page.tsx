@@ -1,9 +1,22 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { PageHeader } from "@/components/panel/page-header";
-import { QueueLoadFailure } from "@/components/panel/queue";
-import { Badge, EmptyState, FormField, TextInput, type BadgeTone } from "@/components/ui";
+import { QueueLoadFailure, QueuePager } from "@/components/panel/queue";
+import {
+  Badge,
+  EmptyState,
+  FormField,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  TextInput,
+  type BadgeTone,
+} from "@/components/ui";
 import {
   EMPTY_VALUE,
   formatCurrency,
@@ -11,8 +24,15 @@ import {
   formatInteger,
   formatPercent,
 } from "@/lib/format";
-import { getEscrowSummary, type EscrowSummary } from "@/server/api/escrow";
-import { readParam, type SearchParams } from "@/server/api/paging";
+import {
+  ASSIGNMENT_PAGING,
+  getAdminAssignments,
+  getEscrowSummary,
+  type AssignmentStatus,
+  type EscrowSummary,
+  type PaymentStatus,
+} from "@/server/api/escrow";
+import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
 import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
@@ -21,16 +41,10 @@ import { classifyQueueFailure } from "@/server/queue/decisions";
 export const metadata: Metadata = { title: "Atama özeti" };
 
 /**
- * Bağımsız atama bakışı — koala-admin#49.
+ * Atama kuyruğu — koala-backend#203.
  *
- * `GET /admin/job-assignments/{id}` `payment.read` ile korunur ve
- * `AdminAssignmentDto` döner. Uyuşmazlık kuyruğu aynı özeti `dispute.resolve`
- * arkasında gösterir; FINANCE_ANALYST o kapıdan geçemez. Liste ucu yok, bakış
- * UUID ile — hakediş mutabakatındaki payout kimliği gibi.
- *
- * Fetch kapının içinde: izni olmayan kişide GET hiç çıkmaz. Taraflar
- * `SafeUserDto`; e-posta fixture'da gelse Zod onu düşürür. Para yazımı
- * (release/refund) burada yok — o uçlar uyuşmazlık kuyruğunda.
+ * `GET /admin/job-assignments` `payment.read` ile sayfalar; satır DTO'su
+ * UUID bakışıyla aynı `AdminAssignmentDto`. Emanet yazımı burada yok.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -41,6 +55,23 @@ const PAYMENT_STATUS_TONES: Record<string, BadgeTone> = {
   REFUNDED: "neutral",
   PENDING_COLLECTION: "neutral",
   FAILED: "danger",
+};
+
+const ASSIGNMENT_STATUS_LABELS: Record<AssignmentStatus, string> = {
+  PENDING_CONFIRMATION: "Onay bekliyor",
+  CONFIRMED: "Onaylı",
+  IN_PROGRESS: "Devam ediyor",
+  COMPLETED: "Tamamlandı",
+  REJECTED: "Reddedildi",
+  CANCELLED: "İptal",
+};
+
+const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  PENDING_COLLECTION: "Tahsil bekliyor",
+  HELD_IN_ESCROW: "Emanette",
+  RELEASED_TO_WORKER: "İşçiye çıktı",
+  FAILED: "Başarısız",
+  REFUNDED: "İade",
 };
 
 export default async function AssignmentsPage({
@@ -56,21 +87,23 @@ export default async function AssignmentsPage({
         title="Atama özeti"
         description={
           <>
-            Tek atamayı kimliğiyle açın. Liste yoktur; kimliği uyuşmazlık kaydından veya ödeme
-            runbook&apos;undan alın. <code className="font-mono">payment.read</code> izni gerekir —{" "}
-            <code className="font-mono">dispute.resolve</code> bu ekranı açmaz.
+            Son atamaları sayfalar veya kimlikle bir kaydı açın.{" "}
+            <code className="font-mono">payment.read</code> izni gerekir —{" "}
+            <code className="font-mono">dispute.resolve</code> bu ekranı açmaz. Para yazımı
+            uyuşmazlık kuyruğundadır.
           </>
         }
       />
 
       <RequirePermission permission="payment.read">
-        <AssignmentLookup params={params} />
+        <AssignmentWorkspace params={params} />
       </RequirePermission>
     </div>
   );
 }
 
-async function AssignmentLookup({ params }: { params: SearchParams }) {
+async function AssignmentWorkspace({ params }: { params: SearchParams }) {
+  const paging = readPaging(params, ASSIGNMENT_PAGING);
   const raw = readParam(params, "atama")?.trim() ?? "";
   const candidate = raw.length === 0 ? null : raw;
   const invalid = candidate !== null && !UUID.test(candidate);
@@ -82,33 +115,17 @@ async function AssignmentLookup({ params }: { params: SearchParams }) {
     />
   );
 
-  if (candidate === null) {
-    return (
-      <div className="flex flex-col gap-6">
-        {form}
-        <EmptyState
-          title="Atama kimliği girin."
-          description="Bekleyen atamalar listelenmez. Bakış, GET /admin/job-assignments/{id} ile UUID üzerinden yapılır."
-        />
-      </div>
-    );
-  }
-
-  if (invalid) {
-    return <div className="flex flex-col gap-6">{form}</div>;
-  }
-
   const accessToken = await getKoalaAccessToken();
 
-  let summary: EscrowSummary;
+  let list;
   try {
-    summary = await getEscrowSummary(accessToken, candidate);
+    list = await getAdminAssignments(accessToken, paging);
   } catch (error) {
     return (
       <div className="flex flex-col gap-6">
         {form}
         <QueueLoadFailure
-          subject="Atama özeti"
+          subject="Atama kuyruğu"
           permission="payment.read"
           failure={classifyQueueFailure(error)}
         />
@@ -116,10 +133,118 @@ async function AssignmentLookup({ params }: { params: SearchParams }) {
     );
   }
 
+  let selected: EscrowSummary | null = null;
+  let selectedFailure = null;
+  if (candidate !== null && !invalid) {
+    const onPage = list.content.find((row) => row.id === candidate) ?? null;
+    if (onPage !== null) {
+      selected = onPage;
+    } else {
+      try {
+        selected = await getEscrowSummary(accessToken, candidate);
+      } catch (error) {
+        selectedFailure = error;
+      }
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {form}
-      <AssignmentSummary summary={summary} />
+
+      <section className="flex flex-col gap-3" aria-labelledby="assignment-queue-heading">
+        <div className="flex flex-col gap-1">
+          <h2 id="assignment-queue-heading" className="text-lg font-semibold">
+            Kuyruk
+          </h2>
+          <p className="max-w-prose text-xs text-ink-muted">
+            <code className="font-mono">GET /admin/job-assignments</code> aynı özeti sayfalar.
+            Satırdaki tutar DTO&apos;daki <code className="font-mono">pricing</code> alanıdır.
+          </p>
+        </div>
+
+        {list.content.length === 0 ? (
+          <EmptyState
+            title="Atama yok."
+            description="Kuyruk boşsa yine de yukarıdan bir atama kimliğiyle bakabilirsiniz."
+          />
+        ) : (
+          <Table caption="Atamalar">
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell>Atama zamanı</TableHeaderCell>
+                <TableHeaderCell>İş</TableHeaderCell>
+                <TableHeaderCell>İşçi</TableHeaderCell>
+                <TableHeaderCell>İşveren</TableHeaderCell>
+                <TableHeaderCell>Durum</TableHeaderCell>
+                <TableHeaderCell>Ödeme</TableHeaderCell>
+                <TableHeaderCell>Tutar</TableHeaderCell>
+                <TableHeaderCell>Detay</TableHeaderCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {list.content.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{formatDateTime(row.assignmentDateTime)}</TableCell>
+                  <TableCell>{row.jobTitle ?? EMPTY_VALUE}</TableCell>
+                  <TableCell>{safeUserName(row.worker)}</TableCell>
+                  <TableCell>
+                    {row.companyName === null
+                      ? safeUserName(row.employer)
+                      : `${safeUserName(row.employer)} · ${row.companyName}`}
+                  </TableCell>
+                  <TableCell>
+                    <Badge>{ASSIGNMENT_STATUS_LABELS[row.status]}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge tone={PAYMENT_STATUS_TONES[row.paymentStatus] ?? "neutral"}>
+                      {PAYMENT_STATUS_LABELS[row.paymentStatus]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {formatCurrency(row.pricing.employerTotal, row.pricing.currency)}
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={{
+                        pathname: "/assignments",
+                        query: {
+                          atama: row.id,
+                          ...(paging.page > 0 ? { sayfa: String(paging.page) } : {}),
+                        },
+                      }}
+                      className="text-sm font-medium text-brand hover:underline"
+                    >
+                      Aç
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        {list.totalElements > 0 ? (
+          <QueuePager
+            window={pageWindow(list)}
+            state={{
+              boyut: String(paging.size),
+              ...(candidate === null ? {} : { atama: candidate }),
+            }}
+            unit="atama"
+          />
+        ) : null}
+      </section>
+
+      {selectedFailure !== null ? (
+        <QueueLoadFailure
+          subject="Atama özeti"
+          permission="payment.read"
+          failure={classifyQueueFailure(selectedFailure)}
+        />
+      ) : null}
+
+      {selected === null ? null : <AssignmentSummary summary={selected} />}
     </div>
   );
 }
@@ -130,17 +255,15 @@ function LookupForm({ value, error }: { value: string; error: string | null }) {
       <FormField
         id="atama"
         label="Atama kimliği"
-        required
         error={error}
         className="min-w-0 flex-1"
-        hint="UUID. Yanlış biçim backend'e gitmez."
+        hint="UUID. Yanlış biçim backend'e gitmez. Boş bırakılırsa kuyruk durur."
       >
         {({ id, describedBy, invalid }) => (
           <TextInput
             id={id}
             name="atama"
             defaultValue={value}
-            required
             autoComplete="off"
             spellCheck={false}
             aria-invalid={invalid || undefined}
@@ -177,12 +300,12 @@ function AssignmentSummary({ summary }: { summary: EscrowSummary }) {
           <Row label="İş" value={summary.jobTitle ?? EMPTY_VALUE} />
           <Row label="İşçi" value={safeUserName(summary.worker)} />
           <Row label="İşveren" value={employerLabel} />
-          <Row label="Atama durumu" value={summary.status} />
+          <Row label="Atama durumu" value={ASSIGNMENT_STATUS_LABELS[summary.status]} />
           <Row
             label="Ödeme durumu"
             value={
               <Badge tone={PAYMENT_STATUS_TONES[summary.paymentStatus] ?? "neutral"}>
-                {summary.paymentStatus}
+                {PAYMENT_STATUS_LABELS[summary.paymentStatus]}
               </Badge>
             }
           />

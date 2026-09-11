@@ -18,6 +18,7 @@ const { default: AssignmentsPage } = await import("./page");
 
 const ADMIN_ME = apiUrl("/admin/me");
 const ASSIGNMENT_ID = "9a1c0f10-0001-4c00-8000-0000000000aa";
+const LIST = apiUrl("/admin/job-assignments");
 const LOOKUP = apiUrl(`/admin/job-assignments/${ASSIGNMENT_ID}`);
 
 const ANALYST = ["payment.read"];
@@ -44,6 +45,52 @@ function stubMe(permissions: readonly string[], roles: readonly string[] = ["FIN
       }),
     ),
   );
+}
+
+function pageEnvelope(content: unknown[]) {
+  return {
+    success: true,
+    message: "Atamalar listelendi.",
+    httpStatus: "200 OK",
+    path: "/admin/job-assignments",
+    requestId: "rid-assignment-list",
+    timeStamp: "2026-09-11T13:00:00.000000000Z",
+    data: {
+      content,
+      page: 0,
+      size: 20,
+      totalElements: content.length,
+      totalPages: 1,
+      first: true,
+      last: true,
+    },
+  };
+}
+
+function watchList(content: unknown[] = [adminAssignmentFixture()]) {
+  const seen: { calls: number; authorization: string | null; url: URL | null } = {
+    calls: 0,
+    authorization: null,
+    url: null,
+  };
+
+  server.use(
+    http.get(LIST, ({ request }) => {
+      const url = new URL(request.url);
+      if (
+        url.pathname !== "/admin/job-assignments" &&
+        !url.pathname.endsWith("/admin/job-assignments")
+      ) {
+        return;
+      }
+      seen.calls += 1;
+      seen.authorization = request.headers.get("authorization");
+      seen.url = url;
+      return HttpResponse.json(pageEnvelope(content));
+    }),
+  );
+
+  return seen;
 }
 
 function watchLookup(data: unknown = adminAssignmentFixture()) {
@@ -94,12 +141,14 @@ describe("who can look up an assignment", () => {
 
   it("lets payment.read through and keeps the bearer token on the server", async () => {
     stubMe(ANALYST);
+    const list = watchList();
     const lookup = watchLookup();
 
     const html = await render({ atama: ASSIGNMENT_ID });
 
-    expect(lookup.calls).toBe(1);
-    expect(lookup.authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(list.calls).toBe(1);
+    expect(list.authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(lookup.calls).toBe(0);
     expect(html).toContain("Ayşe Yılmaz");
     expect(html).toContain("Mehmet Demir");
     expect(html).toContain("Koala Kafe");
@@ -113,27 +162,31 @@ describe("who can look up an assignment", () => {
   });
 });
 
-describe("lookup is a UUID, not a list", () => {
-  it("sends nothing when the form is empty", async () => {
+describe("the queue and the UUID lookup", () => {
+  it("pages the list when the form is empty and does not look up a UUID", async () => {
     stubMe(ANALYST);
+    const list = watchList();
     const lookup = watchLookup();
 
     const html = await render();
 
+    expect(list.calls).toBe(1);
     expect(lookup.calls).toBe(0);
     expect(html).toContain("Atama kimliği");
-    expect(html).not.toContain("Ayşe Yılmaz");
+    expect(html).toContain("Ayşe Yılmaz");
+    expect(html).not.toContain("Liste yoktur");
+    expect(html).not.toContain("listelenmez");
   });
 
-  it("does not call the backend for a malformed UUID", async () => {
+  it("does not look up a malformed UUID", async () => {
     stubMe(ANALYST);
+    watchList();
     const lookup = watchLookup();
 
     const html = await render({ atama: "not-a-uuid" });
 
     expect(lookup.calls).toBe(0);
     expect(html).toContain("Geçerli bir atama kimliği girin.");
-    expect(html).not.toContain("Ayşe Yılmaz");
   });
 });
 
@@ -141,11 +194,13 @@ describe("the safe user projection and missing records", () => {
   it("does not render an email even if the payload carries one", async () => {
     stubMe(ANALYST);
     const assignment = adminAssignmentFixture();
-    watchLookup({
-      ...assignment,
-      worker: { ...assignment.worker, email: "private-worker@koala.test" },
-      employer: { ...assignment.employer, email: "private-employer@koala.test" },
-    });
+    watchList([
+      {
+        ...assignment,
+        worker: { ...assignment.worker, email: "private-worker@koala.test" },
+        employer: { ...assignment.employer, email: "private-employer@koala.test" },
+      },
+    ]);
 
     const html = await render({ atama: ASSIGNMENT_ID });
 
@@ -156,6 +211,7 @@ describe("the safe user projection and missing records", () => {
 
   it("renders the backend 404 in operator language rather than crashing", async () => {
     stubMe(ANALYST);
+    watchList([]);
     const seen: { calls: number } = { calls: 0 };
 
     server.use(
