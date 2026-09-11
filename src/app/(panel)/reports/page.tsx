@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
@@ -24,6 +25,7 @@ import {
   pageWindow,
   readEnumParam,
   readPaging,
+  readParam,
   sortParam,
   type SearchParams,
 } from "@/server/api/paging";
@@ -31,12 +33,15 @@ import {
   REPORT_PAGING,
   REPORT_STATUSES,
   REVIEW_MIN_NOTE_LENGTH,
+  getReport,
   getReports,
+  reportPartyName,
   reportReasonLabel,
   reportStatusLabel,
   reportTargetLabel,
   reportTargets,
   type Report,
+  type ReportContent,
   type ReportStatus,
 } from "@/server/api/reports";
 import { getKoalaAccessToken } from "@/server/auth/session";
@@ -48,34 +53,22 @@ import { ImageRemovalForm } from "./image-removal-form";
 
 export const metadata: Metadata = { title: "Şikayetler" };
 
+const REPORT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * The screen koala mobile has been missing since is-koala/koala#36 merged.
+ * Şikayet kuyruğu — koala-backend#199.
  *
- * Users have been able to report each other and each other's content for a
- * while; nothing in koala-admin could look at what they filed. This is the
- * operator behind that promise.
+ * Liste `AdminReportDto`: muhbir, şikayet edilen, kuyruğun tamamı üzerinden
+ * geçmiş sayı. İçerik önizlemesi yalnız `GET /admin/reports/{id}` üzerinde;
+ * `?id=` o ucu çağırır, sayfa numarasına bağlı bir yer işareti değildir.
  *
- * Two structural notes, both forced by `ReportsController`:
- *
- *  - **One status at a time.** `@RequestParam ReportStatus status` is required,
- *    so there is no combined view and no "all". The filter is a real request
- *    parameter, which is the only way it could be honest with `PageDto`.
- *  - **Detail is not a separate page.** There is no `GET /admin/reports/{id}`,
- *    so a `/reports/[id]` route could only find a report by walking pages —
- *    which would make a bookmarked link depend on how many reports were filed
- *    after it. The detail opens from the row the queue already fetched.
- *
- * The gate wraps the queue element rather than the page, so a staff member
- * without `content.moderate` gets the 403 state and `GET /admin/reports` is
- * never called. `reports.test.tsx` asserts that as a request count.
+ * Kapı kuyruğu sarar: `content.moderate` yoksa GET hiç çıkmaz.
  */
 export default async function ReportsPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  // Reading the URL is not a backend call, so doing it above the gate costs
-  // nothing and keeps the gated child a single element.
   const params = await searchParams;
 
   return (
@@ -114,16 +107,32 @@ const SORT_OPTIONS = [
   { value: "status,asc", label: "Duruma göre (A-Z)" },
 ];
 
+function readUuidParam(params: SearchParams, key: string): string | null {
+  const raw = readParam(params, key);
+  return raw !== null && REPORT_ID.test(raw) ? raw : null;
+}
+
+function reportsHref(state: Record<string, string>, extras: Record<string, string | null> = {}) {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries({ ...state, ...extras })) {
+    if (value !== null && value.length > 0) query.set(name, value);
+  }
+  const encoded = query.toString();
+  return encoded.length > 0 ? `/reports?${encoded}` : "/reports";
+}
+
 async function ReportQueue({ params }: { params: SearchParams }) {
   const status = readEnumParam<ReportStatus>(params, "durum", REPORT_STATUSES, "OPEN");
   const paging = readPaging(params, REPORT_PAGING);
+  const reportedUserId = readUuidParam(params, "kullanici");
+  const selectedId = readUuidParam(params, "id");
 
-  /** Everything that describes this view, minus the page number. */
-  const viewState = {
+  const viewState: Record<string, string> = {
     durum: status,
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
   };
+  if (reportedUserId !== null) viewState.kullanici = reportedUserId;
 
   const filters = (
     <QueueFilters
@@ -144,14 +153,37 @@ async function ReportQueue({ params }: { params: SearchParams }) {
           options: SORT_OPTIONS,
         },
       ]}
-      carry={{ boyut: String(paging.size) }}
-      notice="Durum ve sıralama kuyruğu süzer. Gelen sayfa panelde yeniden süzülmez."
+      carry={{
+        boyut: String(paging.size),
+        ...(reportedUserId !== null ? { kullanici: reportedUserId } : {}),
+      }}
+      notice={
+        reportedUserId !== null ? (
+          <>
+            Bu görünüm bir kullanıcı hakkındaki şikayetleri süzüyor.{" "}
+            <Link
+              href={reportsHref({
+                durum: status,
+                sirala: sortParam(paging.sort),
+                boyut: String(paging.size),
+              })}
+            >
+              Süzgeci kaldır
+            </Link>
+            .
+          </>
+        ) : (
+          "Durum ve sıralama kuyruğu süzer. Gelen sayfa panelde yeniden süzülmez."
+        )
+      }
     />
   );
 
+  const accessToken = await getKoalaAccessToken();
+
   let page;
   try {
-    page = await getReports(await getKoalaAccessToken(), { status, paging });
+    page = await getReports(accessToken, { status, reportedUserId, paging });
   } catch (error) {
     return (
       <div className="flex flex-col gap-4">
@@ -165,27 +197,36 @@ async function ReportQueue({ params }: { params: SearchParams }) {
     );
   }
 
-  const reports = page.content;
-  /**
-   * How many rows *on this page* name the same reported user.
-   *
-   * Deliberately page-scoped, and said in those words everywhere it appears.
-   * Real grouping needs a filter by reported user, which the endpoint does not
-   * have; a number computed from twenty rows and presented as a total would be
-   * a lie an operator would act on.
-   */
-  const repeatsOnPage = new Map<string, number>();
-  for (const report of reports) {
-    if (report.reportedUserId !== null) {
-      repeatsOnPage.set(report.reportedUserId, (repeatsOnPage.get(report.reportedUserId) ?? 0) + 1);
+  let selectedContent: ReportContent | null = null;
+  let selectedOffPage: Report | null = null;
+  let selectedFailure = null;
+  if (selectedId !== null) {
+    try {
+      const detail = await getReport(accessToken, selectedId);
+      selectedContent = detail.content;
+      if (!page.content.some((report) => report.id === selectedId)) {
+        selectedOffPage = detail.report;
+      }
+    } catch (error) {
+      selectedFailure = error;
     }
   }
+
+  const reports = selectedOffPage === null ? page.content : [selectedOffPage, ...page.content];
 
   return (
     <div className="flex flex-col gap-6">
       {filters}
 
-      {reports.length === 0 ? (
+      {selectedFailure !== null ? (
+        <QueueLoadFailure
+          subject="Şikayet detayı"
+          permission="content.moderate"
+          failure={classifyQueueFailure(selectedFailure)}
+        />
+      ) : null}
+
+      {page.content.length === 0 && selectedOffPage === null ? (
         <EmptyState
           title={`"${reportStatusLabel(status)}" durumunda şikayet yok.`}
           description="Bu, bu durumdaki kuyruğun boş olduğu anlamına gelir — başka durumdaki şikayetler için yukarıdaki süzgeci değiştirin."
@@ -198,8 +239,10 @@ async function ReportQueue({ params }: { params: SearchParams }) {
                 <TableHeaderCell>Tarih</TableHeaderCell>
                 <TableHeaderCell>Durum</TableHeaderCell>
                 <TableHeaderCell>Gerekçe</TableHeaderCell>
+                <TableHeaderCell>Şikayet eden</TableHeaderCell>
+                <TableHeaderCell>Şikayet edilen</TableHeaderCell>
+                <TableHeaderCell>Geçmiş</TableHeaderCell>
                 <TableHeaderCell>Hedef</TableHeaderCell>
-                <TableHeaderCell>Açıklama</TableHeaderCell>
                 <TableHeaderCell>Detay</TableHeaderCell>
               </TableRow>
             </TableHead>
@@ -213,6 +256,27 @@ async function ReportQueue({ params }: { params: SearchParams }) {
                     </Badge>
                   </TableCell>
                   <TableCell>{reportReasonLabel(report.reason)}</TableCell>
+                  <TableCell>{reportPartyName(report.reporter)}</TableCell>
+                  <TableCell>
+                    {report.reportedUserId === null ? (
+                      EMPTY_VALUE
+                    ) : (
+                      <Link
+                        href={reportsHref(viewState, {
+                          kullanici: report.reportedUserId,
+                          id: null,
+                        })}
+                        className="text-brand hover:underline"
+                      >
+                        {reportPartyName(report.reportedUser)}
+                      </Link>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {report.reportedUserId === null
+                      ? EMPTY_VALUE
+                      : formatInteger(report.reportedUserReportCount)}
+                  </TableCell>
                   <TableCell>
                     <span className="flex flex-wrap gap-1">
                       {reportTargets(report).map((target) => (
@@ -223,13 +287,13 @@ async function ReportQueue({ params }: { params: SearchParams }) {
                       {reportTargets(report).length === 0 ? EMPTY_VALUE : null}
                     </span>
                   </TableCell>
-                  <TableCell className="max-w-72 truncate">
-                    {report.description ?? EMPTY_VALUE}
-                  </TableCell>
                   <TableCell>
-                    <a href={`#sikayet-${report.id}`} className="text-brand hover:underline">
+                    <Link
+                      href={reportsHref(viewState, { id: report.id, sayfa: String(paging.page) })}
+                      className="text-brand hover:underline"
+                    >
                       İncele
-                    </a>
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}
@@ -244,11 +308,9 @@ async function ReportQueue({ params }: { params: SearchParams }) {
               <ReportDetail
                 key={report.id}
                 report={report}
-                repeatsOnPage={
-                  report.reportedUserId === null
-                    ? 1
-                    : (repeatsOnPage.get(report.reportedUserId) ?? 1)
-                }
+                viewState={viewState}
+                open={selectedId === report.id}
+                content={selectedId === report.id ? selectedContent : null}
               />
             ))}
           </section>
@@ -283,7 +345,17 @@ function decisionOptions(): DecisionOption[] {
   ];
 }
 
-function ReportDetail({ report, repeatsOnPage }: { report: Report; repeatsOnPage: number }) {
+function ReportDetail({
+  report,
+  viewState,
+  open,
+  content,
+}: {
+  report: Report;
+  viewState: Record<string, string>;
+  open: boolean;
+  content: ReportContent | null;
+}) {
   const targets = reportTargets(report);
   const closed = CLOSED_STATUSES.has(report.status);
   const hasImageTarget = targets.some((target) => target.kind === "IMAGE");
@@ -291,6 +363,7 @@ function ReportDetail({ report, repeatsOnPage }: { report: Report; repeatsOnPage
   return (
     <details
       id={`sikayet-${report.id}`}
+      open={open || undefined}
       className="rounded-lg border border-border-subtle bg-surface px-4 py-3"
     >
       <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-ink">
@@ -300,8 +373,10 @@ function ReportDetail({ report, repeatsOnPage }: { report: Report; repeatsOnPage
         </Badge>
         <span>{reportReasonLabel(report.reason)}</span>
         <span className="text-ink-muted">{formatDateTime(report.createdAt)}</span>
-        {repeatsOnPage > 1 ? (
-          <Badge tone="warning">Aynı kullanıcı bu sayfada {formatInteger(repeatsOnPage)} kez</Badge>
+        {report.reportedUserId !== null && report.reportedUserReportCount > 0 ? (
+          <Badge tone={report.reportedUserReportCount > 1 ? "warning" : "neutral"}>
+            Geçmiş şikayet {formatInteger(report.reportedUserReportCount)}
+          </Badge>
         ) : null}
       </summary>
 
@@ -319,6 +394,30 @@ function ReportDetail({ report, repeatsOnPage }: { report: Report; repeatsOnPage
           <dt className="text-sm text-ink-muted">Şikayet metni</dt>
           <dd className="text-sm whitespace-pre-wrap">{report.description ?? EMPTY_VALUE}</dd>
 
+          <dt className="text-sm text-ink-muted">Şikayet eden</dt>
+          <dd className="text-sm">{reportPartyName(report.reporter)}</dd>
+
+          <dt className="text-sm text-ink-muted">Şikayet edilen</dt>
+          <dd className="text-sm">
+            {report.reportedUserId === null ? (
+              EMPTY_VALUE
+            ) : (
+              <Link
+                href={reportsHref(viewState, { kullanici: report.reportedUserId, id: null })}
+                className="text-brand hover:underline"
+              >
+                {reportPartyName(report.reportedUser)}
+              </Link>
+            )}
+          </dd>
+
+          <dt className="text-sm text-ink-muted">Geçmiş şikayet</dt>
+          <dd className="text-sm">
+            {report.reportedUserId === null
+              ? EMPTY_VALUE
+              : `${formatInteger(report.reportedUserReportCount)} (kuyruğun tamamı)`}
+          </dd>
+
           <dt className="text-sm text-ink-muted">Hedef</dt>
           <dd className="flex flex-col gap-1 text-sm">
             {targets.length === 0 ? EMPTY_VALUE : null}
@@ -330,8 +429,40 @@ function ReportDetail({ report, repeatsOnPage }: { report: Report; repeatsOnPage
             ))}
           </dd>
 
-          <dt className="text-sm text-ink-muted">Şikayet eden</dt>
-          <dd className="text-sm">{EMPTY_VALUE}</dd>
+          {content !== null && content.jobTitle !== null ? (
+            <>
+              <dt className="text-sm text-ink-muted">İlan</dt>
+              <dd className="text-sm">{content.jobTitle}</dd>
+            </>
+          ) : null}
+
+          {content !== null && content.messageBody !== null ? (
+            <>
+              <dt className="text-sm text-ink-muted">Mesaj</dt>
+              <dd className="text-sm whitespace-pre-wrap">{content.messageBody}</dd>
+            </>
+          ) : null}
+
+          {content !== null && content.imageUrl !== null ? (
+            <>
+              <dt className="text-sm text-ink-muted">Görsel</dt>
+              <dd>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={content.imageUrl}
+                  alt="Şikayet edilen görsel"
+                  className="max-h-64 rounded-lg border border-border-subtle"
+                />
+              </dd>
+            </>
+          ) : null}
+
+          {report.reviewedBy !== null ? (
+            <>
+              <dt className="text-sm text-ink-muted">Kararı veren</dt>
+              <dd className="text-sm">{reportPartyName(report.reviewedBy)}</dd>
+            </>
+          ) : null}
 
           {report.reviewNote === null && report.reviewedAt === null ? null : (
             <>
@@ -367,14 +498,6 @@ function ReportDetail({ report, repeatsOnPage }: { report: Report; repeatsOnPage
   );
 }
 
-/**
- * What has to happen after a verdict, and what the panel cannot do about it.
- *
- * koala-admin#7 asks for the follow-up steps to be on screen, with a link where
- * an endpoint exists and a plain "out of scope" where one does not. Both halves
- * are true here and neither is invented: there is no suspension endpoint
- * anywhere in koala-backend, and content removal exists for images only.
- */
 function FollowUp({ hasImageTarget }: { hasImageTarget: boolean }) {
   return (
     <p className="text-sm text-ink-muted">

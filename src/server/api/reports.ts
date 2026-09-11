@@ -6,28 +6,21 @@ import { koalaApi } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import type { PageDto } from "./types";
+import { safeUserName, safeUserSchema } from "./users";
 
 /**
  * The report queue's contract with `webAPI/ReportsController.java`.
  *
- * Read the endpoint signature before reading anything else here, because most
- * of what this module does is work around it:
- *
  * ```java
- * @GetMapping("/admin/reports")
- * public ... byStatus(@RequestParam ReportStatus status, @PageableDefault(size = 20) Pageable pageable)
+ * GET  /admin/reports?status=&reason=&targetType=&reportedUserId=
+ * GET  /admin/reports/{id}
+ * POST /admin/reports/{id}/review
  * ```
  *
- * `status` has no `required = false` and no default, so **the queue is always
- * one status at a time** — there is no "all reports" view to build, and asking
- * for one would be a 400. That single parameter is also the *only* filter:
- * there is no filter by reason, by target type, by reporter or by reported
- * user, and no `GET /admin/reports/{id}` for a detail page.
- *
- * The panel does not paper over any of that. Every gap is listed in
- * {@link REPORT_BACKEND_GAPS} and rendered on the screen, because a moderation
- * queue that quietly filters twenty rows in the browser is worse than one that
- * admits it cannot filter at all.
+ * List rows are `AdminReportDto`: reporter, reported user, prior-count, no
+ * content preview. The preview (job title, message body, image URL) lives on
+ * the detail endpoint so a bookmarked `?id=` does not depend on which page the
+ * row happened to sit on.
  */
 
 export const REPORTS_PATH = "/admin/reports";
@@ -88,8 +81,10 @@ const nullableString = z
   .nullish()
   .transform((value) => value ?? null);
 
+const nullableUser = safeUserSchema.nullish().transform((value) => value ?? null);
+
 /**
- * `core/dtos/report/response/ReportDto.java`.
+ * `core/dtos/report/response/AdminReportDto.java`.
  *
  * `reason` and `status` are `z.string()` rather than `z.enum(...)` on purpose.
  * A backend that ships a new enum member first would otherwise fail the whole
@@ -97,9 +92,15 @@ const nullableString = z
  * exactly the failure this screen exists to prevent. The filter still only ever
  * sends a value from {@link REPORT_STATUSES}, which is the direction that has
  * to be strict — Spring answers an unknown enum with 400.
+ *
+ * Reporter and reported user are `SafeUserDto`: name and username, never email
+ * or phone. `reportedUserReportCount` is the table-wide total for that user,
+ * including closed reports — not the count on the current page.
  */
 export const reportSchema = z.object({
   id: z.string(),
+  reporter: nullableUser,
+  reportedUser: nullableUser,
   reportedUserId: nullableString,
   jobId: nullableString,
   messageId: nullableString,
@@ -107,12 +108,32 @@ export const reportSchema = z.object({
   reason: z.string(),
   description: nullableString,
   status: z.string(),
+  reviewedBy: nullableUser,
   reviewNote: nullableString,
   reviewedAt: nullableString,
   createdAt: nullableString,
+  reportedUserReportCount: z.number().int().nonnegative().default(0),
 });
 
 export type Report = z.infer<typeof reportSchema>;
+
+export function reportPartyName(user: Report["reporter"]): string {
+  return safeUserName(user);
+}
+
+const reportContentSchema = z.object({
+  jobTitle: nullableString,
+  messageBody: nullableString,
+  imageUrl: nullableString,
+});
+
+export const reportDetailSchema = z.object({
+  report: reportSchema,
+  content: reportContentSchema,
+});
+
+export type ReportContent = z.infer<typeof reportContentSchema>;
+export type ReportDetail = z.infer<typeof reportDetailSchema>;
 
 /** `ReportManager.SORTABLE` and `ReportManager.DEFAULT_SORT`, copied. */
 export const REPORT_PAGING: PagingContract = {
@@ -157,25 +178,47 @@ export function reportTargets(report: Report): ReportTarget[] {
 
 export interface ReportQueueQuery {
   readonly status: ReportStatus;
+  readonly reportedUserId?: string | null;
   readonly paging: Paging;
 }
 
 /**
  * One page of the queue.
  *
- * `status` and the three paging parameters all go on the query string; nothing
- * about the returned page is narrowed afterwards. `reports.test.ts` asserts the
- * exact URL, because "the filter goes to the server" is a claim about a request
- * and can only be checked as one.
+ * `status`, optional `reportedUserId`, and the three paging parameters all go on
+ * the query string; nothing about the returned page is narrowed afterwards.
+ * `reports.test.ts` asserts the exact URL, because "the filter goes to the
+ * server" is a claim about a request and can only be checked as one.
  */
 export function getReports(accessToken: string, query: ReportQueueQuery): Promise<PageDto<Report>> {
   return koalaApi.get({
     path: REPORTS_PATH,
     schema: pageDtoSchema(reportSchema),
-    query: { status: query.status, ...pagingQuery(query.paging) },
+    query: {
+      status: query.status,
+      reportedUserId: query.reportedUserId?.trim() || undefined,
+      ...pagingQuery(query.paging),
+    },
     accessToken,
-    // A moderation queue is the last place to serve a cached page: the row an
-    // operator is about to open may already have been decided by a colleague.
+    cache: "no-store",
+  });
+}
+
+export function reportDetailPath(reportId: string): string {
+  return `${REPORTS_PATH}/${encodeURIComponent(reportId)}`;
+}
+
+/**
+ * `GET /admin/reports/{id}` — `AdminReportDetailDto { report, content }`.
+ *
+ * Missing reports are `REPORT_NOT_FOUND`. Content is user-authored (job title,
+ * message body, public image URL) and only this call returns it.
+ */
+export function getReport(accessToken: string, reportId: string): Promise<ReportDetail> {
+  return koalaApi.get({
+    path: reportDetailPath(reportId),
+    schema: reportDetailSchema,
+    accessToken,
     cache: "no-store",
   });
 }
@@ -215,57 +258,10 @@ export function reviewReport(
   review: ReportReview,
 ): Promise<Report> {
   return koalaApi.post({
-    path: `${REPORTS_PATH}/${encodeURIComponent(reportId)}/review`,
+    path: `${reportDetailPath(reportId)}/review`,
     schema: reportSchema,
     body: { status: review.status, note: review.note },
     accessToken,
     cache: "no-store",
   });
 }
-
-/**
- * What koala-admin#7 asks for that `ReportsController` cannot answer today.
- *
- * Kept as data rather than as prose scattered through the page so that the
- * screen and the hand-off to the backend team say the same thing, and so that
- * deleting a gap from the UI means deleting it from here — which is a diff
- * somebody reviews.
- */
-export const REPORT_BACKEND_GAPS = [
-  {
-    id: "reporter",
-    title: "Şikayet eden görünmüyor",
-    detail:
-      "`Report` varlığı `reporter` alanını tutuyor ama `ReportDto` onu döndürmüyor, bu yüzden kuyrukta şikayet eden sütunu yok. Aynı şekilde `reviewedBy` de dönmüyor: bir şikayeti kimin sonuçlandırdığı panelde görülemiyor.",
-  },
-  {
-    id: "prior-count",
-    title: "Şikayet edilenin geçmiş şikayet sayısı yok",
-    detail:
-      "Ne `ReportDto`'da bir sayaç var, ne de `GET /admin/reports` şikayet edilene göre süzülebiliyor (tek parametresi `status`). Bu yüzden 'bu kullanıcı hakkında daha önce kaç şikayet açıldı' sorusunun panelde doğru bir cevabı yok.",
-  },
-  {
-    id: "grouping",
-    title: "Aynı kullanıcı hakkındaki şikayetler gruplanamıyor",
-    detail:
-      "Gruplama, şikayet edilen kullanıcıya göre süzme gerektirir; böyle bir parametre yok. Panel yalnızca elindeki sayfada tekrar eden hedefleri işaretler ve bunu 'bu sayfada' diye söyler — kuyruğun tamamı için bir sayı vermez.",
-  },
-  {
-    id: "context",
-    title: "İlan / mesaj bağlamı yalnızca kimlik olarak geliyor",
-    detail:
-      "`ReportDto` ilan, mesaj ve görsel için yalnızca UUID döndürüyor; başlık, metin ya da görsel adresi yok. Şikayetin gerekçesi okunabiliyor, şikayet edilen içerik okunamıyor.",
-  },
-  {
-    id: "detail-endpoint",
-    title: "Tek bir şikayeti getiren uç yok",
-    detail:
-      "`GET /admin/reports/{id}` bulunmuyor. Bu yüzden detay, kuyruk sayfasında zaten gelmiş olan satırdan açılır; ayrı bir detay adresi olsaydı o adres sayfa numarasına bağlı kalırdı.",
-  },
-  {
-    id: "follow-up",
-    title: "Karar sonrası uygulama uçları eksik",
-    detail:
-      "Kullanıcı askıya alma / yasaklama ucu koala-backend'de hiç yok. İçerik kaldırma yalnızca görseller için var (`DELETE /admin/images/{imageId}`, aynı `content.moderate` izniyle); ilan ya da mesaj kaldıran bir uç yok. 'Haklı bulundu' kararı bunların hiçbirini kendiliğinden yapmaz.",
-  },
-] as const;
