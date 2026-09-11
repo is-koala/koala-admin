@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { IdentityReviewDecision } from "@/app/(panel)/identity-reviews/decision-form";
+import { PageHeader } from "@/components/panel/page-header";
 import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
   Badge,
@@ -45,15 +46,17 @@ export default async function IdentityReviewsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Kimlik belge kuyruğu</h1>
-        <p className="max-w-prose text-sm text-ink-muted">
-          Kullanıcının yüklediği TCKK ön ve arka fotoğraflarını inceleyip onaylayın veya
-          gerekçesiyle reddedin. Onay <code className="font-mono">identityVerified</code> damgasını
-          çip olmadan koyar. İzin <code className="font-mono">identity.review</code> hem panelde hem
-          backend&apos;de yeniden denetlenir.
-        </p>
-      </header>
+      <PageHeader
+        title="Kimlik belge kuyruğu"
+        description={
+          <>
+            Kullanıcının yüklediği TCKK ön ve arka fotoğraflarını inceleyip onaylayın veya
+            gerekçesiyle reddedin. Onay <code className="font-mono">identityVerified</code>{" "}
+            damgasını çip olmadan koyar. İzin <code className="font-mono">identity.review</code> hem
+            panelde hem backend&apos;de yeniden denetlenir.
+          </>
+        }
+      />
 
       <RequirePermission permission="identity.review">
         <IdentityQueue params={params} />
@@ -219,7 +222,7 @@ function ReviewDetail({ review, returnTo }: { review: IdentityReview; returnTo: 
   return (
     <details
       id={`inceleme-${review.id}`}
-      className="rounded-lg border border-border-subtle bg-surface px-4 py-3"
+      className="rounded-xl border border-border-subtle bg-surface px-4 py-3 shadow-sm"
     >
       <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-ink">
         <span>{displayName(review)}</span>

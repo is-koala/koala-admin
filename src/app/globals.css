@@ -1,48 +1,87 @@
 @import "tailwindcss";
 
 /**
- * The panel's whole design surface: a handful of semantic tokens.
- *
- * There is no external UI kit here on purpose — an admin panel that renders
- * tables, forms and dialogs does not need one, and owning these components
- * locally is cheaper than owning someone else's upgrade path.
- *
- * The palette is koala-specific rather than the generic SaaS kit: bark for
- * the chrome (fur, not slate-900), eucalyptus mist for the canvas, leaf for
- * the one accent. IBM Plex Sans is the type, because it was cut for dense
- * operational UI rather than marketing headlines.
+ * Merchant-panel tokens. Light is the default (white canvas, branded top bar);
+ * dark is a first-class palette, switched by `[data-theme]` so SSR and the
+ * bootstrap script stay in step. No bark rail, no Plex — those were the
+ * previous console look.
  */
+
 @theme {
-  --font-sans: var(--font-plex), "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
 
-  --color-bark: #2c2926;
-  --color-bark-hover: #3a3733;
-  --color-bark-line: #4a4641;
-  --color-bark-ink: #ede8e1;
-  --color-bark-muted: #b7b0a7;
+  --color-topbar: var(--koala-topbar);
+  --color-on-brand: var(--koala-on-brand);
+  --color-canvas: var(--koala-canvas);
+  --color-surface: var(--koala-surface);
+  --color-surface-muted: var(--koala-surface-muted);
+  --color-surface-sunken: var(--koala-surface-sunken);
 
-  --color-mist: #e7eeec;
-  --color-surface: #f7faf8;
-  --color-surface-muted: #e7eeec;
-  --color-surface-sunken: #dce6e2;
+  --color-border-subtle: var(--koala-border-subtle);
+  --color-border-strong: var(--koala-border-strong);
 
-  --color-border-subtle: #c9d4cf;
-  --color-border-strong: #aebbb5;
+  --color-ink: var(--koala-ink);
+  --color-ink-muted: var(--koala-ink-muted);
+  --color-ink-subtle: var(--koala-ink-subtle);
 
-  --color-ink: #1a221f;
-  --color-ink-muted: #4d5a54;
-  --color-ink-subtle: #6b7872;
+  --color-brand: var(--koala-brand);
+  --color-brand-strong: var(--koala-brand-strong);
+  --color-brand-soft: var(--koala-brand-soft);
 
-  --color-brand: #3b6b54;
-  --color-brand-strong: #2f5644;
-  --color-brand-soft: #dce8e3;
+  --color-danger: var(--koala-danger);
+  --color-danger-soft: var(--koala-danger-soft);
+  --color-success: var(--koala-success);
+  --color-success-soft: var(--koala-success-soft);
+  --color-warning: var(--koala-warning);
+  --color-warning-soft: var(--koala-warning-soft);
+}
 
-  --color-danger: #8f3b32;
-  --color-danger-soft: #f3e4e1;
-  --color-success: #2f6b4a;
-  --color-success-soft: #e3eee8;
-  --color-warning: #8a5a1f;
-  --color-warning-soft: #f3eadb;
+:root {
+  color-scheme: light;
+  --koala-topbar: #1f6b54;
+  --koala-on-brand: #ffffff;
+  --koala-canvas: #f4f6f8;
+  --koala-surface: #ffffff;
+  --koala-surface-muted: #f0f2f5;
+  --koala-surface-sunken: #e8ebef;
+  --koala-border-subtle: #e4e7ec;
+  --koala-border-strong: #cfd4dc;
+  --koala-ink: #1c2430;
+  --koala-ink-muted: #5b6573;
+  --koala-ink-subtle: #7a8694;
+  --koala-brand: #1f6b54;
+  --koala-brand-strong: #185543;
+  --koala-brand-soft: #e6f3ee;
+  --koala-danger: #b42318;
+  --koala-danger-soft: #fce8e6;
+  --koala-success: #1f7a4c;
+  --koala-success-soft: #e6f6ee;
+  --koala-warning: #9a6700;
+  --koala-warning-soft: #faf0d8;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --koala-topbar: #163d32;
+  --koala-on-brand: #ffffff;
+  --koala-canvas: #10141b;
+  --koala-surface: #1a1f28;
+  --koala-surface-muted: #222836;
+  --koala-surface-sunken: #151a22;
+  --koala-border-subtle: #2a3140;
+  --koala-border-strong: #3a4556;
+  --koala-ink: #e8ecef;
+  --koala-ink-muted: #a8b0bc;
+  --koala-ink-subtle: #8b97a6;
+  --koala-brand: #3d9a78;
+  --koala-brand-strong: #2f7d61;
+  --koala-brand-soft: #1c3d3a;
+  --koala-danger: #f97066;
+  --koala-danger-soft: #3a1d1c;
+  --koala-success: #3dba7a;
+  --koala-success-soft: #163528;
+  --koala-warning: #e8b931;
+  --koala-warning-soft: #3a2f12;
 }
 
 @layer base {
@@ -50,15 +89,19 @@
     color-scheme: light;
   }
 
+  html[data-theme="dark"] {
+    color-scheme: dark;
+  }
+
   body {
-    background-color: var(--color-mist);
-    color: var(--color-ink);
+    background-color: var(--koala-canvas);
+    color: var(--koala-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-brand);
+    outline: 2px solid var(--koala-brand);
     outline-offset: 2px;
   }
 }

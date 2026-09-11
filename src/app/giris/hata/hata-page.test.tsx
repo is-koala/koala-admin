@@ -1,10 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { renderServerComponent } from "../../../../test/render-server";
 
 import { AUTH_FAILURE_CODES, type AuthFailureCode } from "@/server/auth/errors";
 
 import SignInErrorPage from "./page";
+
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: () => undefined,
+  }),
+}));
 
 /**
  * Bu sayfanın işi tek bir şey: aynı olayı **farklı** anlatmak.

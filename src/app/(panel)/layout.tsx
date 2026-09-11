@@ -1,8 +1,9 @@
-import Link from "next/link";
+import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 
 import { StaffContextUnavailable } from "@/components/panel/access-states";
-import { StaffNav } from "@/components/panel/staff-nav";
+import { PanelShell } from "@/components/panel/panel-shell";
+import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 import { signOut } from "@/server/auth/actions";
 import { navigationFor } from "@/server/authz/routes";
 import { getStaffContext } from "@/server/authz/staff-context";
@@ -36,52 +37,33 @@ export const dynamic = "force-dynamic";
 export default async function PanelLayout({ children }: { children: ReactNode }) {
   const context = await getStaffContext();
   const entries = navigationFor(context.permissions);
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
 
   return (
-    <div className="flex min-h-dvh flex-col md:flex-row">
-      <aside className="flex w-full shrink-0 flex-col gap-5 bg-bark px-3 py-5 text-bark-ink md:sticky md:top-0 md:h-dvh md:w-60">
-        <Link href="/" className="px-2">
-          <span className="block text-sm font-semibold tracking-tight">Koala</span>
-          <span className="block text-xs text-bark-muted">Yönetim paneli</span>
-        </Link>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <StaffNav entries={entries} unresolved={context.failure !== null} />
-        </div>
-
-        <div className="flex flex-col gap-3 border-t border-bark-line pt-4">
-          {context.staff === null ? null : (
-            <div className="flex flex-col px-2">
-              <span className="truncate text-sm text-bark-ink">{context.staff.displayName}</span>
-              <span className="truncate text-xs text-bark-muted">{context.staff.email}</span>
-            </div>
-          )}
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="w-full rounded-sm border border-bark-line px-2 py-1.5 text-left text-sm font-medium text-bark-ink hover:bg-bark-hover"
-            >
-              Çıkış yap
-            </button>
-          </form>
-        </div>
-      </aside>
-
-      <main className="flex min-w-0 flex-1 flex-col gap-5 bg-mist px-4 py-5 md:px-8 md:py-6">
-        {/*
-         * Shown above the page rather than instead of it. The person whose
-         * permissions could not be resolved still sees where they are and can
-         * still sign out; what they do not see is a menu implying doors that
-         * were never checked.
-         *
-         * Every failure, including the session ones. A gated page redirects
-         * those to /giris or /giris/hata, but an ungated page has nothing to
-         * redirect and would otherwise show an empty menu with no reason
-         * attached to it.
-         */}
-        {context.failure === null ? null : <StaffContextUnavailable failure={context.failure} />}
-        {children}
-      </main>
-    </div>
+    <PanelShell
+      staff={
+        context.staff === null
+          ? null
+          : { displayName: context.staff.displayName, email: context.staff.email }
+      }
+      entries={entries}
+      unresolved={context.failure !== null}
+      initialTheme={theme}
+      signOut={signOut}
+    >
+      {/*
+       * Shown above the page rather than instead of it. The person whose
+       * permissions could not be resolved still sees where they are and can
+       * still sign out; what they do not see is a menu implying doors that
+       * were never checked.
+       *
+       * Every failure, including the session ones. A gated page redirects
+       * those to /giris or /giris/hata, but an ungated page has nothing to
+       * redirect and would otherwise show an empty menu with no reason
+       * attached to it.
+       */}
+      {context.failure === null ? null : <StaffContextUnavailable failure={context.failure} />}
+      {children}
+    </PanelShell>
   );
 }

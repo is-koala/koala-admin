@@ -124,7 +124,7 @@ export default async function ChangePasswordPage({
 
           <button
             type="submit"
-            className="mt-2 w-full rounded-sm bg-brand px-4 py-2.5 text-sm font-medium text-surface hover:bg-brand-strong"
+            className="mt-2 w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-on-brand hover:bg-brand-strong"
           >
             Parolayı değiştir
           </button>

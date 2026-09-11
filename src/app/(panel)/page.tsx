@@ -34,12 +34,12 @@ export default async function PanelHomePage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Panel"
+        title="Güncel durum"
         description="Kim olduğunuzu rol üyeliğiniz, ne yapabildiğinizi rol grafiğinden çözülen izinler söyler. Panel ikisini de her istekte backend'e sorar ve hiçbirini saklamaz."
       />
 
-      <section className="grid gap-px bg-border-subtle md:grid-cols-2">
-        <article className="flex flex-col gap-3 bg-surface p-4">
+      <section className="grid gap-4 md:grid-cols-2">
+        <article className="flex flex-col gap-3 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm">
           <div className="flex flex-col gap-1">
             <h2 className="text-sm font-semibold">Kimlik, rol üyeliği</h2>
             <p className="text-sm text-ink">{context.staff?.displayName ?? "—"}</p>
@@ -64,7 +64,7 @@ export default async function PanelHomePage() {
           </div>
         </article>
 
-        <article className="flex flex-col gap-3 bg-surface p-4">
+        <article className="flex flex-col gap-3 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm">
           <div className="flex flex-col gap-1">
             <h2 className="text-sm font-semibold">Yetki, rol grafiği</h2>
             <p className="text-sm text-ink">
@@ -109,12 +109,12 @@ export default async function PanelHomePage() {
             Şu an açık bir ekran yok. Menü de bu yüzden boş: panel, izniniz olduğunu varsaymaz.
           </p>
         ) : (
-          <ul className="divide-y divide-border-subtle border border-border-subtle bg-surface">
+          <ul className="divide-y divide-border-subtle overflow-hidden rounded-2xl border border-border-subtle bg-surface shadow-sm">
             {reachable.map((entry) => (
               <li key={entry.href}>
                 <Link
                   href={entry.href}
-                  className="flex px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
+                  className="flex px-4 py-2.5 text-sm font-medium text-ink hover:bg-surface-muted"
                 >
                   {entry.label}
                 </Link>
@@ -124,7 +124,7 @@ export default async function PanelHomePage() {
         )}
       </section>
 
-      <section className="flex flex-col gap-2 border border-border-subtle bg-surface p-4">
+      <section className="flex flex-col gap-2 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm">
         <h2 className="text-sm font-semibold">Doğrulama</h2>
         <p className="max-w-prose text-sm text-ink-muted">
           Sunucu tarafı API katmanının canlı backend&apos;e karşı çalıştığını gösteren sayfa; izin
