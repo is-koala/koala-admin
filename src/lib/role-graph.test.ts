@@ -249,10 +249,28 @@ describe("görev ayrılığı ön izlemesi", () => {
     expect(separationVerdictOf(SEEDED, role("TRUST_LEAD")).violates).toBe(false);
   });
 
+  it("yeni FINANCE_* rolünü finans dalı sayıp güven rolüyle kapsamayı reddedilecek görüyor", () => {
+    const graph = [...SEEDED, node("FINANCE_AUDITOR")];
+
+    expect(separationVerdictOf(graph, role("FINANCE_AUDITOR")).branches).toEqual(["FINANCE"]);
+    expect(
+      wouldViolateSeparationAfterInclude(graph, role("TRUST_LEAD"), role("FINANCE_AUDITOR")),
+    ).toBe(true);
+  });
+
   it("OWNER için aynı kapsamayı ihlal saymıyor", () => {
     expect(
       separationVerdictAfterInclude(SEEDED, role("OWNER"), role("FINANCE_OFFICER")).violates,
     ).toBe(false);
+  });
+
+  it("OWNER yeni bir FINANCE_* rolüyle iki dala ulaşsa da yazılı istisnayı koruyor", () => {
+    const graph = [node("MODERATOR"), node("FINANCE_AUDITOR"), node("OWNER", "MODERATOR")];
+    const verdict = separationVerdictAfterInclude(graph, role("OWNER"), role("FINANCE_AUDITOR"));
+
+    expect(verdict.branches).toEqual(["TRUST", "FINANCE"]);
+    expect(verdict.exempt).toBe(true);
+    expect(verdict.violates).toBe(false);
   });
 
   it("rolü iki dala taşımayan kenarı, etkilenen personeli iki dala taşıyorsa reddedilecek sayıyor", () => {
@@ -267,6 +285,20 @@ describe("görev ayrılığı ön izlemesi", () => {
     expect(
       wouldViolateSeparationAfterInclude(
         SEEDED,
+        role("CATALOG_EDITOR"),
+        role("MODERATOR"),
+        memberships,
+      ),
+    ).toBe(true);
+  });
+
+  it("yeni FINANCE_* rolünü taşıyan personeli güven dalına sokacak kenarı reddedilecek sayıyor", () => {
+    const graph = [...SEEDED, node("FINANCE_AUDITOR")];
+    const memberships = [[role("FINANCE_AUDITOR"), role("CATALOG_EDITOR")]];
+
+    expect(
+      wouldViolateSeparationAfterInclude(
+        graph,
         role("CATALOG_EDITOR"),
         role("MODERATOR"),
         memberships,
@@ -378,20 +410,18 @@ describe("görev ayrılığı, üyelik tarafında", () => {
   });
 });
 
-describe("dal listeleri kuralın zayıf tarafı, ve öyle yazılı", () => {
-  it("koala-backend'in StaffRoleGraphSeedTest'indeki kümelerle birebir aynı", () => {
-    // İki depoda iki kopya var ve ikisi de rol adlarını sabit yazıyor. Seed'e
-    // yeni bir rol eklendiği gün ikisi de elle güncellenmek zorunda; bu test o
-    // kopyanın bugünkü hâlini sabitliyor, eşitliği kendiliğinden sağlamıyor.
+describe("dal sınıflandırması ve kullanıcıya gösterilen seed listeleri", () => {
+  it("bugünkü seed rol listelerini ve OWNER istisnasını kullanıcı metni için koruyor", () => {
+    // Finans kararının kaynağı artık prefix olsa da ekrandaki açıklama bugünkü
+    // seed rollerini adlarıyla göstermeye devam ediyor.
     expect([...TRUST_BRANCH_ROLES]).toEqual(["MODERATOR", "DISPUTE_HANDLER", "TRUST_LEAD"]);
     expect([...FINANCE_BRANCH_ROLES]).toEqual(["FINANCE_ANALYST", "FINANCE_OFFICER"]);
     expect([...SEPARATION_EXEMPT_ROLES]).toEqual(["OWNER"]);
   });
 
   it("listede olmayan bir rolü hiçbir dala koymuyor", () => {
-    // Kuralın göremediği şey: seed'den sonra eklenen bir rol. Teşhis sessizce
-    // eksik kalır ve bunu bilerek kabul ediyoruz — alternatifi, rol adından
-    // dal tahmin etmek olurdu.
+    // Backend yalnız tam `FINANCE_` önekini tanıyor; Türkçe görünen benzer bir
+    // ad finans rolü değildir ve panel de koddan daha fazlasını tahmin etmez.
     const withNewRole: RoleGraphNode[] = [...SEEDED, node("FINANS_MUDURU", "MODERATOR")];
 
     const verdict = separationVerdict(

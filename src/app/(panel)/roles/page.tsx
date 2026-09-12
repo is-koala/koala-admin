@@ -311,7 +311,7 @@ function SeparationNotice({
         ADR-0014 §Rol grafiği&apos;nin kuralı şu:{" "}
         <strong>
           OWNER dışında hiçbir rol hem güven dalını ({TRUST_BRANCH_ROLES.join(", ")}) hem finans
-          dalını ({FINANCE_BRANCH_ROLES.join(", ")}) kapsayamaz.
+          dalını (FINANCE_*; bugünkü roller: {FINANCE_BRANCH_ROLES.join(", ")}) kapsayamaz.
         </strong>{" "}
         Backend rol grafiği yazımından sonra etkilenen bütün rol ve personel kapanışlarını yeniden
         denetler; kuralı bozan yazımı 409 ile reddeder.

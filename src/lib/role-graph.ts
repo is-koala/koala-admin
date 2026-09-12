@@ -46,13 +46,14 @@ export interface RoleGraphNode {
 }
 
 /**
- * ADR-0014 §Rol grafiği'nin iki dalı, `StaffRoleGraphSeedTest`'ten birebir.
+ * ADR-0014 §Rol grafiği'nin güven dalı ve bugünkü finans seed rolleri.
  *
- * Rol kodları sabit yazılı, çünkü backend'de de öyle: rol yaratan bir uç yok
- * (`StaffRolesController` yalnız okuma ve kenar/izin yazımı sunuyor), grafiğin
- * kendisi Liquibase seed'iyle geliyor. Yeni bir rol eklendiği gün bu iki küme
- * de elle güncellenmek zorunda — backend tarafındaki test de aynı kısıtla
- * yaşıyor ve bu, kuralın zayıf tarafı olarak burada yazılı dursun.
+ * Backend güven dalını üç sabit kodla, finans dalını ise `FINANCE_` önekiyle
+ * tanıyor. Kullanıcıya gösterilen liste bugünkü Liquibase seed'ini anlatmaya
+ * devam eder; karar hesabı aşağıda prefix kuralını kullanır. Rol yaratan bir uç
+ * yok (`StaffRolesController` yalnız okuma ve kenar/izin yazımı sunuyor), ama
+ * gelecekteki bir changeset yeni bir `FINANCE_*` rolü eklediğinde panelin
+ * backend'den ayrışmaması için gösterim listesi karar kaynağı değildir.
  *
  * Tipleri `RoleCode` değil `string`: bunlar bir adres değil, karşılaştırılan
  * bir liste. Markalamak, listeye bakan her satıra bir dönüşüm eklerdi.
@@ -60,6 +61,9 @@ export interface RoleGraphNode {
 export const TRUST_BRANCH_ROLES: readonly string[] = ["MODERATOR", "DISPUTE_HANDLER", "TRUST_LEAD"];
 
 export const FINANCE_BRANCH_ROLES: readonly string[] = ["FINANCE_ANALYST", "FINANCE_OFFICER"];
+
+/** `StaffSeparationOfDuties.isFinanceBranch` ile aynı çalışma zamanı kuralı. */
+const FINANCE_BRANCH_ROLE_PREFIX = "FINANCE_";
 
 /** Kuralın tek istisnası, ADR-0014'ün kendi cümlesiyle: `OWNER` hariç. */
 export const SEPARATION_EXEMPT_ROLES: readonly string[] = ["OWNER"];
@@ -163,7 +167,7 @@ export interface SeparationVerdict {
 function branchesOf(closure: readonly RoleCode[]): DutyBranch[] {
   const branches: DutyBranch[] = [];
   if (closure.some((code) => TRUST_BRANCH_ROLES.includes(code))) branches.push("TRUST");
-  if (closure.some((code) => FINANCE_BRANCH_ROLES.includes(code))) branches.push("FINANCE");
+  if (closure.some((code) => code.startsWith(FINANCE_BRANCH_ROLE_PREFIX))) branches.push("FINANCE");
   return branches;
 }
 
@@ -249,7 +253,7 @@ export function separationSentence(role: RoleCode, verdict: SeparationVerdict): 
     return `${role} her iki dalı da kapsıyor. ADR-0014 bunu yalnız OWNER için serbest bırakır; kuralın tek yazılı istisnası budur.`;
   }
 
-  return `${role} hem güven dalını (${TRUST_BRANCH_ROLES.join(", ")}) hem finans dalını (${FINANCE_BRANCH_ROLES.join(", ")}) kapsıyor. ADR-0014 §Rol grafiği bunu OWNER dışında yasaklar. Backend yeni rol grafiği yazımlarında bu birleşimi 409 ile reddeder; mevcut bir ihlal görüyorsanız kapsamalar ayrılmalıdır.`;
+  return `${role} hem güven dalını (${TRUST_BRANCH_ROLES.join(", ")}) hem finans dalını (FINANCE_*; bugünkü roller: ${FINANCE_BRANCH_ROLES.join(", ")}) kapsıyor. ADR-0014 §Rol grafiği bunu OWNER dışında yasaklar. Backend yeni rol grafiği yazımlarında bu birleşimi 409 ile reddeder; mevcut bir ihlal görüyorsanız kapsamalar ayrılmalıdır.`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -318,5 +322,5 @@ export function membershipSeparationSentence(
     return `${label} her iki dala da OWNER üzerinden ulaşıyor. ADR-0014 kuralın tek yazılı istisnası olarak OWNER'ı bırakır.`;
   }
 
-  return `${label} taşıdığı rollerle hem güven dalına (${TRUST_BRANCH_ROLES.join(", ")}) hem finans dalına (${FINANCE_BRANCH_ROLES.join(", ")}) ulaşıyor. ADR-0014 §Rol grafiği bu birleşimi OWNER dışında yasaklar. Backend yeni rol atamalarında bu birleşimi 409 ile reddeder; mevcut bir ihlal görüyorsanız roller ayrılmalıdır.`;
+  return `${label} taşıdığı rollerle hem güven dalına (${TRUST_BRANCH_ROLES.join(", ")}) hem finans dalına (FINANCE_*; bugünkü roller: ${FINANCE_BRANCH_ROLES.join(", ")}) ulaşıyor. ADR-0014 §Rol grafiği bu birleşimi OWNER dışında yasaklar. Backend yeni rol atamalarında bu birleşimi 409 ile reddeder; mevcut bir ihlal görüyorsanız roller ayrılmalıdır.`;
 }

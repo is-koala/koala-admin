@@ -341,11 +341,11 @@ function MembershipSeparationNotice() {
       </p>
       <p className="max-w-prose text-sm text-ink">
         ADR-0014 §Rol grafiği&apos;nin kuralı — güven dalı ({TRUST_BRANCH_ROLES.join(", ")}) ile
-        finans dalı ({FINANCE_BRANCH_ROLES.join(", ")}) OWNER dışında birleşemez — bir{" "}
-        <strong>kişide</strong> de bozulabilir: iki dalın rollerini yan yana taşımak yeter. Backend
-        her rol atamasından sonra kişinin etkili rollerini yeniden denetler ve ihlali 409 ile
-        reddeder. Panel geçersiz rol seçeneklerini önceden kapatır; nihai karar yine
-        backend&apos;indir.
+        finans dalı (FINANCE_*; bugünkü roller: {FINANCE_BRANCH_ROLES.join(", ")}) OWNER dışında
+        birleşemez — bir <strong>kişide</strong> de bozulabilir: iki dalın rollerini yan yana
+        taşımak yeter. Backend her rol atamasından sonra kişinin etkili rollerini yeniden denetler
+        ve ihlali 409 ile reddeder. Panel geçersiz rol seçeneklerini önceden kapatır; nihai karar
+        yine backend&apos;indir.
       </p>
     </div>
   );

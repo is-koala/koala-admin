@@ -238,9 +238,9 @@ export const ROLE_GRAPH_BACKEND_GAPS = [
   },
   {
     id: "branch-membership-is-hardcoded",
-    title: "Dal üyeliği rol adına gömülü",
+    title: "Dal üyeliği rol kodu kuralına gömülü",
     detail:
-      "Hangi rolün 'trust' hangisinin 'finans' dalında olduğu bir veri değil, StaffRoleGraphSeedTest'teki iki sabit liste. Panel aynı listeleri taşımak zorunda (src/lib/role-graph.ts). Seed'e yeni bir rol eklendiği gün iki yerde birden güncellenmezse teşhis sessizce eksik kalır.",
+      "Dal üyeliği API verisi değil: backend güven dalını sabit rol kodlarıyla, finans dalını `FINANCE_` önekiyle sınıflandırıyor. Panel karar hesabında aynı kuralı taşır; ekrandaki finans rol listesi yalnız bugünkü seed rollerini açıklar (src/lib/role-graph.ts). Güven dalına yeni bir rol eklenirse iki taraftaki sabit liste birlikte güncellenmelidir.",
   },
   {
     id: "revoke-checks-grantability",
