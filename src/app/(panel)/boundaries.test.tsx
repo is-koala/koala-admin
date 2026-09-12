@@ -1,5 +1,6 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -10,36 +11,43 @@ import PanelLoading from "./loading";
 import PanelNotFound from "./not-found";
 
 /**
- * koala-admin#85: the three route boundaries the panel shares.
+ * koala-admin#85: panelin paylaştığı üç rota sınırı.
  *
- * All three sit at `src/app/(panel)/` so they render *inside* the shell — the
- * menu, the sign-out button and the theme switch stay where they are while
- * the page area says "loading", "broken" or "gone". A root-level copy would
- * drop the chrome; a per-section `error`/`not-found` would only repeat this.
+ * Üçü de `src/app/(panel)/` altında, çünkü kabuğun *içinde* çizilmeliler:
+ * menü, çıkış ve tema anahtarı yerinde dururken sayfa alanı "yükleniyor",
+ * "bozuk" ya da "yok" der. Kök seviyede bir kopya kabuğu düşürürdü; bölüm
+ * başına `error`/`not-found` ise yalnız bunu tekrar ederdi.
  *
- * `loading` is the exception, and the last group below pins why. A queue and
- * its object page (`/reports` and `/reports/[id]`) are two children of one
- * segment, and the `(panel)` Suspense above them is already on screen when
- * the operator moves between them — React keeps the old page up rather than
- * re-suspending a mounted boundary. Seen in the browser: "Kuyruğa dön" from
- * an object page showed the object until the queue arrived. A `loading.tsx`
- * beside the `[id]` folder puts the boundary around the child that changes.
+ * `loading` istisna; son grup gerekçesini sabitler. Kuyruk ile nesne sayfası
+ * (`/reports` ve `/reports/[id]`) aynı segmentin iki çocuğu ve `(panel)`
+ * seviyesindeki Suspense ikisi arasında geçilirken zaten ekranda — React
+ * çizilmiş bir sınırı yeniden askıya almaz, eski sayfayı tutar. Tarayıcıda
+ * görüldü: nesne sayfasından "Kuyruğa dön" kuyruk gelene dek nesneyi
+ * gösterdi. `[id]` klasörünün yanındaki `loading.tsx` sınırı değişen çocuğun
+ * etrafına koyar.
  *
- * The claim that carries weight is the last one in the error group: Next hands
- * `error.tsx` the thrown object, and in development that object still carries
- * the original message. A backend `KoalaApiError` message can name the path,
- * the method and the status of an upstream call. Rendering it would put that on
- * the screen of whoever hit the bug; the boundary shows the digest instead,
- * which is what a server log can be searched for.
+ * Ağırlığı taşıyan iddia hata grubundaki sonuncusu. Next `error.tsx`'e
+ * fırlatılan nesnenin kendisini verir ve geliştirmede o nesne orijinal
+ * mesajı taşır; bir `KoalaApiError` mesajı upstream çağrının yolunu,
+ * metodunu ve durum kodunu içerir. Çizilseydi hatayı gören kişinin ekranına
+ * inerdi. Sınır onun yerine digest'i gösterir: sunucu günlüğünde aranabilen
+ * tek şey o.
  */
 
 describe("the shared loading view", () => {
-  it("announces itself as a busy status with Turkish text a screen reader can read", () => {
-    render(<PanelLoading />);
+  it("announces itself as a status with Turkish text a screen reader can read", () => {
+    const { container } = render(<PanelLoading />);
 
     const status = screen.getByRole("status");
-    expect(status).toHaveAttribute("aria-busy", "true");
     expect(status).toHaveTextContent("Sayfa yükleniyor");
+
+    // `aria-busy` yükleniyor cümlesinin üstünde olamaz: yardımcı teknoloji
+    // meşgul bir canlı bölgenin içeriğini erteleyebilir ve duyurulması
+    // istenen tek cümle yutulurdu. Meşgul olan iskelet; durum onun kardeşi.
+    expect(status).not.toHaveAttribute("aria-busy");
+    const busy = container.querySelector('[aria-busy="true"]');
+    expect(busy).not.toBeNull();
+    expect(busy).not.toContainElement(status);
   });
 });
 
@@ -86,13 +94,17 @@ describe("the not-found surface", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Kayıt bulunamadı" })).toBeInTheDocument();
     expect(screen.getByText(/404/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Güncel duruma dön" })).toHaveAttribute("href", "/");
-    // Not an alert: nothing is broken, the address simply names nothing.
+    // Alert değil: bozuk bir şey yok, adres yalnızca hiçbir kaydı adreslemiyor.
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 
 describe("sections with an object page carry the loading boundary themselves", () => {
-  const PANEL_DIR = path.dirname(new URL(import.meta.url).pathname);
+  // `fileURLToPath(new URL(".", import.meta.url))` kardeş testlerin kalıbı, ama
+  // `dom` projesinde Vite o `new URL(…, import.meta.url)` biçimini varlık
+  // adresine çevirip şemayı bozuyor. Düz dizeden çözmek yüzde-kodlamayı yine
+  // açar (boşluk, Türkçe harf) ve yeniden yazımdan kaçar.
+  const PANEL_DIR = path.dirname(fileURLToPath(import.meta.url));
 
   async function sectionsWithObjectPages(): Promise<string[]> {
     const sections: string[] = [];
@@ -116,7 +128,7 @@ describe("sections with an object page carry the loading boundary themselves", (
 
   it("re-exports the shared view next to every [id] folder, and adds no second design", async () => {
     for (const section of await sectionsWithObjectPages()) {
-      const loaded = (await import(`./${section}/loading`)) as { default: unknown };
+      const loaded = (await import(`./${section}/loading.tsx`)) as { default: unknown };
       expect(loaded.default, `${section}/loading.tsx must re-export (panel)/loading.tsx`).toBe(
         PanelLoading,
       );
