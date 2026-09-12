@@ -24,6 +24,7 @@ import {
   formatInteger,
   formatPercent,
 } from "@/lib/format";
+import { userHrefOrNull } from "@/lib/panel-href";
 import {
   ASSIGNMENT_PAGING,
   getAdminAssignments,
@@ -33,7 +34,7 @@ import {
   type PaymentStatus,
 } from "@/server/api/escrow";
 import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
-import { safeUserName } from "@/server/api/users";
+import { safeUserName, type SafeUser } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
@@ -281,11 +282,6 @@ function LookupForm({ value, error }: { value: string; error: string | null }) {
 }
 
 function AssignmentSummary({ summary }: { summary: EscrowSummary }) {
-  const employerLabel =
-    summary.companyName === null
-      ? safeUserName(summary.employer)
-      : `${safeUserName(summary.employer)} · ${summary.companyName}`;
-
   return (
     <section className="flex flex-col gap-4" aria-labelledby="assignment-summary-heading">
       <h2 id="assignment-summary-heading" className="text-lg font-semibold">
@@ -296,8 +292,19 @@ function AssignmentSummary({ summary }: { summary: EscrowSummary }) {
         <dl className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4 text-sm">
           <Row label="Atama" value={<span className="font-mono text-xs">{summary.id}</span>} />
           <Row label="İş" value={summary.jobTitle ?? EMPTY_VALUE} />
-          <Row label="İşçi" value={safeUserName(summary.worker)} />
-          <Row label="İşveren" value={employerLabel} />
+          <Row label="İşçi" value={<NamedUser user={summary.worker} />} />
+          <Row
+            label="İşveren"
+            value={
+              summary.companyName === null ? (
+                <NamedUser user={summary.employer} />
+              ) : (
+                <span>
+                  <NamedUser user={summary.employer} /> · {summary.companyName}
+                </span>
+              )
+            }
+          />
           <Row label="Atama durumu" value={ASSIGNMENT_STATUS_LABELS[summary.status]} />
           <Row
             label="Ödeme durumu"
@@ -334,6 +341,16 @@ function AssignmentSummary({ summary }: { summary: EscrowSummary }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function NamedUser({ user }: { user: SafeUser }) {
+  const href = userHrefOrNull(user.id);
+  if (href === null) return safeUserName(user);
+  return (
+    <Link href={href} className="text-brand hover:underline">
+      {safeUserName(user)}
+    </Link>
   );
 }
 

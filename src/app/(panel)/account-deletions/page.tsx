@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { PageHeader } from "@/components/panel/page-header";
 import {
@@ -20,6 +21,7 @@ import {
   type BadgeTone,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
+import { userHrefOrNull } from "@/lib/panel-href";
 import {
   DELETION_PAGING,
   DELETION_STATUS_FILTERS,
@@ -184,7 +186,7 @@ async function DeletionQueue({ params }: { params: SearchParams }) {
                     </Badge>
                   </TableCell>
                   <TableCell className="font-mono text-xs">
-                    {row.subjectId ?? EMPTY_VALUE}
+                    <SubjectLink subjectId={row.subjectId} />
                   </TableCell>
                   <TableCell>{formatDateTime(row.requestedAt)}</TableCell>
                   <TableCell>{formatDateTime(row.processedAt)}</TableCell>
@@ -207,6 +209,17 @@ async function DeletionQueue({ params }: { params: SearchParams }) {
         </>
       )}
     </div>
+  );
+}
+
+function SubjectLink({ subjectId }: { subjectId: string | null }) {
+  const href = userHrefOrNull(subjectId);
+  if (subjectId === null) return EMPTY_VALUE;
+  if (href === null) return subjectId;
+  return (
+    <Link href={href} className="text-brand hover:underline">
+      {subjectId}
+    </Link>
   );
 }
 
@@ -252,7 +265,9 @@ function DeletionDetail({
           <dt className="text-sm text-ink-muted">Talep kimliği</dt>
           <dd className="font-mono text-sm break-all">{row.id}</dd>
           <dt className="text-sm text-ink-muted">Kullanıcı</dt>
-          <dd className="font-mono text-sm break-all">{row.subjectId ?? EMPTY_VALUE}</dd>
+          <dd className="font-mono text-sm break-all">
+            <SubjectLink subjectId={row.subjectId} />
+          </dd>
           <dt className="text-sm text-ink-muted">İstendi</dt>
           <dd className="text-sm">{formatDateTime(row.requestedAt)}</dd>
           <dt className="text-sm text-ink-muted">İşlendi</dt>

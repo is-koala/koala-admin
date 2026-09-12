@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
-import { reportHref, userHref } from "@/lib/panel-href";
+import { reportHref, userHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   pageWindow,
   readEnumParam,
@@ -198,50 +198,63 @@ async function ReportQueue({ params }: { params: SearchParams }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {page.content.map((report) => (
-                <TableRow key={report.id}>
-                  <TableCell>{formatDateTime(report.createdAt)}</TableCell>
-                  <TableCell>
-                    <Badge tone={REPORT_STATUS_TONES[report.status] ?? "neutral"}>
-                      {reportStatusLabel(report.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{reportReasonLabel(report.reason)}</TableCell>
-                  <TableCell>{reportPartyName(report.reporter)}</TableCell>
-                  <TableCell>
-                    {report.reportedUserId === null ? (
-                      EMPTY_VALUE
-                    ) : (
-                      <Link
-                        href={userHref(report.reportedUserId)}
-                        className="text-brand hover:underline"
-                      >
-                        {reportPartyName(report.reportedUser)}
+              {page.content.map((report) => {
+                const reporterHref = userHrefOrNull(report.reporter?.id);
+                return (
+                  <TableRow key={report.id}>
+                    <TableCell>{formatDateTime(report.createdAt)}</TableCell>
+                    <TableCell>
+                      <Badge tone={REPORT_STATUS_TONES[report.status] ?? "neutral"}>
+                        {reportStatusLabel(report.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{reportReasonLabel(report.reason)}</TableCell>
+                    <TableCell>
+                      {report.reporter === null ? (
+                        EMPTY_VALUE
+                      ) : reporterHref === null ? (
+                        reportPartyName(report.reporter)
+                      ) : (
+                        <Link href={reporterHref} className="text-brand hover:underline">
+                          {reportPartyName(report.reporter)}
+                        </Link>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {report.reportedUserId === null ? (
+                        EMPTY_VALUE
+                      ) : (
+                        <Link
+                          href={userHref(report.reportedUserId)}
+                          className="text-brand hover:underline"
+                        >
+                          {reportPartyName(report.reportedUser)}
+                        </Link>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {report.reportedUserId === null
+                        ? EMPTY_VALUE
+                        : formatInteger(report.reportedUserReportCount)}
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex flex-wrap gap-1">
+                        {reportTargets(report).map((target) => (
+                          <Badge key={`${target.kind}-${target.id}`}>
+                            {reportTargetLabel(target.kind)}
+                          </Badge>
+                        ))}
+                        {reportTargets(report).length === 0 ? EMPTY_VALUE : null}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Link href={reportHref(report.id)} className="text-brand hover:underline">
+                        İncele
                       </Link>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {report.reportedUserId === null
-                      ? EMPTY_VALUE
-                      : formatInteger(report.reportedUserReportCount)}
-                  </TableCell>
-                  <TableCell>
-                    <span className="flex flex-wrap gap-1">
-                      {reportTargets(report).map((target) => (
-                        <Badge key={`${target.kind}-${target.id}`}>
-                          {reportTargetLabel(target.kind)}
-                        </Badge>
-                      ))}
-                      {reportTargets(report).length === 0 ? EMPTY_VALUE : null}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Link href={reportHref(report.id)} className="text-brand hover:underline">
-                      İncele
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
 

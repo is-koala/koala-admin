@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
+import { companyHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   COMPANY_APPROVAL_STATUSES,
   COMPANY_PAGING,
@@ -34,10 +35,15 @@ import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
-import { ApprovalStatusBadge, CompanyDetail, DecisionDeliveryNotice } from "./company-review";
+import { ApprovalStatusBadge } from "./company-review";
 
 export const metadata: Metadata = { title: "Şirket onayları" };
 
+/**
+ * Şirket onay kuyruğu. Liste `AdminCompanyDto`; inceleme ve karar
+ * `/companies/[id]` üzerinde. Kapı kuyruğu sarar: `company.approve` yoksa
+ * GET hiç çıkmaz.
+ */
 export default async function CompaniesPage({
   searchParams,
 }: {
@@ -51,8 +57,8 @@ export default async function CompaniesPage({
         title="Şirket onay kuyruğu"
         description={
           <>
-            Şirket başvurularını ara, kayıtlı adres ve galeri fotoğraflarıyla incele, onayla ya da
-            gerekçesiyle reddet. Onay geri alınamaz.
+            Şirket başvurularını ara ve süz. İnceleme, onay ve ret şirket sayfasında. Onay geri
+            alınamaz.
           </>
         }
       />
@@ -91,10 +97,7 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
   };
-  const returnTo = `/companies?${new URLSearchParams({
-    ...viewState,
-    sayfa: String(paging.page),
-  }).toString()}`;
+  const objectQuery = { ...viewState, sayfa: String(paging.page) };
 
   const filters = (
     <QueueFilters
@@ -119,7 +122,7 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
       notice={
         <>
           Durum, arama ve sıralama backend&apos;e gider; gelen sayfa tarayıcıda yeniden süzülmez.
-          Arama şirket adı ve vergi numarası üzerinde çalışır.
+          Arama şirket adı ve vergi numarası üzerinde çalışır. Karar şirket sayfasındadır.
         </>
       }
     />
@@ -150,7 +153,6 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
       {filters}
       <CompanySearch query={query} state={viewState} />
       {decisionResult === null ? null : <DecisionSuccess result={decisionResult} />}
-      <DecisionDeliveryNotice />
 
       {companies.length === 0 ? (
         <EmptyState
@@ -166,52 +168,61 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
           }
         />
       ) : (
-        <>
-          <Table caption="Şirket onay kuyruğu">
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Şirket</TableHeaderCell>
-                <TableHeaderCell>Tür</TableHeaderCell>
-                <TableHeaderCell>Vergi no</TableHeaderCell>
-                <TableHeaderCell>Oluşturan</TableHeaderCell>
-                <TableHeaderCell>Başvuru zamanı</TableHeaderCell>
-                <TableHeaderCell>Durum</TableHeaderCell>
-                <TableHeaderCell>Detay</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {companies.map((company) => (
+        <Table caption="Şirket onay kuyruğu">
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell>Şirket</TableHeaderCell>
+              <TableHeaderCell>Tür</TableHeaderCell>
+              <TableHeaderCell>Vergi no</TableHeaderCell>
+              <TableHeaderCell>Oluşturan</TableHeaderCell>
+              <TableHeaderCell>Başvuru zamanı</TableHeaderCell>
+              <TableHeaderCell>Durum</TableHeaderCell>
+              <TableHeaderCell>Detay</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {companies.map((company) => {
+              const creatorHref = userHrefOrNull(company.createdBy?.id);
+              return (
                 <TableRow key={company.id}>
-                  <TableCell>{company.name ?? EMPTY_VALUE}</TableCell>
+                  <TableCell>
+                    <Link
+                      href={companyHref(company.id, objectQuery)}
+                      className="text-brand hover:underline"
+                    >
+                      {company.name ?? EMPTY_VALUE}
+                    </Link>
+                  </TableCell>
                   <TableCell>{companyTypeLabel(company.type) ?? EMPTY_VALUE}</TableCell>
                   <TableCell>
                     <span className="font-mono text-xs">{company.taxNumber ?? EMPTY_VALUE}</span>
                   </TableCell>
-                  <TableCell>{safeUserDisplayName(company.createdBy) ?? EMPTY_VALUE}</TableCell>
+                  <TableCell>
+                    {creatorHref === null ? (
+                      (safeUserDisplayName(company.createdBy) ?? EMPTY_VALUE)
+                    ) : (
+                      <Link href={creatorHref} className="text-brand hover:underline">
+                        {safeUserDisplayName(company.createdBy) ?? EMPTY_VALUE}
+                      </Link>
+                    )}
+                  </TableCell>
                   <TableCell>{formatDateTime(company.createdAt)}</TableCell>
                   <TableCell>
                     <ApprovalStatusBadge status={company.approvalStatus} />
                   </TableCell>
                   <TableCell>
                     <Link
-                      href={`/companies/${company.id}` as Route}
+                      href={companyHref(company.id, objectQuery)}
                       className="text-brand hover:underline"
                     >
                       İncele
                     </Link>
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-
-          <section className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold">Başvuru detayları ve karar</h2>
-            {companies.map((company) => (
-              <CompanyDetail key={company.id} company={company} returnTo={returnTo} />
-            ))}
-          </section>
-        </>
+              );
+            })}
+          </TableBody>
+        </Table>
       )}
 
       <QueuePager window={pageWindow(page)} state={viewState} unit="şirket" />

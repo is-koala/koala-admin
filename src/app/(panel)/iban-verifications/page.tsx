@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatCurrency, formatDateTime } from "@/lib/format";
+import { userHrefOrNull } from "@/lib/panel-href";
 import {
   getPendingIbanVerifications,
   IBAN_PENDING_PAGING,
@@ -185,10 +186,19 @@ function PendingRow({
   page: number;
 }) {
   const amountText = ibanPendingAmountText(row.amount);
+  const personHref = userHrefOrNull(row.user.id);
 
   return (
     <TableRow>
-      <TableCell>{safeUserName(row.user)}</TableCell>
+      <TableCell>
+        {personHref === null ? (
+          safeUserName(row.user)
+        ) : (
+          <Link href={personHref} className="text-brand hover:underline">
+            {safeUserName(row.user)}
+          </Link>
+        )}
+      </TableCell>
       <TableCell>
         <span className="font-mono text-xs">{row.maskedIban}</span>
       </TableCell>

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
-import { userHref } from "@/lib/panel-href";
+import { userHrefOrNull } from "@/lib/panel-href";
 import {
   COMPANY_DECISION_MAX_NOTE_LENGTH,
   COMPANY_DECISION_MIN_NOTE_LENGTH,
@@ -28,6 +28,7 @@ export function CompanyReviewBody({
   returnTo: string;
 }) {
   const creator = company.createdBy;
+  const creatorHref = userHrefOrNull(creator?.id);
 
   return (
     <div className="flex flex-col gap-4">
@@ -64,8 +65,10 @@ export function CompanyReviewBody({
         <dd className="text-sm">
           {creator === null ? (
             EMPTY_VALUE
+          ) : creatorHref === null ? (
+            (safeUserDisplayName(creator) ?? EMPTY_VALUE)
           ) : (
-            <Link href={userHref(creator.id)} className="text-brand hover:underline">
+            <Link href={creatorHref} className="text-brand hover:underline">
               {safeUserDisplayName(creator) ?? EMPTY_VALUE}
             </Link>
           )}
@@ -91,24 +94,6 @@ export function CompanyReviewBody({
 
       <CompanyDecision company={company} returnTo={returnTo} />
     </div>
-  );
-}
-
-export function CompanyDetail({ company, returnTo }: { company: CompanyReview; returnTo: string }) {
-  return (
-    <details
-      id={`sirket-${company.id}`}
-      className="rounded-lg border border-border-subtle bg-surface px-4 py-3"
-    >
-      <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-ink">
-        <span>{company.name ?? EMPTY_VALUE}</span>
-        <ApprovalStatusBadge status={company.approvalStatus} />
-        <span className="font-mono text-xs text-ink-subtle">{company.id.slice(0, 8)}</span>
-      </summary>
-      <div className="mt-4">
-        <CompanyReviewBody company={company} returnTo={returnTo} />
-      </div>
-    </details>
   );
 }
 

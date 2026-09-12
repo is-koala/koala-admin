@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 
 import { RecentOperationsList } from "@/components/escrow/recent-operations-list";
 import { PageHeader } from "@/components/panel/page-header";
@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
+import { assignmentLookupHref, disputeHref, userHrefOrNull } from "@/lib/panel-href";
 import { DISPUTE_PAGING, getDisputes, type Dispute } from "@/server/api/disputes";
 import { pageWindow, readPaging, type PageWindow, type SearchParams } from "@/server/api/paging";
 import { getEscrowSummary } from "@/server/api/escrow";
@@ -297,6 +298,7 @@ async function DisputeWorkspace({ filter, paging }: WorkspaceProps) {
               <TableBody>
                 {visible.map((dispute) => {
                   const entry = summaries.get(dispute.jobAssignmentId);
+                  const openedByHref = userHrefOrNull(dispute.openedBy?.id);
                   return (
                     <TableRow key={dispute.id}>
                       <TableCell>
@@ -304,13 +306,18 @@ async function DisputeWorkspace({ filter, paging }: WorkspaceProps) {
                           {DISPUTE_STATUS_LABELS[dispute.status]}
                         </Badge>
                       </TableCell>
-                      <TableCell>{safeUserName(dispute.openedBy)}</TableCell>
+                      <TableCell>
+                        {openedByHref === null ? (
+                          safeUserName(dispute.openedBy)
+                        ) : (
+                          <Link href={openedByHref} className="text-brand hover:underline">
+                            {safeUserName(dispute.openedBy)}
+                          </Link>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Link
-                          href={{
-                            pathname: "/assignments",
-                            query: { atama: dispute.jobAssignmentId },
-                          }}
+                          href={assignmentLookupHref(dispute.jobAssignmentId)}
                           className="font-mono text-xs text-brand hover:underline"
                         >
                           {dispute.jobAssignmentId}
@@ -327,7 +334,7 @@ async function DisputeWorkspace({ filter, paging }: WorkspaceProps) {
                       <TableCell>{formatDateTime(dispute.createdAt)}</TableCell>
                       <TableCell>
                         <Link
-                          href={`/disputes/${dispute.id}` as Route}
+                          href={disputeHref(dispute.id)}
                           className="text-sm font-medium text-brand hover:underline"
                         >
                           İncele
