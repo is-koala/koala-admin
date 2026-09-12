@@ -69,17 +69,31 @@ export function IdentityReviewBody({
         <div className="grid gap-4 sm:grid-cols-2">
           <DocumentPhoto
             reviewId={review.id}
+            documentId={review.selfieDocumentId}
+            label="Yüz"
+            emptyLabel="Yüz fotoğrafı yok"
+            alt="Yüz fotoğrafı"
+          />
+          <DocumentPhoto
+            reviewId={review.id}
             documentId={review.frontDocumentId}
-            label="Ön yüz"
-            emptyLabel="Ön yüz fotoğrafı yok"
+            label="TCKK ön"
+            emptyLabel="TCKK ön fotoğrafı yok"
             alt="TCKK ön yüz"
           />
           <DocumentPhoto
             reviewId={review.id}
             documentId={review.backDocumentId}
-            label="Arka yüz"
-            emptyLabel="Arka yüz fotoğrafı yok"
+            label="TCKK arka"
+            emptyLabel="TCKK arka fotoğrafı yok"
             alt="TCKK arka yüz"
+          />
+          <DocumentPhoto
+            reviewId={review.id}
+            documentId={review.togetherDocumentId}
+            label="TCKK yüzün altında"
+            emptyLabel="TCKK yüzün altında fotoğrafı yok"
+            alt="TCKK yüzün altında"
           />
         </div>
       </section>

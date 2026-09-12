@@ -54,7 +54,7 @@ export default async function IdentityReviewsPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Kimlik belge kuyruğu"
-        description="Yüklenen TCKK ön ve arka fotoğraflarını inceleyip onaylayın veya gerekçesiyle reddedin. Onay kimlik damgasını çip olmadan koyar ve geri alınamaz. Karar inceleme sayfasındadır."
+        description="Yüklenen dört TCKK fotoğrafını (yüz, ön, arka, yüzün altında) inceleyip onaylayın veya gerekçesiyle reddedin. Onay kimlik damgasını çip olmadan koyar ve geri alınamaz. Karar inceleme sayfasındadır."
       />
 
       <RequirePermission permission="identity.review">

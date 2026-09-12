@@ -52,8 +52,10 @@ export const identityReviewSchema = z.object({
   rejectedAt: nullableString,
   verifiedAt: nullableString,
   reviewedByStaffId: nullableString,
+  selfieDocumentId: nullableString,
   frontDocumentId: nullableString,
   backDocumentId: nullableString,
+  togetherDocumentId: nullableString,
   createdAt: nullableString,
 });
 
