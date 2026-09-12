@@ -1,7 +1,7 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
+import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -251,5 +251,43 @@ describe("status and paging are backend query parameters", () => {
     await render({ durum: "MAYBE" });
 
     expect(queue.url?.searchParams.has("status")).toBe(false);
+  });
+});
+
+/** koala-admin#85: olmayan talep ortak 404 yüzeyidir, uyarı kutusu değil. */
+describe("a deletion request that does not exist", () => {
+  it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {
+    stubMe(READER);
+    const detail = watchDetail(undefined, () =>
+      HttpResponse.json(
+        {
+          ...resourceNotFoundBody,
+          errorCode: "ACCOUNT_DELETION_REQUEST_NOT_FOUND",
+          path: `/admin/account-deletions/${REQUEST_ID}`,
+        },
+        { status: 404 },
+      ),
+    );
+
+    const thrown = await renderDetail().then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(detail.calls).toBe(1);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+
+  it("treats an id that cannot be a UUID the same way, without asking the backend", async () => {
+    stubMe(READER);
+    const detail = watchDetail();
+
+    const thrown = await renderDetail("not-a-uuid").then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(detail.calls).toBe(0);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });

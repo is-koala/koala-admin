@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
@@ -14,7 +15,7 @@ import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
-import { classifyQueueFailure } from "@/server/queue/decisions";
+import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
 import { UserRoleDetail, type UserGrants } from "../user-roles";
 
@@ -51,11 +52,9 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
 }
 
 async function UserObject({ id }: { id: string }) {
-  if (!isUuid(id)) {
-    return (
-      <p className="text-sm text-ink-muted">Kullanıcı kimliği geçersiz. Dizinden bir satır açın.</p>
-    );
-  }
+  // UUID olmayan bir kimlik hiçbir kaydı adresleyemez: backend'e sormadan
+  // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
+  if (!isUuid(id)) notFound();
 
   const accessToken = await getKoalaAccessToken();
   const context = await getStaffContext();
@@ -66,6 +65,7 @@ async function UserObject({ id }: { id: string }) {
   try {
     user = await getMarketplaceUser(accessToken, id);
   } catch (error) {
+    notFoundIfMissing(error);
     return (
       <QueueLoadFailure
         subject="Kullanıcı detayı"

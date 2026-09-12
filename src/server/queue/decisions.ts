@@ -1,5 +1,7 @@
 import "server-only";
 
+import { notFound } from "next/navigation";
+
 import {
   decisionFailed,
   decisionRejected,
@@ -27,6 +29,24 @@ import { getStaffContext } from "@/server/authz/staff-context";
  * 403 the operator has to interpret, and so the panel does not spend a mutating
  * request finding out something it already knows.
  */
+
+/**
+ * Olmayan kaydı panelin 404 yüzeyine gönder (koala-admin#85).
+ *
+ * Yalnız nesne sayfaları için — tek fetch'i sayfanın kendisi olan `/x/{id}`.
+ * Liste sayfasındaki arama (`/assignments?atama=`) satır içi uyarısını
+ * korur, çünkü `notFound()` listenin tamamını 404 görünümüyle değiştirirdi.
+ * Çağrı `try`de değil `catch`te durur: `notFound()` fırlatır ve etrafındaki
+ * bir `try` tam da yükseltmek için var olduğu kesmeyi yutardı.
+ *
+ * {@link classifyQueueFailure} içine bilerek katılmadı: onu yukarıdaki liste
+ * sayfaları da paylaşıyor.
+ */
+export function notFoundIfMissing(error: unknown): void {
+  if (isKoalaApiError(error) && error.isResourceNotFound) {
+    notFound();
+  }
+}
 
 /** Turn anything thrown by a queue fetch into something a screen can render. */
 export function classifyQueueFailure(error: unknown): QueueFailure {

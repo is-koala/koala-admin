@@ -71,3 +71,32 @@ describe("StaffNav groups the screens it was handed", () => {
     expect(screen.getByText("Operasyon")).toBeInTheDocument();
   });
 });
+
+/**
+ * koala-admin#85. Nesne sayfaları (`/reports/{id}`) menü girişi değil ve
+ * ortak `error.tsx` / `not-found.tsx` de aynı yollarda çizilir. Menü yalnız
+ * tam href'i eşleseydi bir şikayeti açmak — ya da onun 404'üne düşmek — her
+ * girişi söndürür, operatörü yönsüz bırakırdı.
+ */
+describe("StaffNav keeps the section lit on its object pages", () => {
+  it("marks the queue current, as an ancestor, when an object under it is open", () => {
+    render(
+      <StaffNav
+        entries={navigationFor(["content.moderate", "user.read"])}
+        currentPath="/reports/a1000000-0000-4000-8000-000000000001"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Şikayetler" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    expect(screen.getByRole("link", { name: "Kullanıcılar" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("matches on a path segment, not on a string prefix", () => {
+    render(<StaffNav entries={navigationFor(["user.read"])} currentPath="/users-archive" />);
+
+    expect(screen.getByRole("link", { name: "Kullanıcılar" })).not.toHaveAttribute("aria-current");
+  });
+});

@@ -1,7 +1,11 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
+import {
+  adminMeSuccessBody,
+  endpointNotFoundBody,
+  resourceNotFoundBody,
+} from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -507,5 +511,94 @@ describe("unfinished-work copy stays off the screen", () => {
     const failed = await render();
     expect(failed).toContain("Şikayet kuyruğu yüklenemedi.");
     expect(failed).not.toContain("Backend&#x27;in veremedikleri");
+  });
+});
+
+/**
+ * koala-admin#85. Backend'in `REPORT_NOT_FOUND`u ortak 404 yüzeyidir. Öteki
+ * 404 — `ENDPOINT_NOT_FOUND`, ucun kendisinin yokluğu — değildir: o bir
+ * dağıtım sorunudur ve istek numarasıyla uyarı olarak kalır, çünkü "kayıt
+ * silinmiş" operatörü hiç olmamış bir silmeyi aramaya gönderirdi.
+ *
+ * Son test sırayı sabitler: `notFound()` kapının *içinde* çalışır. İzni
+ * olmayan kişi bozuk bir id ile de 403 görür ve hiçbir istek çıkmaz; Next'in
+ * "notFound()'u her await'ten önce koyun" öğüdü çağrıyı kapının üstüne
+ * taşımaya davet eder ve bu test o taşımayı kırmızıya çevirir.
+ */
+describe("a report that does not exist", () => {
+  it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {
+    stubMe(MODERATOR);
+    let calls = 0;
+    server.use(
+      http.get(`${REPORTS}/:reportId`, () => {
+        calls += 1;
+        return HttpResponse.json(resourceNotFoundBody, { status: 404 });
+      }),
+    );
+
+    const thrown = await renderDetail().then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(calls).toBe(1);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+
+  it("treats an id that cannot be a UUID the same way, without asking the backend", async () => {
+    stubMe(MODERATOR);
+    let calls = 0;
+    server.use(
+      http.get(`${REPORTS}/:reportId`, () => {
+        calls += 1;
+        return HttpResponse.json(resourceNotFoundBody, { status: 404 });
+      }),
+    );
+
+    const thrown = await renderDetail("not-a-uuid").then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(calls).toBe(0);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+
+  it("keeps a missing endpoint as a load failure with its request id", async () => {
+    stubMe(MODERATOR);
+    server.use(
+      http.get(`${REPORTS}/:reportId`, () =>
+        HttpResponse.json(
+          { ...endpointNotFoundBody, path: `/admin/reports/${row().id}` },
+          { status: 404 },
+        ),
+      ),
+    );
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Şikayet detayı yüklenemedi.");
+    expect(html).toContain("ENDPOINT_NOT_FOUND");
+    expect(html).toContain(endpointNotFoundBody.requestId);
+  });
+
+  it("answers a malformed id with the permission gate, not the 404, when the actor lacks content.moderate", async () => {
+    stubMe(CATALOG_EDITOR, ["CATALOG_EDITOR"]);
+    let calls = 0;
+    server.use(
+      http.get(`${REPORTS}/:reportId`, () => {
+        calls += 1;
+        return HttpResponse.json(resourceNotFoundBody, { status: 404 });
+      }),
+    );
+
+    const outcome = await renderDetail("not-a-uuid").then(
+      (html) => ({ html, thrown: null as unknown }),
+      (error: unknown) => ({ html: null, thrown: error }),
+    );
+
+    expect(outcome.thrown).toBeNull();
+    expect(calls).toBe(0);
+    expect(outcome.html).toContain("403 — Bu sayfa için yetkiniz yok");
   });
 });

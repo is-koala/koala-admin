@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
@@ -8,7 +9,7 @@ import { formatDateTime } from "@/lib/format";
 import { getReport, reportReasonLabel, reportStatusLabel } from "@/server/api/reports";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
-import { classifyQueueFailure } from "@/server/queue/decisions";
+import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
 import { ReportDecision, REPORT_STATUS_TONES } from "../report-decision";
 
@@ -45,16 +46,15 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 }
 
 async function ReportObject({ id }: { id: string }) {
-  if (!OBJECT_ID.test(id)) {
-    return (
-      <p className="text-sm text-ink-muted">Şikayet kimliği geçersiz. Kuyruktan bir satır açın.</p>
-    );
-  }
+  // UUID olmayan bir kimlik hiçbir kaydı adresleyemez: backend'e sormadan
+  // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
+  if (!OBJECT_ID.test(id)) notFound();
 
   let detail;
   try {
     detail = await getReport(await getKoalaAccessToken(), id);
   } catch (error) {
+    notFoundIfMissing(error);
     return (
       <QueueLoadFailure
         subject="Şikayet detayı"

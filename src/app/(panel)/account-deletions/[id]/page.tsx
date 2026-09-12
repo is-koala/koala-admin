@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
@@ -9,7 +10,7 @@ import { readParam, type SearchParams } from "@/server/api/paging";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
-import { classifyQueueFailure } from "@/server/queue/decisions";
+import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
 import { DeletionReviewBody, DeletionStatusBadge } from "../deletion-detail";
 
@@ -64,11 +65,9 @@ export default async function AccountDeletionDetailPage({
 }
 
 async function DeletionObject({ id }: { id: string }) {
-  if (!isUuid(id)) {
-    return (
-      <p className="text-sm text-ink-muted">Talep kimliği geçersiz. Kuyruktan bir satır açın.</p>
-    );
-  }
+  // UUID olmayan bir kimlik hiçbir kaydı adresleyemez: backend'e sormadan
+  // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
+  if (!isUuid(id)) notFound();
 
   const canReject = (await getStaffContext()).has("user.deletion.manage");
 
@@ -76,6 +75,7 @@ async function DeletionObject({ id }: { id: string }) {
   try {
     row = await getAccountDeletion(await getKoalaAccessToken(), id);
   } catch (error) {
+    notFoundIfMissing(error);
     return (
       <QueueLoadFailure
         subject="Hesap silme talebi"

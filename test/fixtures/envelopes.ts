@@ -48,6 +48,26 @@ export const endpointNotFoundBody = {
   timeStamp: "2026-09-05T22:58:54.787343086Z",
 };
 
+/**
+ * Backend'de satırı olmayan bir id için `GET /admin/reports/{id}`. Her
+ * `*_NOT_FOUND` kodu `RESOURCE_NOT_FOUND` kategorisini paylaşır; tam bir
+ * zarfın içindeki bu kategori, nesne sayfasının `notFound()`a çevirdiği şey.
+ * `endpointNotFoundBody` ile karşılaştırın: o da 404, ama eksik olan *uç*;
+ * bir sayfa onu "kayıt silinmiş" diye okumamalı.
+ */
+export const resourceNotFoundBody = {
+  message: "Şikayet bulunamadı.",
+  httpStatus: "404 NOT_FOUND",
+  errorCode: "REPORT_NOT_FOUND",
+  errorCategory: "RESOURCE_NOT_FOUND",
+  requestId: "4f2a9c1e-7b3d-4e55-9a10-2c8d6f0b1e77",
+  path: "/admin/reports/a1000000-0000-4000-8000-000000000001",
+  resource: "report",
+  resourceId: "a1000000-0000-4000-8000-000000000001",
+  success: false,
+  timeStamp: "2026-09-11T13:00:00.000000000Z",
+};
+
 /** `GET /admin/job-categories` without a token. */
 export const authenticationRequiredBody = {
   message: "You must be signed in to continue.",

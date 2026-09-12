@@ -5,6 +5,7 @@ import {
   authenticationRequiredBody,
   endpointNotFoundBody,
   jobCategoriesSuccessBody,
+  resourceNotFoundBody,
   validationFailedBody,
 } from "../../../test/fixtures/envelopes";
 
@@ -113,6 +114,21 @@ describe("toKoalaApiError", () => {
     expect(error.errorCategory).toBe("AUTHENTICATION_REQUIRED");
     expect(error.isAuthFailure).toBe(true);
     expect(error.isForbidden).toBe(false);
+  });
+
+  it("classifies a missing record so an object page can answer 404, and only then", () => {
+    const missing = toKoalaApiError(resourceNotFoundBody, context({ status: 404 }));
+    expect(missing.isResourceNotFound).toBe(true);
+
+    // Aynı durum kodu, başka anlam: kayıt değil uç yok.
+    const endpoint = toKoalaApiError(endpointNotFoundBody, context({ status: 404 }));
+    expect(endpoint.isResourceNotFound).toBe(false);
+
+    // Zarfsız 404 proxy ya da yanlış yönlendirmedir; "bu kayıt yok" demeye
+    // yalnız backend'in kendi ErrorResult'ı yetkili.
+    const proxy = toKoalaApiError("<html>404</html>", context({ status: 404 }));
+    expect(proxy.errorCategory).toBe("RESOURCE_NOT_FOUND");
+    expect(proxy.isResourceNotFound).toBe(false);
   });
 
   it("salvages a body that is not a contract-shaped ErrorResult", () => {

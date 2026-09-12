@@ -73,6 +73,18 @@ export class KoalaApiError extends Error {
   get isValidationFailure(): boolean {
     return this.errorCategory === "VALIDATION_FAILED";
   }
+
+  /**
+   * Adreslenen kaydın olmadığını backend'in kendisi söyledi mi?
+   *
+   * Zarf şartı bilerek: `ErrorResult` taşımayan bir 404 proxy ya da yanlış
+   * yönlendirmedir, `ENDPOINT_NOT_FOUND` ise kaydın değil ucun yokluğu.
+   * Bir nesne sayfasının `notFound()`a çevirebileceği tek birleşim bu
+   * (koala-admin#85); kalanı istek numarasıyla yükleme hatası olarak kalır.
+   */
+  get isResourceNotFound(): boolean {
+    return this.hasContractEnvelope && this.errorCategory === "RESOURCE_NOT_FOUND";
+  }
 }
 
 export function isKoalaApiError(value: unknown): value is KoalaApiError {

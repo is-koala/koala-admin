@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
@@ -8,7 +9,7 @@ import { getIdentityReview } from "@/server/api/identity-reviews";
 import { readParam, type SearchParams } from "@/server/api/paging";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
-import { classifyQueueFailure } from "@/server/queue/decisions";
+import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
 import { IdentityReviewBody, IdentityStatusBadge, identityDisplayName } from "../identity-review";
 
@@ -78,16 +79,15 @@ async function IdentityObject({
   decisionResult: "approved" | "rejected" | null;
   returnTo: string;
 }) {
-  if (!isUuid(id)) {
-    return (
-      <p className="text-sm text-ink-muted">İnceleme kimliği geçersiz. Kuyruktan bir satır açın.</p>
-    );
-  }
+  // UUID olmayan bir kimlik hiçbir kaydı adresleyemez: backend'e sormadan
+  // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
+  if (!isUuid(id)) notFound();
 
   let review;
   try {
     review = await getIdentityReview(await getKoalaAccessToken(), id);
   } catch (error) {
+    notFoundIfMissing(error);
     return (
       <QueueLoadFailure
         subject="Kimlik incelemesi"

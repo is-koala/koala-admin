@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
@@ -10,7 +11,7 @@ import { isKoalaApiError } from "@/server/api/errors";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
-import { classifyQueueFailure } from "@/server/queue/decisions";
+import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
 import { DisputeDetail, type EvidenceResult, type SummaryEntry } from "../dispute-detail";
 
@@ -47,13 +48,9 @@ export default async function DisputeDetailPage({ params }: { params: Promise<{ 
 }
 
 async function DisputeObject({ id }: { id: string }) {
-  if (!OBJECT_ID.test(id)) {
-    return (
-      <p className="text-sm text-ink-muted">
-        Uyuşmazlık kimliği geçersiz. Kuyruktan bir satır açın.
-      </p>
-    );
-  }
+  // UUID olmayan bir kimlik hiçbir kaydı adresleyemez: backend'e sormadan
+  // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
+  if (!OBJECT_ID.test(id)) notFound();
 
   const context = await getStaffContext();
   const accessToken = await getKoalaAccessToken();
@@ -62,6 +59,7 @@ async function DisputeObject({ id }: { id: string }) {
   try {
     dispute = await getDispute(accessToken, id);
   } catch (error) {
+    notFoundIfMissing(error);
     return (
       <QueueLoadFailure
         subject="Uyuşmazlık detayı"
