@@ -3,7 +3,7 @@ import Link from "next/link";
 import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
 import { Badge, type BadgeTone } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
-import { reportsForUserHref, userHref } from "@/lib/panel-href";
+import { reportsForUserHref, userHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   REVIEW_MIN_NOTE_LENGTH,
   reportPartyName,
@@ -63,6 +63,7 @@ export function ReportDecision({
   const targets = reportTargets(report);
   const closed = CLOSED_STATUSES.has(report.status);
   const hasImageTarget = targets.some((target) => target.kind === "IMAGE");
+  const reporterHref = userHrefOrNull(report.reporter?.id);
 
   return (
     <div className="flex flex-col gap-4">
@@ -80,7 +81,17 @@ export function ReportDecision({
         <dd className="text-sm whitespace-pre-wrap">{report.description ?? EMPTY_VALUE}</dd>
 
         <dt className="text-sm text-ink-muted">Şikayet eden</dt>
-        <dd className="text-sm">{reportPartyName(report.reporter)}</dd>
+        <dd className="text-sm">
+          {report.reporter === null ? (
+            EMPTY_VALUE
+          ) : reporterHref === null ? (
+            reportPartyName(report.reporter)
+          ) : (
+            <Link href={reporterHref} className="text-brand hover:underline">
+              {reportPartyName(report.reporter)}
+            </Link>
+          )}
+        </dd>
 
         <dt className="text-sm text-ink-muted">Şikayet edilen</dt>
         <dd className="text-sm">

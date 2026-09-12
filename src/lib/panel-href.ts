@@ -11,12 +11,28 @@ function asRoute(path: string): Route {
   return path as Route;
 }
 
+function withQuery(path: string, state: Readonly<Record<string, string>> = {}): Route {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries(state)) {
+    if (value.length > 0) query.set(name, value);
+  }
+  const encoded = query.toString();
+  return asRoute(encoded.length > 0 ? `${path}?${encoded}` : path);
+}
+
 export function reportHref(reportId: string): Route {
   return asRoute(`/reports/${reportId}`);
 }
 
-export function companyHref(companyId: string): Route {
-  return asRoute(`/companies/${companyId}`);
+export function companiesHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/companies", state);
+}
+
+export function companyHref(
+  companyId: string,
+  queueState: Readonly<Record<string, string>> = {},
+): Route {
+  return withQuery(`/companies/${companyId}`, queueState);
 }
 
 export function disputeHref(disputeId: string): Route {
@@ -25,6 +41,10 @@ export function disputeHref(disputeId: string): Route {
 
 export function userHref(userId: string): Route {
   return asRoute(`/users/${userId}`);
+}
+
+export function userHrefOrNull(userId: string | null | undefined): Route | null {
+  return userId !== null && userId !== undefined && isUuid(userId) ? userHref(userId) : null;
 }
 
 export function assignmentLookupHref(assignmentId: string): Route {

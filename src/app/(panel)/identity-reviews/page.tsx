@@ -155,7 +155,15 @@ async function IdentityQueue({ params }: { params: SearchParams }) {
             <TableBody>
               {reviews.map((review) => (
                 <TableRow key={review.id}>
-                  <TableCell>{displayName(review)}</TableCell>
+                  <TableCell>
+                    {review.userId !== null && isUuid(review.userId) ? (
+                      <Link href={userHref(review.userId)} className="text-brand hover:underline">
+                        {displayName(review)}
+                      </Link>
+                    ) : (
+                      displayName(review)
+                    )}
+                  </TableCell>
                   <TableCell>
                     <span className="font-mono text-xs">
                       {review.tcIdentityNumber ?? EMPTY_VALUE}

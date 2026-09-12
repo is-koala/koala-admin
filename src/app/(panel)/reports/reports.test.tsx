@@ -365,6 +365,7 @@ describe("the detail, and what it refuses to make up", () => {
     const html = await render();
 
     expect(html).toContain(`/users/${REPORTED.id}`);
+    expect(html).toContain(`/users/${REPORTER.id}`);
     expect(html).not.toContain("Aynı kullanıcı bu sayfada 2 kez");
   });
 

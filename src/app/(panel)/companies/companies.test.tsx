@@ -18,12 +18,14 @@ vi.mock("@/server/auth/session", () => ({
 }));
 
 const { default: CompaniesPage } = await import("./page");
+const { default: CompanyDetailPage } = await import("./[id]/page");
 
 const ADMIN_ME = apiUrl("/admin/me");
 const COMPANIES = apiUrl("/admin/companies");
 
 const APPROVER = ["company.approve"];
 const MODERATOR = ["content.moderate"];
+const CREATOR_ID = "bbbbbbbb-0000-4000-8000-00000000000b";
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
@@ -102,9 +104,44 @@ function watchQueue(rows: unknown[] = [], respond?: () => Response) {
   return seen;
 }
 
+function watchDetail(row: unknown = company(), respond?: () => Response) {
+  const seen: { calls: number; companyId: string | null } = {
+    calls: 0,
+    companyId: null,
+  };
+
+  server.use(
+    http.get(`${COMPANIES}/:companyId`, ({ params }) => {
+      seen.calls += 1;
+      seen.companyId = String(params.companyId);
+
+      if (respond !== undefined) return respond();
+
+      return HttpResponse.json({
+        success: true,
+        message: "Şirket getirildi.",
+        httpStatus: "200 OK",
+        path: `/admin/companies/${COMPANY_REVIEW_ID}`,
+        requestId: "rid-company",
+        timeStamp: "2026-09-06T09:40:00.000000000Z",
+        data: row,
+      });
+    }),
+  );
+
+  return seen;
+}
+
 const render = async (params: Record<string, string> = {}) =>
   (
     await renderServerComponent(<CompaniesPage searchParams={Promise.resolve(params)} />)
+  ).replaceAll("<!-- -->", "");
+
+const renderDetail = async (id: string = COMPANY_REVIEW_ID, query: Record<string, string> = {}) =>
+  (
+    await renderServerComponent(
+      <CompanyDetailPage params={Promise.resolve({ id })} searchParams={Promise.resolve(query)} />,
+    )
   ).replaceAll("<!-- -->", "");
 
 describe("who can see the queue", () => {
@@ -130,6 +167,17 @@ describe("who can see the queue", () => {
     expect(queue.authorization).toBe("Bearer ACCESS-TOKEN");
     expect(html).toContain("Koala Kahve A.Ş.");
     expect(html).not.toContain("ACCESS-TOKEN");
+  });
+
+  it("refuses a MODERATOR on the object page and never asks GET /admin/companies/{id}", async () => {
+    stubMe(MODERATOR, ["MODERATOR"]);
+    const detail = watchDetail();
+
+    const html = await renderDetail();
+
+    expect(detail.calls).toBe(0);
+    expect(html).toContain("403 — Bu sayfa için yetkiniz yok");
+    expect(html).not.toContain("Koala Kahve");
   });
 });
 
@@ -211,74 +259,39 @@ describe("status, search and paging are backend query parameters", () => {
   });
 });
 
-describe("the safe review projection", () => {
-  it("renders creator, timestamps, status and saved note without extra user or company fields", async () => {
+describe("the queue is not the review", () => {
+  it("links each row to the object page and does not inline the decision form", async () => {
     stubMe(APPROVER);
+    const detail = watchDetail();
     watchQueue([
       company({
-        approvalStatus: "REJECTED",
-        approvalNote: "Vergi levhası okunmuyor.",
-        approvalDecidedAt: "2026-09-06T09:40:00Z",
+        createdBy: {
+          id: CREATOR_ID,
+          firstName: "Ayşe",
+          lastName: "Yılmaz",
+          username: "ayse",
+          profilePictureUrl: null,
+        },
       }),
     ]);
 
-    const html = await render({ durum: "REJECTED" });
+    const html = await render({
+      durum: "PENDING",
+      ara: "Koala",
+      sirala: "name,asc",
+      boyut: "40",
+      sayfa: "2",
+    });
 
-    expect(html).toContain("Ayşe Yılmaz");
-    expect(html).toContain("01.09.2026 11:00");
-    expect(html).toContain("06.09.2026 12:40");
-    expect(html).toContain("Reddedildi");
-    expect(html).toContain("Vergi levhası okunmuyor.");
-    expect(html).not.toContain("private@koala.test");
-    expect(html).not.toContain("never-render-this");
-    expect(html).not.toContain("must-not-render");
-    expect(html).not.toContain("s3://must-not-render");
-    expect(html).toContain("Caferağa Mah. Moda Cad. No:12, Kadıköy");
-    expect(html).toContain("İstanbul");
-    expect(html).toContain("Kadıköy");
-    expect(html).toContain(
-      `/api/companies/${COMPANY_REVIEW_ID}/images/${COMPANY_GALLERY_IMAGE_ID}/download`,
-    );
-  });
-
-  it("says when a company has no registered address or gallery photos", async () => {
-    stubMe(APPROVER);
-    watchQueue([
-      company({
-        address: null,
-        galleryImageIds: [],
-      }),
-    ]);
-
-    const html = await render();
-
-    expect(html).toContain("Kayıtlı adres");
-    expect(html).toContain("Galeri");
-    expect(html).toContain("—");
+    expect(detail.calls).toBe(0);
+    expect(html).toContain(`/companies/${COMPANY_REVIEW_ID}?`);
+    expect(html).toContain(`durum=PENDING`);
+    expect(html).toContain(`/users/${CREATOR_ID}`);
+    expect(html).not.toContain("Başvuru detayları ve karar");
+    expect(html).not.toContain('name="decision"');
+    expect(html).not.toContain('name="returnTo"');
+    expect(html).not.toContain("Kayıtlı adres");
     expect(html).not.toContain("/api/companies/");
-    expect(html).not.toContain("sözleşmede yoktur");
-  });
-
-  it("renders explicit fallbacks when optional review metadata is absent", async () => {
-    stubMe(APPROVER);
-    watchQueue([
-      company({
-        name: "Yeni Şirket",
-        email: null,
-        phoneNumber: null,
-        taxNumber: null,
-        type: null,
-        createdAt: null,
-        createdBy: null,
-      }),
-    ]);
-
-    const html = await render();
-
-    expect(html).toContain("Yeni Şirket");
-    expect(html).toContain("Oluşturan");
-    expect(html).toContain("Başvuru zamanı");
-    expect(html).toContain("—");
   });
 
   it("distinguishes an empty search result from a load failure", async () => {
@@ -317,6 +330,77 @@ describe("the safe review projection", () => {
   });
 });
 
+describe("the safe review projection", () => {
+  it("renders creator, timestamps, status and saved note without extra user or company fields", async () => {
+    stubMe(APPROVER);
+    watchDetail(
+      company({
+        approvalStatus: "REJECTED",
+        approvalNote: "Vergi levhası okunmuyor.",
+        approvalDecidedAt: "2026-09-06T09:40:00Z",
+      }),
+    );
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Ayşe Yılmaz");
+    expect(html).toContain("01.09.2026 11:00");
+    expect(html).toContain("06.09.2026 12:40");
+    expect(html).toContain("Reddedildi");
+    expect(html).toContain("Vergi levhası okunmuyor.");
+    expect(html).not.toContain("private@koala.test");
+    expect(html).not.toContain("never-render-this");
+    expect(html).not.toContain("must-not-render");
+    expect(html).not.toContain("s3://must-not-render");
+    expect(html).toContain("Caferağa Mah. Moda Cad. No:12, Kadıköy");
+    expect(html).toContain("İstanbul");
+    expect(html).toContain("Kadıköy");
+    expect(html).toContain(
+      `/api/companies/${COMPANY_REVIEW_ID}/images/${COMPANY_GALLERY_IMAGE_ID}/download`,
+    );
+  });
+
+  it("says when a company has no registered address or gallery photos", async () => {
+    stubMe(APPROVER);
+    watchDetail(
+      company({
+        address: null,
+        galleryImageIds: [],
+      }),
+    );
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Kayıtlı adres");
+    expect(html).toContain("Galeri");
+    expect(html).toContain("—");
+    expect(html).not.toContain("/api/companies/");
+    expect(html).not.toContain("sözleşmede yoktur");
+  });
+
+  it("renders explicit fallbacks when optional review metadata is absent", async () => {
+    stubMe(APPROVER);
+    watchDetail(
+      company({
+        name: "Yeni Şirket",
+        email: null,
+        phoneNumber: null,
+        taxNumber: null,
+        type: null,
+        createdAt: null,
+        createdBy: null,
+      }),
+    );
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Yeni Şirket");
+    expect(html).toContain("Oluşturan");
+    expect(html).toContain("Başvuru zamanı");
+    expect(html).toContain("—");
+  });
+});
+
 describe("the backend decision state machine", () => {
   it("keeps successful decision feedback visible after the decided row leaves the queue", async () => {
     stubMe(APPROVER);
@@ -338,13 +422,13 @@ describe("the backend decision state machine", () => {
     expect(html).toContain("Şirket kuyruğu yüklenemedi.");
   });
 
-  it("carries the canonical queue location into the decision action", async () => {
+  it("returns a successful decision to the companies queue, carrying the view the operator left", async () => {
     stubMe(APPROVER);
-    watchQueue([company({ approvalStatus: "REJECTED" })]);
+    watchDetail(company({ approvalStatus: "REJECTED" }));
 
-    const html = await render({
+    const html = await renderDetail(COMPANY_REVIEW_ID, {
       durum: "REJECTED",
-      ara: "  Koala  ",
+      ara: "Koala",
       sirala: "name,asc",
       boyut: "40",
       sayfa: "2",
@@ -357,11 +441,24 @@ describe("the backend decision state machine", () => {
     );
   });
 
+  it("defaults returnTo to the companies queue when the object URL has no queue params", async () => {
+    stubMe(APPROVER);
+    watchDetail();
+
+    const html = await renderDetail();
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    expect(container.querySelector<HTMLInputElement>('input[name="returnTo"]')?.value).toBe(
+      "/companies",
+    );
+  });
+
   it("offers both approval and rejection for PENDING", async () => {
     stubMe(APPROVER);
-    watchQueue([company()]);
+    watchDetail();
 
-    const html = await render();
+    const html = await renderDetail();
 
     expect([...html.matchAll(/name="decision"/g)]).toHaveLength(2);
     expect(html).toContain('value="APPROVE"');
@@ -372,9 +469,9 @@ describe("the backend decision state machine", () => {
 
   it("lets a REJECTED company be approved but not rejected twice", async () => {
     stubMe(APPROVER);
-    watchQueue([company({ approvalStatus: "REJECTED", approvalNote: "Eksik evrak." })]);
+    watchDetail(company({ approvalStatus: "REJECTED", approvalNote: "Eksik evrak." }));
 
-    const html = await render({ durum: "REJECTED" });
+    const html = await renderDetail();
 
     expect([...html.matchAll(/name="decision"/g)]).toHaveLength(1);
     expect(html).toContain('value="APPROVE"');
@@ -384,9 +481,9 @@ describe("the backend decision state machine", () => {
 
   it("closes every decision control for APPROVED", async () => {
     stubMe(APPROVER);
-    watchQueue([company({ approvalStatus: "APPROVED" })]);
+    watchDetail(company({ approvalStatus: "APPROVED" }));
 
-    const html = await render({ durum: "APPROVED" });
+    const html = await renderDetail();
 
     expect(html).toContain("Backend onayı geri almaya");
     expect(html).not.toContain('name="decision"');
@@ -395,9 +492,9 @@ describe("the backend decision state machine", () => {
 
   it("states that notes persist and notification delivery is not claimed", async () => {
     stubMe(APPROVER);
-    watchQueue([company()]);
+    watchDetail();
 
-    const html = await render();
+    const html = await renderDetail();
 
     expect(html).toContain("Gerekçe şirket kararında saklanır.");
     expect(html).toContain("varsa şirketin ADMIN yetkilileri");
