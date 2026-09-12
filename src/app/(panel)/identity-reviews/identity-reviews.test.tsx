@@ -147,6 +147,17 @@ const renderDetail = async (id: string = REVIEW_ID, query: Record<string, string
     )
   ).replaceAll("<!-- -->", "");
 
+/** Onayın gerçekten gönderilebilir olup olmadığı — kapalı diyalogdaki submit de sayılır. */
+function enabledApproveControls(html: string): HTMLButtonElement[] {
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  return [...container.querySelectorAll("button")].filter((button): button is HTMLButtonElement => {
+    if (!(button instanceof HTMLButtonElement)) return false;
+    if (!(button.textContent ?? "").includes("Kimliği onayla")) return false;
+    return !button.disabled;
+  });
+}
+
 describe("who can see the identity review queue", () => {
   it("refuses a MODERATOR and never asks the backend for reviews", async () => {
     stubMe(MODERATOR, ["MODERATOR"]);
@@ -231,11 +242,12 @@ describe("TCKK photos on the object page", () => {
     expect(html).not.toContain("koala-backend.test");
     expect(html).not.toContain("ACCESS-TOKEN");
     expect(html).toContain("Kimliği onayla");
+    expect(enabledApproveControls(html)).toHaveLength(1);
     expect(html).toContain("İncelemeyi reddet");
     expect(html).toContain(`/users/${PENDING_REVIEW.userId}`);
   });
 
-  it("keeps approve and reject when a document id is missing, without an img", async () => {
+  it("closes approve and leaves reject when the four document ids are missing", async () => {
     stubMe(REVIEWER);
     watchDetail({
       ...PENDING_REVIEW,
@@ -254,7 +266,21 @@ describe("TCKK photos on the object page", () => {
     expect(html).toContain("TCKK ön fotoğrafı yok");
     expect(html).toContain("TCKK arka fotoğrafı yok");
     expect(html).toContain("TCKK yüzün altında fotoğrafı yok");
-    expect(html).toContain("Kimliği onayla");
+    expect(enabledApproveControls(html)).toHaveLength(0);
+    expect(html).toContain("İncelemeyi reddet");
+  });
+
+  it("closes approve when only the TCKK-under-face document is missing", async () => {
+    stubMe(REVIEWER);
+    watchDetail({ ...PENDING_REVIEW, togetherDocumentId: null });
+
+    const html = await renderDetail();
+
+    expect(html).toContain("TCKK yüzün altında fotoğrafı yok");
+    expect(html).toContain(
+      `/api/identity-verifications/${REVIEW_ID}/documents/${SELFIE_ID}/download`,
+    );
+    expect(enabledApproveControls(html)).toHaveLength(0);
     expect(html).toContain("İncelemeyi reddet");
   });
 

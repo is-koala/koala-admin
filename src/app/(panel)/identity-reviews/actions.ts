@@ -4,11 +4,18 @@ import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { decisionRejected, type DecisionState } from "@/components/panel/queue/decision-state";
+import {
+  decisionFailed,
+  decisionRejected,
+  type DecisionState,
+} from "@/components/panel/queue/decision-state";
+import { isKoalaApiError } from "@/server/api/errors";
 import {
   IDENTITY_REJECTION_MAX_REASON_LENGTH,
   IDENTITY_REJECTION_MIN_REASON_LENGTH,
   approveIdentityReview,
+  getIdentityReview,
+  identityReviewDocumentsComplete,
   rejectIdentityReview,
 } from "@/server/api/identity-reviews";
 import { getKoalaAccessToken } from "@/server/auth/session";
@@ -71,12 +78,24 @@ export async function submitIdentityReviewDecision(
   try {
     const accessToken = await getKoalaAccessToken();
     if (decision === "APPROVE") {
+      // UI kapısı yeterli değil: onay formu gizli olsa da eylem ayrı POST'tur.
+      const review = await getIdentityReview(accessToken, reviewId);
+      if (review.status !== "PENDING") {
+        return decisionRejected(
+          "Bu inceleme artık bekleyen durumda değil. Backend ikinci bir onayı kabul etmez.",
+        );
+      }
+      if (!identityReviewDocumentsComplete(review)) {
+        return decisionRejected(
+          "Onay kapalı. Dört TCKK fotoğrafı (yüz, ön, arka, yüzün altında) olmadan kimlik damgası konulamaz. İncelemeyi reddedin; kullanıcı belgeleri yeniden yükler.",
+        );
+      }
       await approveIdentityReview(accessToken, reviewId);
     } else {
       await rejectIdentityReview(accessToken, reviewId, reason);
     }
   } catch (error) {
-    return decisionFailureFrom(error, "Karar gönderilemedi.");
+    return identityDecisionFailureFrom(error);
   }
 
   try {
@@ -86,4 +105,15 @@ export async function submitIdentityReviewDecision(
   }
 
   redirect(successLocation(returnTo, decision));
+}
+
+/**
+ * 409 belgeler eksikken "birisi önce karar verdi" değildir; backend'in dört
+ * fotoğraf kuralıdır. Genel `decisionFailureFrom` o 409'u yanlış cümleye çevirirdi.
+ */
+function identityDecisionFailureFrom(error: unknown): DecisionState {
+  if (isKoalaApiError(error) && error.errorCode === "IDENTITY_REVIEW_DOCUMENTS_MISSING") {
+    return decisionFailed(error.message, error.errorCode, error.requestId);
+  }
+  return decisionFailureFrom(error, "Karar gönderilemedi.");
 }

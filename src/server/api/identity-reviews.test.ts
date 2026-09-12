@@ -10,6 +10,7 @@ import {
   getIdentityReview,
   getIdentityReviews,
   identityDocumentDownloadPath,
+  identityReviewDocumentsComplete,
   identityReviewStatusLabel,
   rejectIdentityReview,
 } from "./identity-reviews";
@@ -122,6 +123,16 @@ describe("the identity review queue", () => {
     expect(identityReviewStatusLabel("PENDING")).toBe("Onay bekliyor");
     expect(identityReviewStatusLabel("APPROVED")).toBe("Onaylı");
     expect(identityReviewStatusLabel("REJECTED")).toBe("Reddedildi");
+  });
+
+  it("treats any empty photo slot as an incomplete set", () => {
+    expect(identityReviewDocumentsComplete(PENDING_REVIEW)).toBe(true);
+    expect(identityReviewDocumentsComplete({ ...PENDING_REVIEW, togetherDocumentId: null })).toBe(
+      false,
+    );
+    expect(identityReviewDocumentsComplete({ ...PENDING_REVIEW, selfieDocumentId: "" })).toBe(
+      false,
+    );
   });
 });
 
