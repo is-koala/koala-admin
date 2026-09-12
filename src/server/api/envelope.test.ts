@@ -120,12 +120,12 @@ describe("toKoalaApiError", () => {
     const missing = toKoalaApiError(resourceNotFoundBody, context({ status: 404 }));
     expect(missing.isResourceNotFound).toBe(true);
 
-    // Same status, different meaning: the endpoint is gone, not the record.
+    // Aynı durum kodu, başka anlam: kayıt değil uç yok.
     const endpoint = toKoalaApiError(endpointNotFoundBody, context({ status: 404 }));
     expect(endpoint.isResourceNotFound).toBe(false);
 
-    // A 404 with no envelope is a proxy or a misroute; only the backend's own
-    // ErrorResult is allowed to say "this record does not exist".
+    // Zarfsız 404 proxy ya da yanlış yönlendirmedir; "bu kayıt yok" demeye
+    // yalnız backend'in kendi ErrorResult'ı yetkili.
     const proxy = toKoalaApiError("<html>404</html>", context({ status: 404 }));
     expect(proxy.errorCategory).toBe("RESOURCE_NOT_FOUND");
     expect(proxy.isResourceNotFound).toBe(false);

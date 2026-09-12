@@ -75,12 +75,12 @@ export class KoalaApiError extends Error {
   }
 
   /**
-   * True when the backend itself said the addressed record does not exist.
+   * Adreslenen kaydın olmadığını backend'in kendisi söyledi mi?
    *
-   * Envelope required on purpose: a 404 with no `ErrorResult` is a proxy or a
-   * misroute, and `ENDPOINT_NOT_FOUND` is the route missing, not the record.
-   * Only this combination is what an object page may turn into `notFound()`
-   * (koala-admin#85); the rest stay load failures with their request id.
+   * Zarf şartı bilerek: `ErrorResult` taşımayan bir 404 proxy ya da yanlış
+   * yönlendirmedir, `ENDPOINT_NOT_FOUND` ise kaydın değil ucun yokluğu.
+   * Bir nesne sayfasının `notFound()`a çevirebileceği tek birleşim bu
+   * (koala-admin#85); kalanı istek numarasıyla yükleme hatası olarak kalır.
    */
   get isResourceNotFound(): boolean {
     return this.hasContractEnvelope && this.errorCategory === "RESOURCE_NOT_FOUND";

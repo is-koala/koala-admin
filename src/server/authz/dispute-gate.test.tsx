@@ -587,7 +587,7 @@ describe("the backend is the authority", () => {
   });
 });
 
-/** koala-admin#85: a missing dispute is the shared 404 surface, not an alert. */
+/** koala-admin#85: olmayan uyuşmazlık ortak 404 yüzeyidir, uyarı kutusu değil. */
 describe("a dispute that does not exist", () => {
   it("calls notFound() on the backend's RESOURCE_NOT_FOUND and fetches nothing else", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);

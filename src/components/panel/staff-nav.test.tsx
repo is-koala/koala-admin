@@ -73,10 +73,10 @@ describe("StaffNav groups the screens it was handed", () => {
 });
 
 /**
- * koala-admin#85. Object pages (`/reports/{id}`) are not menu entries, and the
- * shared `error.tsx` / `not-found.tsx` render on those same paths. If the menu
- * only matched the exact href, opening a report — or landing on its 404 —
- * would leave every entry unlit and the operator without a bearing.
+ * koala-admin#85. Nesne sayfaları (`/reports/{id}`) menü girişi değil ve
+ * ortak `error.tsx` / `not-found.tsx` de aynı yollarda çizilir. Menü yalnız
+ * tam href'i eşleseydi bir şikayeti açmak — ya da onun 404'üne düşmek — her
+ * girişi söndürür, operatörü yönsüz bırakırdı.
  */
 describe("StaffNav keeps the section lit on its object pages", () => {
   it("marks the queue current, as an ancestor, when an object under it is open", () => {

@@ -278,10 +278,10 @@ describe("TCKK photos on the object page", () => {
 });
 
 /**
- * koala-admin#85. A review the backend does not have is not a load failure to
- * explain in an alert; it is an address that names nothing, and the shared
- * `not-found.tsx` is the one place that says so. `notFound()` throws, so the
- * render rejects — the digest is how Next recognises it.
+ * koala-admin#85. Backend'de olmayan bir inceleme, uyarı kutusunda açıklanacak
+ * bir yükleme hatası değil; hiçbir kaydı adreslemeyen bir adres, ve bunu
+ * söyleyen tek yer ortak `not-found.tsx`. `notFound()` fırlattığı için render
+ * reddeder — Next onu digest'ten tanır.
  */
 describe("a review that does not exist", () => {
   it("calls notFound() on the backend's RESOURCE_NOT_FOUND rather than drawing an alert", async () => {

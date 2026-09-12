@@ -31,16 +31,16 @@ import { getStaffContext } from "@/server/authz/staff-context";
  */
 
 /**
- * Send a missing record to the panel's 404 surface (koala-admin#85).
+ * Olmayan kaydı panelin 404 yüzeyine gönder (koala-admin#85).
  *
- * Only for object pages — a `/x/{id}` whose one fetch *is* the page. A list
- * page's lookup (`/assignments?atama=`) keeps its inline alert, because
- * `notFound()` would replace the whole list with the 404 view. The call sits
- * in the `catch` rather than the `try`: `notFound()` throws, and a `try`
- * around it would swallow the very interrupt it exists to raise.
+ * Yalnız nesne sayfaları için — tek fetch'i sayfanın kendisi olan `/x/{id}`.
+ * Liste sayfasındaki arama (`/assignments?atama=`) satır içi uyarısını
+ * korur, çünkü `notFound()` listenin tamamını 404 görünümüyle değiştirirdi.
+ * Çağrı `try`de değil `catch`te durur: `notFound()` fırlatır ve etrafındaki
+ * bir `try` tam da yükseltmek için var olduğu kesmeyi yutardı.
  *
- * Deliberately not folded into {@link classifyQueueFailure}: that one is
- * shared with the list pages above.
+ * {@link classifyQueueFailure} içine bilerek katılmadı: onu yukarıdaki liste
+ * sayfaları da paylaşıyor.
  */
 export function notFoundIfMissing(error: unknown): void {
   if (isKoalaApiError(error) && error.isResourceNotFound) {

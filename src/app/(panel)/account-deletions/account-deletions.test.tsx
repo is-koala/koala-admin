@@ -254,7 +254,7 @@ describe("status and paging are backend query parameters", () => {
   });
 });
 
-/** koala-admin#85: a missing request is the shared 404 surface, not an alert. */
+/** koala-admin#85: olmayan talep ortak 404 yüzeyidir, uyarı kutusu değil. */
 describe("a deletion request that does not exist", () => {
   it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {
     stubMe(READER);

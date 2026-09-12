@@ -49,11 +49,11 @@ export const endpointNotFoundBody = {
 };
 
 /**
- * `GET /admin/reports/{id}` for an id the backend has no row for. Every
- * `*_NOT_FOUND` code shares the `RESOURCE_NOT_FOUND` category; that category,
- * inside a complete envelope, is what an object page turns into `notFound()`.
- * Compare `endpointNotFoundBody`: also 404, but the *endpoint* is missing, and
- * a page must not read that as "the record is gone".
+ * Backend'de satırı olmayan bir id için `GET /admin/reports/{id}`. Her
+ * `*_NOT_FOUND` kodu `RESOURCE_NOT_FOUND` kategorisini paylaşır; tam bir
+ * zarfın içindeki bu kategori, nesne sayfasının `notFound()`a çevirdiği şey.
+ * `endpointNotFoundBody` ile karşılaştırın: o da 404, ama eksik olan *uç*;
+ * bir sayfa onu "kayıt silinmiş" diye okumamalı.
  */
 export const resourceNotFoundBody = {
   message: "Şikayet bulunamadı.",

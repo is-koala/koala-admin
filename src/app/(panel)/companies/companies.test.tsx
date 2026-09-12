@@ -527,7 +527,7 @@ describe("unfinished-work copy stays off the screen", () => {
   });
 });
 
-/** koala-admin#85: a missing company is the shared 404 surface, not an alert. */
+/** koala-admin#85: olmayan şirket ortak 404 yüzeyidir, uyarı kutusu değil. */
 describe("a company that does not exist", () => {
   it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {
     stubMe(APPROVER);

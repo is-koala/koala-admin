@@ -409,7 +409,7 @@ describe("a bookmarked marketplace user", () => {
   });
 });
 
-/** koala-admin#85: a missing user is the shared 404 surface, not an alert. */
+/** koala-admin#85: olmayan kullanıcı ortak 404 yüzeyidir, uyarı kutusu değil. */
 describe("a marketplace user that does not exist", () => {
   it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {
     stubMe(READER);
