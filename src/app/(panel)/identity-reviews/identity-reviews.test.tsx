@@ -12,6 +12,7 @@ vi.mock("@/server/auth/session", () => ({
 }));
 
 const { default: IdentityReviewsPage } = await import("./page");
+const { default: IdentityReviewDetailPage } = await import("./[id]/page");
 
 const ADMIN_ME = apiUrl("/admin/me");
 const REVIEWS = apiUrl("/admin/identity-verifications");
@@ -99,9 +100,47 @@ function watchQueue(rows: unknown[]) {
   return seen;
 }
 
+function watchDetail(row: unknown = PENDING_REVIEW, respond?: () => Response) {
+  const seen: { calls: number; reviewId: string | null } = {
+    calls: 0,
+    reviewId: null,
+  };
+
+  server.use(
+    http.get(`${REVIEWS}/:reviewId`, ({ params }) => {
+      seen.calls += 1;
+      seen.reviewId = String(params.reviewId);
+
+      if (respond !== undefined) return respond();
+
+      return HttpResponse.json({
+        success: true,
+        message: "Kimlik incelemesi getirildi.",
+        httpStatus: "200 OK",
+        path: `/admin/identity-verifications/${REVIEW_ID}`,
+        requestId: "rid-identity-one",
+        timeStamp: "2026-09-11T12:00:00.000000000Z",
+        data: row,
+      });
+    }),
+  );
+
+  return seen;
+}
+
 const render = async (params: Record<string, string> = {}) =>
   (
     await renderServerComponent(<IdentityReviewsPage searchParams={Promise.resolve(params)} />)
+  ).replaceAll("<!-- -->", "");
+
+const renderDetail = async (id: string = REVIEW_ID, query: Record<string, string> = {}) =>
+  (
+    await renderServerComponent(
+      <IdentityReviewDetailPage
+        params={Promise.resolve({ id })}
+        searchParams={Promise.resolve(query)}
+      />,
+    )
   ).replaceAll("<!-- -->", "");
 
 describe("who can see the identity review queue", () => {
@@ -115,18 +154,53 @@ describe("who can see the identity review queue", () => {
     expect(html).toContain("403 — Bu sayfa için yetkiniz yok");
     expect(html).not.toContain("Yusuf");
   });
+
+  it("refuses a MODERATOR on the object page and never asks GET by id", async () => {
+    stubMe(MODERATOR, ["MODERATOR"]);
+    const detail = watchDetail();
+
+    const html = await renderDetail();
+
+    expect(detail.calls).toBe(0);
+    expect(html).toContain("403 — Bu sayfa için yetkiniz yok");
+    expect(html).not.toContain("Yusuf");
+  });
 });
 
-describe("TCKK photos on the review page", () => {
-  it("points front and back imgs at the same-origin BFF and never at storage", async () => {
+describe("the queue is not the review", () => {
+  it("links each row to the object page and does not inline the decision form", async () => {
     stubMe(REVIEWER);
+    const detail = watchDetail();
     const queue = watchQueue([PENDING_REVIEW]);
 
-    const html = await render();
+    const html = await render({
+      durum: "PENDING",
+      sirala: "createdAt,desc",
+      boyut: "20",
+      sayfa: "0",
+    });
 
     expect(queue.calls).toBe(1);
     expect(queue.authorization).toBe("Bearer ACCESS-TOKEN");
-    expect(queue.url?.searchParams.get("status")).toBe("PENDING");
+    expect(detail.calls).toBe(0);
+    expect(html).toContain(`/identity-reviews/${REVIEW_ID}?`);
+    expect(html).toContain("durum=PENDING");
+    expect(html).toContain(`/users/${PENDING_REVIEW.userId}`);
+    expect(html).toContain("İncele");
+    expect(html).not.toContain("Kimliği onayla");
+    expect(html).not.toContain("İncelemeyi reddet");
+    expect(html).not.toContain("/api/identity-verifications/");
+    expect(html).not.toContain("s3://");
+    expect(html).not.toContain("ACCESS-TOKEN");
+  });
+});
+
+describe("TCKK photos on the object page", () => {
+  it("points front and back imgs at the same-origin BFF and never at storage", async () => {
+    stubMe(REVIEWER);
+    watchDetail(PENDING_REVIEW);
+
+    const html = await renderDetail();
 
     expect(html).toContain(
       `/api/identity-verifications/${REVIEW_ID}/documents/${FRONT_ID}/download`,
@@ -147,22 +221,38 @@ describe("TCKK photos on the review page", () => {
 
   it("keeps approve and reject when a document id is missing, without an img", async () => {
     stubMe(REVIEWER);
-    watchQueue([
-      {
-        ...PENDING_REVIEW,
-        frontDocumentId: null,
-        backDocumentId: null,
-        fileUrl: undefined,
-        storageKey: undefined,
-      },
-    ]);
+    watchDetail({
+      ...PENDING_REVIEW,
+      frontDocumentId: null,
+      backDocumentId: null,
+      fileUrl: undefined,
+      storageKey: undefined,
+    });
 
-    const html = await render();
+    const html = await renderDetail();
 
     expect(html).not.toContain("/documents/");
     expect(html).toContain("Ön yüz fotoğrafı yok");
     expect(html).toContain("Arka yüz fotoğrafı yok");
     expect(html).toContain("Kimliği onayla");
     expect(html).toContain("İncelemeyi reddet");
+  });
+
+  it("returns a successful decision to the identity queue, carrying the view the operator left", async () => {
+    stubMe(REVIEWER);
+    watchDetail();
+
+    const html = await renderDetail(REVIEW_ID, {
+      durum: "PENDING",
+      sirala: "createdAt,asc",
+      boyut: "40",
+      sayfa: "2",
+    });
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    expect(container.querySelector<HTMLInputElement>('input[name="returnTo"]')?.value).toBe(
+      "/identity-reviews?durum=PENDING&sirala=createdAt%2Casc&boyut=40&sayfa=2",
+    );
   });
 });

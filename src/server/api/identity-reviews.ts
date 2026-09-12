@@ -13,6 +13,7 @@ import type { PageDto } from "./types";
  *
  * ```
  * GET  /admin/identity-verifications?status=PENDING|APPROVED|REJECTED
+ * GET  /admin/identity-verifications/{id}
  * GET  /admin/identity-verifications/{id}/documents/{documentId}/download
  * POST /admin/identity-verifications/{id}/approve
  * POST /admin/identity-verifications/{id}/reject  { reason }
@@ -84,6 +85,20 @@ export function getIdentityReviews(
       status: query.status,
       ...pagingQuery(query.paging),
     },
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+export function identityReviewDetailPath(reviewId: string): string {
+  return `${IDENTITY_REVIEWS_PATH}/${encodeURIComponent(reviewId)}`;
+}
+
+/** `GET /admin/identity-verifications/{reviewId}` — same IdentityReviewDto as the queue. */
+export function getIdentityReview(accessToken: string, reviewId: string): Promise<IdentityReview> {
+  return koalaApi.get({
+    path: identityReviewDetailPath(reviewId),
+    schema: identityReviewSchema,
     accessToken,
     cache: "no-store",
   });

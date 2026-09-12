@@ -7,6 +7,7 @@ import { readPaging } from "./paging";
 import {
   IDENTITY_REVIEW_PAGING,
   approveIdentityReview,
+  getIdentityReview,
   getIdentityReviews,
   identityDocumentDownloadPath,
   identityReviewStatusLabel,
@@ -119,6 +120,50 @@ describe("the identity review queue", () => {
     expect(identityReviewStatusLabel("PENDING")).toBe("Onay bekliyor");
     expect(identityReviewStatusLabel("APPROVED")).toBe("Onaylı");
     expect(identityReviewStatusLabel("REJECTED")).toBe("Reddedildi");
+  });
+});
+
+describe("the identity review object", () => {
+  it("loads GET /admin/identity-verifications/{id} with the same DTO as the queue", async () => {
+    let url: string | null = null;
+    let authorization: string | null = null;
+
+    server.use(
+      http.get(`${REVIEWS}/:reviewId`, ({ request }) => {
+        url = request.url;
+        authorization = request.headers.get("authorization");
+        return HttpResponse.json({
+          success: true,
+          message: "Kimlik incelemesi getirildi.",
+          httpStatus: "200 OK",
+          path: `/admin/identity-verifications/${REVIEW_ID}`,
+          requestId: "rid-identity-one",
+          timeStamp: "2026-09-11T12:00:00.000000000Z",
+          data: { ...PENDING_REVIEW, fileUrl: "s3://secret" },
+        });
+      }),
+    );
+
+    const review = await getIdentityReview("ACCESS-TOKEN", REVIEW_ID);
+
+    expect(url).toBe(`${REVIEWS}/${REVIEW_ID}`);
+    expect(authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(review).toEqual(PENDING_REVIEW);
+    expect(review).not.toHaveProperty("fileUrl");
+  });
+
+  it("escapes the review id on the object path", async () => {
+    let url: string | null = null;
+    server.use(
+      http.get(`${REVIEWS}/*`, ({ request }) => {
+        url = request.url;
+        return HttpResponse.json({ success: false, message: "yok" }, { status: 404 });
+      }),
+    );
+
+    await getIdentityReview("ACCESS-TOKEN", "../../me").catch(() => undefined);
+
+    expect(url).toContain("%2F");
   });
 });
 

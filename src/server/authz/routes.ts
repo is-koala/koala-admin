@@ -215,6 +215,17 @@ export const ROUTES = [
   },
   {
     /**
+     * Kuyruk `GET /admin/identity-verifications`; nesne
+     * `GET /admin/identity-verifications/{id}`. İkisi de `identity.review`.
+     * Detay menüde yok — kuyruktan açılır.
+     */
+    path: "/identity-reviews/[id]",
+    title: "Kimlik incelemesi",
+    access: "permission",
+    permission: "identity.review",
+  },
+  {
+    /**
      * Kuyruk `GET /admin/disputes`; nesne `GET /admin/disputes/{id}`. İkisi de
      * `dispute.resolve`. Detay menüde yok — kuyruktan açılır.
      */

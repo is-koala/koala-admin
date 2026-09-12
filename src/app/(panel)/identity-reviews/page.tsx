@@ -1,12 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 
-import { IdentityReviewDecision } from "@/app/(panel)/identity-reviews/decision-form";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
-  Badge,
   EmptyState,
   Table,
   TableBody,
@@ -16,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
-import { isUuid, userHref } from "@/lib/panel-href";
+import { identityReviewHref, isUuid, userHref } from "@/lib/panel-href";
 import {
   IDENTITY_REVIEW_PAGING,
   IDENTITY_REVIEW_STATUSES,
@@ -37,8 +34,15 @@ import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
+import { IdentityStatusBadge, identityDisplayName } from "./identity-review";
+
 export const metadata: Metadata = { title: "Kimlik incelemeleri" };
 
+/**
+ * Kimlik belge kuyruğu. Liste `IdentityReviewDto`; inceleme ve karar
+ * `/identity-reviews/[id]` üzerinde. Kapı kuyruğu sarar: `identity.review` yoksa
+ * GET hiç çıkmaz.
+ */
 export default async function IdentityReviewsPage({
   searchParams,
 }: {
@@ -50,7 +54,7 @@ export default async function IdentityReviewsPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Kimlik belge kuyruğu"
-        description="Yüklenen TCKK ön ve arka fotoğraflarını inceleyip onaylayın veya gerekçesiyle reddedin. Onay kimlik damgasını çip olmadan koyar ve geri alınamaz."
+        description="Yüklenen TCKK ön ve arka fotoğraflarını inceleyip onaylayın veya gerekçesiyle reddedin. Onay kimlik damgasını çip olmadan koyar ve geri alınamaz. Karar inceleme sayfasındadır."
       />
 
       <RequirePermission permission="identity.review">
@@ -82,10 +86,7 @@ async function IdentityQueue({ params }: { params: SearchParams }) {
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
   };
-  const returnTo = `/identity-reviews?${new URLSearchParams({
-    ...viewState,
-    sayfa: String(paging.page),
-  }).toString()}`;
+  const objectQuery = { ...viewState, sayfa: String(paging.page) };
 
   const filters = (
     <QueueFilters
@@ -107,7 +108,7 @@ async function IdentityQueue({ params }: { params: SearchParams }) {
         },
       ]}
       carry={{ boyut: String(paging.size) }}
-      notice="Durum ve sıralama kuyruğu süzer. İnceleme detayında TCKK ön ve arka fotoğraflarını görürsünüz."
+      notice="Durum ve sıralama kuyruğu süzer. TCKK fotoğrafları ve karar inceleme sayfasındadır."
     />
   );
 
@@ -141,60 +142,68 @@ async function IdentityQueue({ params }: { params: SearchParams }) {
           description="Başka bir durum seçebilir ya da kuyruğu daha sonra yenileyebilirsiniz."
         />
       ) : (
-        <>
-          <Table caption="Kimlik belge kuyruğu">
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Ad soyad</TableHeaderCell>
-                <TableHeaderCell>TCKN</TableHeaderCell>
-                <TableHeaderCell>Durum</TableHeaderCell>
-                <TableHeaderCell>Gönderim</TableHeaderCell>
-                <TableHeaderCell>Detay</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {reviews.map((review) => (
-                <TableRow key={review.id}>
-                  <TableCell>
-                    {review.userId !== null && isUuid(review.userId) ? (
-                      <Link href={userHref(review.userId)} className="text-brand hover:underline">
-                        {displayName(review)}
-                      </Link>
-                    ) : (
-                      displayName(review)
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono text-xs">
-                      {review.tcIdentityNumber ?? EMPTY_VALUE}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={review.status} />
-                  </TableCell>
-                  <TableCell>{formatDateTime(review.createdAt)}</TableCell>
-                  <TableCell>
-                    <a href={`#inceleme-${review.id}`} className="text-brand hover:underline">
-                      İncele
-                    </a>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-
-          <section className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold">İnceleme detayı ve karar</h2>
+        <Table caption="Kimlik belge kuyruğu">
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell>Ad soyad</TableHeaderCell>
+              <TableHeaderCell>Kullanıcı</TableHeaderCell>
+              <TableHeaderCell>TCKN</TableHeaderCell>
+              <TableHeaderCell>Durum</TableHeaderCell>
+              <TableHeaderCell>Gönderim</TableHeaderCell>
+              <TableHeaderCell>Detay</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {reviews.map((review) => (
-              <ReviewDetail key={review.id} review={review} returnTo={returnTo} />
+              <TableRow key={review.id}>
+                <TableCell>
+                  <Link
+                    href={identityReviewHref(review.id, objectQuery)}
+                    className="text-brand hover:underline"
+                  >
+                    {identityDisplayName(review)}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <UserLink review={review} />
+                </TableCell>
+                <TableCell>
+                  <span className="font-mono text-xs">
+                    {review.tcIdentityNumber ?? EMPTY_VALUE}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <IdentityStatusBadge status={review.status} />
+                </TableCell>
+                <TableCell>{formatDateTime(review.createdAt)}</TableCell>
+                <TableCell>
+                  <Link
+                    href={identityReviewHref(review.id, objectQuery)}
+                    className="text-brand hover:underline"
+                  >
+                    İncele
+                  </Link>
+                </TableCell>
+              </TableRow>
             ))}
-          </section>
-        </>
+          </TableBody>
+        </Table>
       )}
 
       <QueuePager window={pageWindow(page)} state={viewState} unit="inceleme" />
     </div>
   );
+}
+
+function UserLink({ review }: { review: IdentityReview }) {
+  if (review.userId !== null && isUuid(review.userId)) {
+    return (
+      <Link href={userHref(review.userId)} className="font-mono text-xs text-brand hover:underline">
+        {review.userId}
+      </Link>
+    );
+  }
+  return <span className="font-mono text-xs">{review.userId ?? EMPTY_VALUE}</span>;
 }
 
 function DecisionSuccess({ result }: { result: "approved" | "rejected" }) {
@@ -204,141 +213,4 @@ function DecisionSuccess({ result }: { result: "approved" | "rejected" }) {
       yüklendi.
     </p>
   );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const tone = status === "APPROVED" ? "success" : status === "REJECTED" ? "danger" : "warning";
-  return <Badge tone={tone}>{identityReviewStatusLabel(status)}</Badge>;
-}
-
-function displayName(review: IdentityReview): string {
-  const name = [review.firstName, review.lastName].filter(Boolean).join(" ").trim();
-  return name.length > 0 ? name : EMPTY_VALUE;
-}
-
-function ReviewDetail({ review, returnTo }: { review: IdentityReview; returnTo: string }) {
-  return (
-    <details
-      id={`inceleme-${review.id}`}
-      className="rounded-xl border border-border-subtle bg-surface px-4 py-3 shadow-sm"
-    >
-      <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-ink">
-        <span>{displayName(review)}</span>
-        <StatusBadge status={review.status} />
-        <span className="font-mono text-xs text-ink-subtle">{review.id.slice(0, 8)}</span>
-      </summary>
-
-      <div className="mt-4 flex flex-col gap-4">
-        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[10rem_1fr]">
-          <Row label="İnceleme" value={<span className="font-mono text-xs">{review.id}</span>} />
-          <Row
-            label="Kullanıcı"
-            value={
-              review.userId !== null && isUuid(review.userId) ? (
-                <Link
-                  href={userHref(review.userId)}
-                  className="font-mono text-xs text-brand hover:underline"
-                >
-                  {review.userId}
-                </Link>
-              ) : (
-                <span className="font-mono text-xs">{review.userId ?? EMPTY_VALUE}</span>
-              )
-            }
-          />
-          <Row label="Ad soyad" value={displayName(review)} />
-          <Row
-            label="TCKN"
-            value={
-              <span className="font-mono text-sm">{review.tcIdentityNumber ?? EMPTY_VALUE}</span>
-            }
-          />
-          <Row
-            label="Belge no"
-            value={
-              <span className="font-mono text-sm">{review.tcDocumentNumber ?? EMPTY_VALUE}</span>
-            }
-          />
-          <Row label="Doğum tarihi" value={review.birthDate ?? EMPTY_VALUE} />
-          <Row label="Gönderim" value={formatDateTime(review.createdAt)} />
-          <Row label="Ret gerekçesi" value={review.rejectionReason ?? EMPTY_VALUE} />
-        </dl>
-
-        <section className="flex flex-col gap-3" aria-labelledby={`tckk-${review.id}`}>
-          <h3 id={`tckk-${review.id}`} className="text-sm font-semibold text-ink">
-            TCKK fotoğrafları
-          </h3>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <DocumentPhoto
-              reviewId={review.id}
-              documentId={review.frontDocumentId}
-              label="Ön yüz"
-              emptyLabel="Ön yüz fotoğrafı yok"
-              alt="TCKK ön yüz"
-            />
-            <DocumentPhoto
-              reviewId={review.id}
-              documentId={review.backDocumentId}
-              label="Arka yüz"
-              emptyLabel="Arka yüz fotoğrafı yok"
-              alt="TCKK arka yüz"
-            />
-          </div>
-        </section>
-
-        {review.status === "PENDING" ? (
-          <IdentityReviewDecision reviewId={review.id} returnTo={returnTo} />
-        ) : (
-          <p className="rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 text-sm text-ink-muted">
-            Bu inceleme sonuçlanmış. Backend ikinci bir kararı kabul etmez.
-          </p>
-        )}
-      </div>
-    </details>
-  );
-}
-
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <>
-      <dt className="text-sm text-ink-muted">{label}</dt>
-      <dd className="text-sm text-ink">{value}</dd>
-    </>
-  );
-}
-
-function DocumentPhoto({
-  reviewId,
-  documentId,
-  label,
-  emptyLabel,
-  alt,
-}: {
-  reviewId: string;
-  documentId: string | null;
-  label: string;
-  emptyLabel: string;
-  alt: string;
-}) {
-  return (
-    <figure className="flex flex-col gap-2">
-      <figcaption className="text-sm font-medium text-ink">{label}</figcaption>
-      {documentId === null ? (
-        <p className="rounded-lg border border-border-subtle bg-surface-sunken px-3 py-8 text-center text-sm text-ink-muted">
-          {emptyLabel}
-        </p>
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element -- same-origin BFF personel çerezini ister; next/image göndermez.
-        <img
-          src={identityPhotoSrc(reviewId, documentId)}
-          alt={alt}
-          className="max-h-[28rem] w-full rounded-lg border border-border-subtle bg-surface-sunken object-contain"
-        />
-      )}
-    </figure>
-  );
-}
-
-function identityPhotoSrc(reviewId: string, documentId: string): string {
-  return `/api/identity-verifications/${encodeURIComponent(reviewId)}/documents/${encodeURIComponent(documentId)}/download`;
 }
