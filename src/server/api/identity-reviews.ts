@@ -61,6 +61,29 @@ export const identityReviewSchema = z.object({
 
 export type IdentityReview = z.infer<typeof identityReviewSchema>;
 
+/**
+ * Onayın dört kanıtı var mı? Panel ve Server Action aynı kümeyi kullanır ki
+ * UI'ın kapattığını eylem de reddetsin; eski iki fotoğraflı PENDING kayıt
+ * ekranda açık durup POST'ta geçmesin.
+ */
+export function identityReviewDocumentsComplete(
+  review: Pick<
+    IdentityReview,
+    "selfieDocumentId" | "frontDocumentId" | "backDocumentId" | "togetherDocumentId"
+  >,
+): boolean {
+  return (
+    hasDocumentId(review.selfieDocumentId) &&
+    hasDocumentId(review.frontDocumentId) &&
+    hasDocumentId(review.backDocumentId) &&
+    hasDocumentId(review.togetherDocumentId)
+  );
+}
+
+function hasDocumentId(value: string | null): boolean {
+  return value !== null && value.trim().length > 0;
+}
+
 const STATUS_LABELS: Record<IdentityReviewStatus, string> = {
   PENDING: "Onay bekliyor",
   APPROVED: "Onaylı",

@@ -4,9 +4,14 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
 import { isUuid, userHref } from "@/lib/panel-href";
-import { identityReviewStatusLabel, type IdentityReview } from "@/server/api/identity-reviews";
+import {
+  identityReviewDocumentsComplete,
+  identityReviewStatusLabel,
+  type IdentityReview,
+} from "@/server/api/identity-reviews";
 
 import { IdentityReviewDecision } from "./decision-form";
+import { DocumentPhoto } from "./document-photo";
 
 export function IdentityStatusBadge({ status }: { status: string }) {
   const tone = status === "APPROVED" ? "success" : status === "REJECTED" ? "danger" : "warning";
@@ -99,7 +104,11 @@ export function IdentityReviewBody({
       </section>
 
       {review.status === "PENDING" ? (
-        <IdentityReviewDecision reviewId={review.id} returnTo={returnTo} />
+        <IdentityReviewDecision
+          reviewId={review.id}
+          returnTo={returnTo}
+          canApprove={identityReviewDocumentsComplete(review)}
+        />
       ) : (
         <p className="rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 text-sm text-ink-muted">
           Bu inceleme sonuçlanmış. Backend ikinci bir kararı kabul etmez.
@@ -116,40 +125,4 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
       <dd className="text-sm text-ink">{value}</dd>
     </>
   );
-}
-
-function DocumentPhoto({
-  reviewId,
-  documentId,
-  label,
-  emptyLabel,
-  alt,
-}: {
-  reviewId: string;
-  documentId: string | null;
-  label: string;
-  emptyLabel: string;
-  alt: string;
-}) {
-  return (
-    <figure className="flex flex-col gap-2">
-      <figcaption className="text-sm font-medium text-ink">{label}</figcaption>
-      {documentId === null ? (
-        <p className="rounded-lg border border-border-subtle bg-surface-sunken px-3 py-8 text-center text-sm text-ink-muted">
-          {emptyLabel}
-        </p>
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element -- same-origin BFF personel çerezini ister; next/image göndermez.
-        <img
-          src={identityPhotoSrc(reviewId, documentId)}
-          alt={alt}
-          className="max-h-[28rem] w-full rounded-lg border border-border-subtle bg-surface-sunken object-contain"
-        />
-      )}
-    </figure>
-  );
-}
-
-function identityPhotoSrc(reviewId: string, documentId: string): string {
-  return `/api/identity-verifications/${encodeURIComponent(reviewId)}/documents/${encodeURIComponent(documentId)}/download`;
 }
