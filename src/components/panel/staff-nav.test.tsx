@@ -71,3 +71,32 @@ describe("StaffNav groups the screens it was handed", () => {
     expect(screen.getByText("Operasyon")).toBeInTheDocument();
   });
 });
+
+/**
+ * koala-admin#85. Object pages (`/reports/{id}`) are not menu entries, and the
+ * shared `error.tsx` / `not-found.tsx` render on those same paths. If the menu
+ * only matched the exact href, opening a report — or landing on its 404 —
+ * would leave every entry unlit and the operator without a bearing.
+ */
+describe("StaffNav keeps the section lit on its object pages", () => {
+  it("marks the queue current, as an ancestor, when an object under it is open", () => {
+    render(
+      <StaffNav
+        entries={navigationFor(["content.moderate", "user.read"])}
+        currentPath="/reports/a1000000-0000-4000-8000-000000000001"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Şikayetler" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    expect(screen.getByRole("link", { name: "Kullanıcılar" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("matches on a path segment, not on a string prefix", () => {
+    render(<StaffNav entries={navigationFor(["user.read"])} currentPath="/users-archive" />);
+
+    expect(screen.getByRole("link", { name: "Kullanıcılar" })).not.toHaveAttribute("aria-current");
+  });
+});

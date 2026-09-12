@@ -5,8 +5,10 @@ import { navigationFor } from "@/server/authz/routes";
 
 import { PanelShell } from "./panel-shell";
 
+const pathname = vi.hoisted(() => ({ current: "/identity-reviews" }));
+
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/identity-reviews",
+  usePathname: () => pathname.current,
 }));
 
 /**
@@ -53,5 +55,30 @@ describe("PanelShell", () => {
     expect(review).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("Operasyon")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Güncel durum" })).toHaveAttribute("href", "/");
+  });
+
+  it("keeps the section lit on an object page, where the shared boundaries also render", () => {
+    pathname.current = "/identity-reviews/a1000000-0000-4000-8000-000000000001";
+    try {
+      render(
+        <PanelShell
+          staff={{ displayName: "Yusuf Açmacı", email: "yusuf@iskoala.com" }}
+          entries={navigationFor(["identity.review"])}
+          signOut={signOut}
+        >
+          <p>Nesne</p>
+        </PanelShell>,
+      );
+
+      expect(screen.getByRole("link", { name: "Kimlik incelemeleri" })).toHaveAttribute(
+        "aria-current",
+        "true",
+      );
+      expect(screen.getByRole("link", { name: "Güncel durum" })).not.toHaveAttribute(
+        "aria-current",
+      );
+    } finally {
+      pathname.current = "/identity-reviews";
+    }
   });
 });

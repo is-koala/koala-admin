@@ -3,7 +3,7 @@ import type { Route } from "next";
 
 import type { DrawnNavEntry } from "./nav-types";
 import { NavIcon } from "./nav-icons";
-import { navItemClass } from "./nav-item";
+import { isWithinSection, navItemClass } from "./nav-item";
 
 export interface StaffNavProps {
   /**
@@ -107,14 +107,17 @@ export function StaffNav({
             )}
             <ul className="flex flex-col gap-0.5" aria-labelledby={`nav-${group.id}`}>
               {group.entries.map((entry) => {
-                const active = currentPath === entry.href;
+                const exact = currentPath === entry.href;
+                const active = exact || isWithinSection(currentPath, entry.href);
                 return (
                   <li key={entry.href}>
                     <Link
                       // DrawnNavEntry.href string çünkü chrome `@/server`'a
                       // bağlanmıyor; href'lerin kaynağı hâlâ yalnız kayıt.
                       href={entry.href as Route}
-                      aria-current={active ? "page" : undefined}
+                      // "page" yalnız girişin kendi sayfasında; bir nesne
+                      // sayfasında giriş "current" ama "bu sayfa" değil.
+                      aria-current={exact ? "page" : active ? "true" : undefined}
                       title={entry.label}
                       className={navItemClass(active)}
                     >
