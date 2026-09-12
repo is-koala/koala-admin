@@ -515,11 +515,15 @@ describe("unfinished-work copy stays off the screen", () => {
 });
 
 /**
- * koala-admin#85. The backend's `REPORT_NOT_FOUND` is the shared 404 surface.
- * The other 404 — `ENDPOINT_NOT_FOUND`, the route itself missing — is not:
- * that one is a deployment problem and stays an alert with its request id,
- * because "the record is gone" would send the operator looking for a deletion
- * that never happened.
+ * koala-admin#85. Backend'in `REPORT_NOT_FOUND`u ortak 404 yüzeyidir. Öteki
+ * 404 — `ENDPOINT_NOT_FOUND`, ucun kendisinin yokluğu — değildir: o bir
+ * dağıtım sorunudur ve istek numarasıyla uyarı olarak kalır, çünkü "kayıt
+ * silinmiş" operatörü hiç olmamış bir silmeyi aramaya gönderirdi.
+ *
+ * Son test sırayı sabitler: `notFound()` kapının *içinde* çalışır. İzni
+ * olmayan kişi bozuk bir id ile de 403 görür ve hiçbir istek çıkmaz; Next'in
+ * "notFound()'u her await'ten önce koyun" öğüdü çağrıyı kapının üstüne
+ * taşımaya davet eder ve bu test o taşımayı kırmızıya çevirir.
  */
 describe("a report that does not exist", () => {
   it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {
@@ -576,5 +580,25 @@ describe("a report that does not exist", () => {
     expect(html).toContain("Şikayet detayı yüklenemedi.");
     expect(html).toContain("ENDPOINT_NOT_FOUND");
     expect(html).toContain(endpointNotFoundBody.requestId);
+  });
+
+  it("answers a malformed id with the permission gate, not the 404, when the actor lacks content.moderate", async () => {
+    stubMe(CATALOG_EDITOR, ["CATALOG_EDITOR"]);
+    let calls = 0;
+    server.use(
+      http.get(`${REPORTS}/:reportId`, () => {
+        calls += 1;
+        return HttpResponse.json(resourceNotFoundBody, { status: 404 });
+      }),
+    );
+
+    const outcome = await renderDetail("not-a-uuid").then(
+      (html) => ({ html, thrown: null as unknown }),
+      (error: unknown) => ({ html: null, thrown: error }),
+    );
+
+    expect(outcome.thrown).toBeNull();
+    expect(calls).toBe(0);
+    expect(outcome.html).toContain("403 — Bu sayfa için yetkiniz yok");
   });
 });
