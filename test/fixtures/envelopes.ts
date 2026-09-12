@@ -48,6 +48,26 @@ export const endpointNotFoundBody = {
   timeStamp: "2026-09-05T22:58:54.787343086Z",
 };
 
+/**
+ * `GET /admin/reports/{id}` for an id the backend has no row for. Every
+ * `*_NOT_FOUND` code shares the `RESOURCE_NOT_FOUND` category; that category,
+ * inside a complete envelope, is what an object page turns into `notFound()`.
+ * Compare `endpointNotFoundBody`: also 404, but the *endpoint* is missing, and
+ * a page must not read that as "the record is gone".
+ */
+export const resourceNotFoundBody = {
+  message: "Şikayet bulunamadı.",
+  httpStatus: "404 NOT_FOUND",
+  errorCode: "REPORT_NOT_FOUND",
+  errorCategory: "RESOURCE_NOT_FOUND",
+  requestId: "4f2a9c1e-7b3d-4e55-9a10-2c8d6f0b1e77",
+  path: "/admin/reports/a1000000-0000-4000-8000-000000000001",
+  resource: "report",
+  resourceId: "a1000000-0000-4000-8000-000000000001",
+  success: false,
+  timeStamp: "2026-09-11T13:00:00.000000000Z",
+};
+
 /** `GET /admin/job-categories` without a token. */
 export const authenticationRequiredBody = {
   message: "You must be signed in to continue.",

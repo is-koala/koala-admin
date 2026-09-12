@@ -1,7 +1,7 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
+import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -406,5 +406,54 @@ describe("a bookmarked marketplace user", () => {
     expect(seen.reportCalls).toBe(1);
     expect(html).toContain("Açık şikayetler");
     expect(html).toContain(`kullanici=${user.id}`);
+  });
+});
+
+/** koala-admin#85: a missing user is the shared 404 surface, not an alert. */
+describe("a marketplace user that does not exist", () => {
+  it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {
+    stubMe(READER);
+    const user = row();
+    let calls = 0;
+    server.use(
+      http.get(`${USERS}/${user.id}`, () => {
+        calls += 1;
+        return HttpResponse.json(
+          { ...resourceNotFoundBody, errorCode: "USER_NOT_FOUND", path: `/admin/users/${user.id}` },
+          { status: 404 },
+        );
+      }),
+    );
+
+    const thrown = await renderServerComponent(
+      <UserDetailPage params={Promise.resolve({ id: user.id })} />,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(calls).toBe(1);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+
+  it("treats an id that cannot be a UUID the same way, without asking the backend", async () => {
+    stubMe(READER);
+    let calls = 0;
+    server.use(
+      http.get(`${USERS}/:userId`, () => {
+        calls += 1;
+        return HttpResponse.json(resourceNotFoundBody, { status: 404 });
+      }),
+    );
+
+    const thrown = await renderServerComponent(
+      <UserDetailPage params={Promise.resolve({ id: "not-a-uuid" })} />,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(calls).toBe(0);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });

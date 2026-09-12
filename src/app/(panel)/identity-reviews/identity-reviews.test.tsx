@@ -1,7 +1,7 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
+import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -274,5 +274,48 @@ describe("TCKK photos on the object page", () => {
     expect(container.querySelector<HTMLInputElement>('input[name="returnTo"]')?.value).toBe(
       "/identity-reviews?durum=PENDING&sirala=createdAt%2Casc&boyut=40&sayfa=2",
     );
+  });
+});
+
+/**
+ * koala-admin#85. A review the backend does not have is not a load failure to
+ * explain in an alert; it is an address that names nothing, and the shared
+ * `not-found.tsx` is the one place that says so. `notFound()` throws, so the
+ * render rejects — the digest is how Next recognises it.
+ */
+describe("a review that does not exist", () => {
+  it("calls notFound() on the backend's RESOURCE_NOT_FOUND rather than drawing an alert", async () => {
+    stubMe(REVIEWER);
+    const detail = watchDetail(undefined, () =>
+      HttpResponse.json(
+        {
+          ...resourceNotFoundBody,
+          errorCode: "IDENTITY_VERIFICATION_NOT_FOUND",
+          path: `/admin/identity-verifications/${REVIEW_ID}`,
+        },
+        { status: 404 },
+      ),
+    );
+
+    const thrown = await renderDetail().then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(detail.calls).toBe(1);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+
+  it("treats an id that cannot be a UUID the same way, without asking the backend", async () => {
+    stubMe(REVIEWER);
+    const detail = watchDetail();
+
+    const thrown = await renderDetail("not-a-uuid").then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(detail.calls).toBe(0);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });

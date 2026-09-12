@@ -5,6 +5,7 @@ import {
   authenticationRequiredBody,
   endpointNotFoundBody,
   jobCategoriesSuccessBody,
+  resourceNotFoundBody,
   validationFailedBody,
 } from "../../../test/fixtures/envelopes";
 
@@ -113,6 +114,21 @@ describe("toKoalaApiError", () => {
     expect(error.errorCategory).toBe("AUTHENTICATION_REQUIRED");
     expect(error.isAuthFailure).toBe(true);
     expect(error.isForbidden).toBe(false);
+  });
+
+  it("classifies a missing record so an object page can answer 404, and only then", () => {
+    const missing = toKoalaApiError(resourceNotFoundBody, context({ status: 404 }));
+    expect(missing.isResourceNotFound).toBe(true);
+
+    // Same status, different meaning: the endpoint is gone, not the record.
+    const endpoint = toKoalaApiError(endpointNotFoundBody, context({ status: 404 }));
+    expect(endpoint.isResourceNotFound).toBe(false);
+
+    // A 404 with no envelope is a proxy or a misroute; only the backend's own
+    // ErrorResult is allowed to say "this record does not exist".
+    const proxy = toKoalaApiError("<html>404</html>", context({ status: 404 }));
+    expect(proxy.errorCategory).toBe("RESOURCE_NOT_FOUND");
+    expect(proxy.isResourceNotFound).toBe(false);
   });
 
   it("salvages a body that is not a contract-shaped ErrorResult", () => {

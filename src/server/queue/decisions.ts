@@ -1,5 +1,7 @@
 import "server-only";
 
+import { notFound } from "next/navigation";
+
 import {
   decisionFailed,
   decisionRejected,
@@ -27,6 +29,24 @@ import { getStaffContext } from "@/server/authz/staff-context";
  * 403 the operator has to interpret, and so the panel does not spend a mutating
  * request finding out something it already knows.
  */
+
+/**
+ * Send a missing record to the panel's 404 surface (koala-admin#85).
+ *
+ * Only for object pages — a `/x/{id}` whose one fetch *is* the page. A list
+ * page's lookup (`/assignments?atama=`) keeps its inline alert, because
+ * `notFound()` would replace the whole list with the 404 view. The call sits
+ * in the `catch` rather than the `try`: `notFound()` throws, and a `try`
+ * around it would swallow the very interrupt it exists to raise.
+ *
+ * Deliberately not folded into {@link classifyQueueFailure}: that one is
+ * shared with the list pages above.
+ */
+export function notFoundIfMissing(error: unknown): void {
+  if (isKoalaApiError(error) && error.isResourceNotFound) {
+    notFound();
+  }
+}
 
 /** Turn anything thrown by a queue fetch into something a screen can render. */
 export function classifyQueueFailure(error: unknown): QueueFailure {

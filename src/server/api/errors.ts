@@ -73,6 +73,18 @@ export class KoalaApiError extends Error {
   get isValidationFailure(): boolean {
     return this.errorCategory === "VALIDATION_FAILED";
   }
+
+  /**
+   * True when the backend itself said the addressed record does not exist.
+   *
+   * Envelope required on purpose: a 404 with no `ErrorResult` is a proxy or a
+   * misroute, and `ENDPOINT_NOT_FOUND` is the route missing, not the record.
+   * Only this combination is what an object page may turn into `notFound()`
+   * (koala-admin#85); the rest stay load failures with their request id.
+   */
+  get isResourceNotFound(): boolean {
+    return this.hasContractEnvelope && this.errorCategory === "RESOURCE_NOT_FOUND";
+  }
 }
 
 export function isKoalaApiError(value: unknown): value is KoalaApiError {

@@ -1,7 +1,11 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
+import {
+  adminMeSuccessBody,
+  endpointNotFoundBody,
+  resourceNotFoundBody,
+} from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -507,5 +511,70 @@ describe("unfinished-work copy stays off the screen", () => {
     const failed = await render();
     expect(failed).toContain("Şikayet kuyruğu yüklenemedi.");
     expect(failed).not.toContain("Backend&#x27;in veremedikleri");
+  });
+});
+
+/**
+ * koala-admin#85. The backend's `REPORT_NOT_FOUND` is the shared 404 surface.
+ * The other 404 — `ENDPOINT_NOT_FOUND`, the route itself missing — is not:
+ * that one is a deployment problem and stays an alert with its request id,
+ * because "the record is gone" would send the operator looking for a deletion
+ * that never happened.
+ */
+describe("a report that does not exist", () => {
+  it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {
+    stubMe(MODERATOR);
+    let calls = 0;
+    server.use(
+      http.get(`${REPORTS}/:reportId`, () => {
+        calls += 1;
+        return HttpResponse.json(resourceNotFoundBody, { status: 404 });
+      }),
+    );
+
+    const thrown = await renderDetail().then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(calls).toBe(1);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+
+  it("treats an id that cannot be a UUID the same way, without asking the backend", async () => {
+    stubMe(MODERATOR);
+    let calls = 0;
+    server.use(
+      http.get(`${REPORTS}/:reportId`, () => {
+        calls += 1;
+        return HttpResponse.json(resourceNotFoundBody, { status: 404 });
+      }),
+    );
+
+    const thrown = await renderDetail("not-a-uuid").then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(calls).toBe(0);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+
+  it("keeps a missing endpoint as a load failure with its request id", async () => {
+    stubMe(MODERATOR);
+    server.use(
+      http.get(`${REPORTS}/:reportId`, () =>
+        HttpResponse.json(
+          { ...endpointNotFoundBody, path: `/admin/reports/${row().id}` },
+          { status: 404 },
+        ),
+      ),
+    );
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Şikayet detayı yüklenemedi.");
+    expect(html).toContain("ENDPOINT_NOT_FOUND");
+    expect(html).toContain(endpointNotFoundBody.requestId);
   });
 });

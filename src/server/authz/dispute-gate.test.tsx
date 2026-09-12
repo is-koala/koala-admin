@@ -1,7 +1,7 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { adminMeSuccessBody } from "../../../test/fixtures/envelopes";
+import { adminMeSuccessBody, resourceNotFoundBody } from "../../../test/fixtures/envelopes";
 import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment";
 import { apiUrl, server } from "../../../test/msw";
 import { renderServerComponent } from "../../../test/render-server";
@@ -584,5 +584,49 @@ describe("the backend is the authority", () => {
 
     expect(html).toContain("Son işlemler");
     expect(html).toContain("koala-backend#15");
+  });
+});
+
+/** koala-admin#85: a missing dispute is the shared 404 surface, not an alert. */
+describe("a dispute that does not exist", () => {
+  it("calls notFound() on the backend's RESOURCE_NOT_FOUND and fetches nothing else", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    const dispute = watchDispute(() =>
+      HttpResponse.json(
+        {
+          ...resourceNotFoundBody,
+          errorCode: "DISPUTE_NOT_FOUND",
+          path: `/admin/disputes/${DISPUTE}`,
+        },
+        { status: 404 },
+      ),
+    );
+    const summary = watchSummary();
+    const evidence = watchEvidence();
+
+    const thrown = await renderDetail().then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(dispute.calls).toBe(1);
+    expect(summary.calls).toBe(0);
+    expect(evidence.calls).toBe(0);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+
+  it("treats an id that cannot be a UUID the same way, without asking the backend", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    const dispute = watchDispute();
+
+    const thrown = await renderServerComponent(
+      <DisputeDetailPage params={Promise.resolve({ id: "not-a-uuid" })} />,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(dispute.calls).toBe(0);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });

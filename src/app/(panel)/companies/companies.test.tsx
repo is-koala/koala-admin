@@ -7,7 +7,7 @@ import {
   reviewCompany,
   type CompanyReviewOverrides,
 } from "../../../../test/fixtures/companies";
-import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
+import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -524,5 +524,43 @@ describe("unfinished-work copy stays off the screen", () => {
 
     expect(html).toContain("Şirket kuyruğu yüklenemedi.");
     expect(html).not.toContain("İnceleme verisinin sınırı");
+  });
+});
+
+/** koala-admin#85: a missing company is the shared 404 surface, not an alert. */
+describe("a company that does not exist", () => {
+  it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {
+    stubMe(APPROVER);
+    const detail = watchDetail(undefined, () =>
+      HttpResponse.json(
+        {
+          ...resourceNotFoundBody,
+          errorCode: "COMPANY_NOT_FOUND",
+          path: `/admin/companies/${COMPANY_REVIEW_ID}`,
+        },
+        { status: 404 },
+      ),
+    );
+
+    const thrown = await renderDetail().then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(detail.calls).toBe(1);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+
+  it("treats an id that cannot be a UUID the same way, without asking the backend", async () => {
+    stubMe(APPROVER);
+    const detail = watchDetail();
+
+    const thrown = await renderDetail("not-a-uuid").then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(detail.calls).toBe(0);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });
