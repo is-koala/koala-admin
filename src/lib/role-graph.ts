@@ -214,13 +214,30 @@ export function wouldViolateSeparationAfterInclude(
   graph: readonly RoleGraphNode[],
   parent: RoleCode,
   child: RoleCode,
+  memberRoles: readonly (readonly RoleCode[])[] = [],
 ): boolean {
-  return graph.some((node) => {
+  const roleWouldViolate = graph.some((node) => {
     const reachesParent = closureWithSelf(graph, node.code).includes(parent);
     if (!reachesParent) return false;
 
     const closureAfterInclude = closureWithSelf(graph, node.code, { from: parent, to: child });
     return separationVerdict(node.code, closureAfterInclude).violates;
+  });
+
+  if (roleWouldViolate) return true;
+
+  return memberRoles.some((held) => {
+    const affected = held.some((role) => closureWithSelf(graph, role).includes(parent));
+    if (!affected) return false;
+
+    const reachedAfterInclude = new Set<RoleCode>();
+    for (const role of held) {
+      for (const reached of closureWithSelf(graph, role, { from: parent, to: child })) {
+        reachedAfterInclude.add(reached);
+      }
+    }
+
+    return membershipSeparationVerdict([...reachedAfterInclude]).violates;
   });
 }
 

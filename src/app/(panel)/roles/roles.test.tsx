@@ -32,6 +32,7 @@ const { default: RolesPage } = await import("./page");
 const ADMIN_ME = apiUrl("/admin/me");
 const ROLES = apiUrl("/admin/roles");
 const PERMISSIONS = apiUrl("/admin/permissions");
+const STAFF = apiUrl("/admin/staff");
 
 const TRUST_LEAD_ID = "9a1c0f10-0003-4c00-8000-000000000008";
 const FINANCE_OFFICER_ID = "9a1c0f10-0003-4c00-8000-000000000009";
@@ -72,6 +73,18 @@ function envelope(path: string, data: unknown) {
     timeStamp: "2026-09-08T09:00:00.000000000Z",
     data,
   };
+}
+
+function staffPage(content: readonly unknown[]) {
+  return envelope("/admin/staff", {
+    content,
+    page: 0,
+    size: 100,
+    totalElements: content.length,
+    totalPages: content.length === 0 ? 0 : 1,
+    first: true,
+    last: true,
+  });
 }
 
 /** Seed'lenmiş grafiğin bir dilimi — ADR-0014 §Rol grafiği'nin kenarlarıyla. */
@@ -169,8 +182,9 @@ function watchGraph(): {
   readonly roles: number;
   readonly permissions: number;
   readonly details: number;
+  readonly staff: number;
 } {
-  const seen = { roles: 0, permissions: 0, details: 0 };
+  const seen = { roles: 0, permissions: 0, details: 0, staff: 0 };
 
   server.use(
     http.get(ROLES, () => {
@@ -180,6 +194,10 @@ function watchGraph(): {
     http.get(PERMISSIONS, () => {
       seen.permissions += 1;
       return HttpResponse.json(envelope("/admin/permissions", PERMISSION_ROWS));
+    }),
+    http.get(STAFF, () => {
+      seen.staff += 1;
+      return HttpResponse.json(staffPage([]));
     }),
     http.get(`${ROLES}/:roleId`, ({ params }) => {
       seen.details += 1;
@@ -431,6 +449,56 @@ describe("görev ayrılığı: backend kuralının arayüzdeki ön izlemesi", ()
     const option =
       block.match(new RegExp(`<option value="[^"]*:FINANCE_OFFICER"[^>]*>[^<]*</option>`))?.[0] ??
       "";
+
+    expect(option).toContain("disabled");
+    expect(option).toContain("görev ayrılığını bozar; backend 409 döner");
+  });
+
+  it("rol tek dalda kalsa bile mevcut personeli iki dala taşıyacak kapsamayı seçilemez yapıyor", async () => {
+    const catalogEditor = {
+      id: "9a1c0f10-0003-4c00-8000-000000000001",
+      code: "CATALOG_EDITOR",
+      name: "Katalog editörü",
+      permissions: [],
+      includes: [],
+    };
+    stubMe(["role.manage", "staff.read"]);
+    watchGraph();
+    server.use(
+      http.get(ROLES, () =>
+        HttpResponse.json(envelope("/admin/roles", [...ROLE_ROWS, catalogEditor])),
+      ),
+      http.get(STAFF, ({ request }) => {
+        const page = Number(new URL(request.url).searchParams.get("page") ?? 0);
+        const affectedMember = {
+          id: "b7f4a2c1-0000-4c00-8000-000000000079",
+          email: "finans-katalog@koala.local",
+          displayName: "Finans ve katalog görevlisi",
+          active: true,
+          mustChangePassword: false,
+          lockedUntil: null,
+          createdAt: "2026-09-12T10:00:00Z",
+          roles: ["FINANCE_OFFICER", "CATALOG_EDITOR"],
+        };
+
+        return HttpResponse.json(
+          envelope("/admin/staff", {
+            content: page === 1 ? [affectedMember] : [],
+            page,
+            size: 100,
+            totalElements: 1,
+            totalPages: 2,
+            first: page === 0,
+            last: page === 1,
+          }),
+        );
+      }),
+    );
+
+    const html = await render();
+    const block = detailBlock(html, "CATALOG_EDITOR");
+    const option =
+      block.match(new RegExp(`<option value="[^"]*:MODERATOR"[^>]*>[^<]*</option>`))?.[0] ?? "";
 
     expect(option).toContain("disabled");
     expect(option).toContain("görev ayrılığını bozar; backend 409 döner");

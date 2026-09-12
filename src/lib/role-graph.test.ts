@@ -15,6 +15,7 @@ import {
   separationVerdictAfterInclude,
   separationVerdictOf,
   wouldCycle,
+  wouldViolateSeparationAfterInclude,
   type RoleGraphNode,
 } from "./role-graph";
 import { asRoleCode } from "./role-identity";
@@ -194,12 +195,11 @@ describe("döngü uyarısı, backend'in 409'unun aynası", () => {
   });
 });
 
-describe("görev ayrılığı teşhisi", () => {
+describe("görev ayrılığı ön izlemesi", () => {
   it("seed'lenmiş grafikte OWNER dışında hiçbir rol iki dalı kapsamıyor", () => {
     // ADR-0014 §Rol grafiği'nin kuralı, seed üzerinde doğrulanmış hâli.
-    // koala-backend'de bunun karşılığı `StaffRoleGraphSeedTest` — ve orada da,
-    // burada da bu bir *seed* denetimi: çalışan bir isteği durduran hiçbir şey
-    // ikimizde de yok.
+    // koala-backend'de bunun karşılığı hem seed testi hem de yazım sırasında
+    // çalışan `StaffSeparationOfDuties`: panel yalnız sonucu önceden gösterir.
     const offenders = SEEDED.filter((entry) => separationVerdictOf(SEEDED, entry.code).violates);
 
     expect(offenders.map((entry) => entry.code)).toEqual([]);
@@ -255,6 +255,25 @@ describe("görev ayrılığı teşhisi", () => {
     ).toBe(false);
   });
 
+  it("rolü iki dala taşımayan kenarı, etkilenen personeli iki dala taşıyorsa reddedilecek sayıyor", () => {
+    /**
+     * CATALOG_EDITOR tek başına dal dışı, MODERATOR yalnız güven dalında.
+     * Fakat CATALOG_EDITOR + FINANCE_OFFICER taşıyan kişi, yeni kenarla güven
+     * ve finans dallarını birleştirir. Backend etkilenen personel
+     * üyeliklerini de denetlediği için panelin ön izlemesi de bunu görmeli.
+     */
+    const memberships = [[role("FINANCE_OFFICER"), role("CATALOG_EDITOR")]];
+
+    expect(
+      wouldViolateSeparationAfterInclude(
+        SEEDED,
+        role("CATALOG_EDITOR"),
+        role("MODERATOR"),
+        memberships,
+      ),
+    ).toBe(true);
+  });
+
   it("tek dala değen bir rolde söylenecek bir şey olmadığını söylüyor", () => {
     expect(
       separationSentence(role("TRUST_LEAD"), separationVerdictOf(SEEDED, role("TRUST_LEAD"))),
@@ -265,9 +284,9 @@ describe("görev ayrılığı teşhisi", () => {
 describe("görev ayrılığı, üyelik tarafında", () => {
   /**
    * Aynı kural, insanın eliyle en kolay kurulan hâli: kimsenin rol grafiğine
-   * dokunması gerekmiyor, bir kişiye iki rol vermek yetiyor. koala-backend
-   * bunu da reddetmiyor (is-koala/koala-backend#133), bu yüzden buradaki
-   * hesap da bir teşhis — bir kapı değil.
+   * dokunması gerekmiyor, bir kişiye iki rol vermek yetiyor. Backend bunu
+   * yazım sırasında reddeder; buradaki hesap aynı sonucun arayüz ön izlemesi,
+   * nihai kapı değildir.
    */
   it("iki dalın rollerini yan yana taşıyan kişiyi ihlal olarak işaretliyor", () => {
     const verdict = membershipSeparationVerdict(

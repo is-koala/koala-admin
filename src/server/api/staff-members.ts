@@ -5,7 +5,7 @@ import { z } from "zod";
 import { asRoleCode } from "@/lib/role-identity";
 
 import { koalaApi, koalaRequestNoData } from "./koala";
-import { pagingQuery, type Paging, type PagingContract } from "./paging";
+import { MAX_PAGE_SIZE, pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import type { PageDto } from "./types";
 
@@ -140,6 +140,35 @@ export function getStaffMembers(
     accessToken,
     cache: "no-store",
   });
+}
+
+/**
+ * Rol grafiği yazımından etkilenebilecek doğrudan üyeliklerin tamamı.
+ *
+ * Backend bir kapsama eklerken yalnız ekrandaki yirmi kişiyi değil bütün
+ * `staff_member_roles` satırlarını denetliyor. `/roles` ön izlemesinin aynı
+ * sonucu verebilmesi için sayfalı ucu son sayfaya kadar okumak zorunda; tek
+ * sayfa sessiz bir yanlış-negatif üretirdi. Bu yalnız `staff.read` taşıyan
+ * çağıranlar içindir ve nihai karar yine yazım ucundaki backend guard'ıdır.
+ */
+export async function getAllStaffMembers(accessToken: string): Promise<StaffMember[]> {
+  const members: StaffMember[] = [];
+  let pageNumber = 0;
+
+  while (true) {
+    const page = await getStaffMembers(accessToken, {
+      query: null,
+      paging: {
+        page: pageNumber,
+        size: MAX_PAGE_SIZE,
+        sort: STAFF_PAGING.defaultSort,
+      },
+    });
+    members.push(...page.content);
+
+    if (page.last || pageNumber + 1 >= page.totalPages) return members;
+    pageNumber += 1;
+  }
 }
 
 /** `POST /admin/staff` → 201. Hesap "ilk girişte parola değiştir" ile doğar. */

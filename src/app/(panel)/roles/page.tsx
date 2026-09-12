@@ -29,6 +29,7 @@ import {
 } from "@/lib/role-graph";
 import { roleOptionValue, type RoleCode } from "@/lib/role-identity";
 import { QueueLoadFailure } from "@/components/panel/queue";
+import { getAllStaffMembers } from "@/server/api/staff-members";
 import {
   getStaffPermissionCatalog,
   getStaffRoles,
@@ -36,6 +37,7 @@ import {
   type StaffRole,
 } from "@/server/api/staff-roles";
 import { getKoalaAccessToken } from "@/server/auth/session";
+import { getStaffContext } from "@/server/authz/staff-context";
 import { isPermission, permissionLabel } from "@/server/authz/permissions";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
@@ -108,19 +110,25 @@ export default async function RolesPage() {
 
 async function RoleGraph() {
   const accessToken = await getKoalaAccessToken();
+  const context = await getStaffContext();
 
   let roles: StaffRole[];
   let catalog: StaffPermissionEntry[];
+  let memberRoles: readonly (readonly RoleCode[])[];
   try {
     /**
-     * İki istek, paralel. `GET /admin/roles` grafiğin **tamamını** tek cevapta
-     * veriyor (controller'ın kendi belgesi böyle vaat ediyor), bu yüzden
-     * kapanış, döngü ve görev ayrılığı hesaplarının hiçbiri ek istek istemiyor.
+     * Rol ve izin kataloğu zorunlu iki istek. `staff.read` varsa personel
+     * üyelikleri de son sayfaya kadar okunuyor; backend bir kapsama yazımında
+     * rol kapanışlarının yanında etkilenen kişileri de denetliyor.
      */
-    [roles, catalog] = await Promise.all([
+    const [loadedRoles, loadedCatalog, members] = await Promise.all([
       getStaffRoles(accessToken),
       getStaffPermissionCatalog(accessToken),
+      context.has("staff.read") ? getAllStaffMembers(accessToken) : Promise.resolve([]),
     ]);
+    roles = loadedRoles;
+    catalog = loadedCatalog;
+    memberRoles = members.map((member) => member.roles);
   } catch (error) {
     return (
       <div className="flex flex-col gap-4">
@@ -161,7 +169,7 @@ async function RoleGraph() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SeparationNotice />
+      <SeparationNotice membershipPreviewComplete={context.has("staff.read")} />
 
       {roles.length === 0 ? (
         <EmptyState
@@ -213,6 +221,7 @@ async function RoleGraph() {
                 roles={roles}
                 graph={graph}
                 closures={closures}
+                memberRoles={memberRoles}
                 catalog={catalog}
               />
             ))}
@@ -273,7 +282,11 @@ function effectivePermissionsIn(
  * görünür kalır; bayat bir sayfadan veya doğrudan eylem çağrısından gelen yazımı
  * yine backend reddeder.
  */
-function SeparationNotice() {
+function SeparationNotice({
+  membershipPreviewComplete,
+}: {
+  readonly membershipPreviewComplete: boolean;
+}) {
   return (
     <div className="rounded-lg border border-warning/30 bg-warning-soft px-4 py-3">
       <p className="text-sm font-semibold text-warning">
@@ -292,6 +305,13 @@ function SeparationNotice() {
         Panel, reddedileceği belli birleşimleri önceden seçilemez yapar ve nedenini seçenekte
         gösterir. Bu yalnız bir ön izlemedir; nihai kararı her istekte backend verir.
       </p>
+      {membershipPreviewComplete ? null : (
+        <p className="mt-2 max-w-prose text-sm text-ink">
+          Bu oturum <code className="font-mono">staff.read</code> taşımadığı için personel
+          üyeliklerinden doğan etkiler seçenek ön izlemesinde görünmeyebilir. Backend bu birleşimi
+          yine 409 ile reddeder.
+        </p>
+      )}
     </div>
   );
 }
@@ -301,12 +321,14 @@ function RoleDetail({
   roles,
   graph,
   closures,
+  memberRoles,
   catalog,
 }: {
   row: RoleRow;
   roles: readonly StaffRole[];
   graph: readonly RoleGraphNode[];
   closures: RoleClosures;
+  memberRoles: readonly (readonly RoleCode[])[];
   catalog: readonly StaffPermissionEntry[];
 }) {
   const sentence = separationSentence(role.code, verdict);
@@ -469,6 +491,7 @@ function RoleDetail({
                       graph,
                       role.code,
                       candidate.code,
+                      memberRoles,
                     );
 
                     return {
