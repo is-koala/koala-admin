@@ -111,3 +111,14 @@ describe("the dispute object page is gated on dispute.resolve", () => {
     expect(navigationFor(["dispute.resolve"]).map((entry) => entry.href)).toEqual(["/disputes"]);
   });
 });
+
+describe("the identity review object page is gated on identity.review", () => {
+  it("is registered and stays off the menu", () => {
+    const entry = entryFor("/identity-reviews/[id]");
+
+    expect(entry).toMatchObject({ permission: "identity.review" });
+    expect(navigationFor(["identity.review"]).map((entry) => entry.href)).toEqual([
+      "/identity-reviews",
+    ]);
+  });
+});

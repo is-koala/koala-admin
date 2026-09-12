@@ -1,0 +1,141 @@
+import Link from "next/link";
+import type { ReactNode } from "react";
+
+import { Badge } from "@/components/ui";
+import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
+import { isUuid, userHref } from "@/lib/panel-href";
+import { identityReviewStatusLabel, type IdentityReview } from "@/server/api/identity-reviews";
+
+import { IdentityReviewDecision } from "./decision-form";
+
+export function IdentityStatusBadge({ status }: { status: string }) {
+  const tone = status === "APPROVED" ? "success" : status === "REJECTED" ? "danger" : "warning";
+  return <Badge tone={tone}>{identityReviewStatusLabel(status)}</Badge>;
+}
+
+export function identityDisplayName(review: IdentityReview): string {
+  const name = [review.firstName, review.lastName].filter(Boolean).join(" ").trim();
+  return name.length > 0 ? name : EMPTY_VALUE;
+}
+
+export function IdentityReviewBody({
+  review,
+  returnTo,
+}: {
+  review: IdentityReview;
+  returnTo: string;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[10rem_1fr]">
+        <Row label="İnceleme" value={<span className="font-mono text-xs">{review.id}</span>} />
+        <Row
+          label="Kullanıcı"
+          value={
+            review.userId !== null && isUuid(review.userId) ? (
+              <Link
+                href={userHref(review.userId)}
+                className="font-mono text-xs text-brand hover:underline"
+              >
+                {review.userId}
+              </Link>
+            ) : (
+              <span className="font-mono text-xs">{review.userId ?? EMPTY_VALUE}</span>
+            )
+          }
+        />
+        <Row label="Ad soyad" value={identityDisplayName(review)} />
+        <Row
+          label="TCKN"
+          value={
+            <span className="font-mono text-sm">{review.tcIdentityNumber ?? EMPTY_VALUE}</span>
+          }
+        />
+        <Row
+          label="Belge no"
+          value={
+            <span className="font-mono text-sm">{review.tcDocumentNumber ?? EMPTY_VALUE}</span>
+          }
+        />
+        <Row label="Doğum tarihi" value={review.birthDate ?? EMPTY_VALUE} />
+        <Row label="Gönderim" value={formatDateTime(review.createdAt)} />
+        <Row label="Ret gerekçesi" value={review.rejectionReason ?? EMPTY_VALUE} />
+      </dl>
+
+      <section className="flex flex-col gap-3" aria-labelledby={`tckk-${review.id}`}>
+        <h3 id={`tckk-${review.id}`} className="text-sm font-semibold text-ink">
+          TCKK fotoğrafları
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <DocumentPhoto
+            reviewId={review.id}
+            documentId={review.frontDocumentId}
+            label="Ön yüz"
+            emptyLabel="Ön yüz fotoğrafı yok"
+            alt="TCKK ön yüz"
+          />
+          <DocumentPhoto
+            reviewId={review.id}
+            documentId={review.backDocumentId}
+            label="Arka yüz"
+            emptyLabel="Arka yüz fotoğrafı yok"
+            alt="TCKK arka yüz"
+          />
+        </div>
+      </section>
+
+      {review.status === "PENDING" ? (
+        <IdentityReviewDecision reviewId={review.id} returnTo={returnTo} />
+      ) : (
+        <p className="rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 text-sm text-ink-muted">
+          Bu inceleme sonuçlanmış. Backend ikinci bir kararı kabul etmez.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <>
+      <dt className="text-sm text-ink-muted">{label}</dt>
+      <dd className="text-sm text-ink">{value}</dd>
+    </>
+  );
+}
+
+function DocumentPhoto({
+  reviewId,
+  documentId,
+  label,
+  emptyLabel,
+  alt,
+}: {
+  reviewId: string;
+  documentId: string | null;
+  label: string;
+  emptyLabel: string;
+  alt: string;
+}) {
+  return (
+    <figure className="flex flex-col gap-2">
+      <figcaption className="text-sm font-medium text-ink">{label}</figcaption>
+      {documentId === null ? (
+        <p className="rounded-lg border border-border-subtle bg-surface-sunken px-3 py-8 text-center text-sm text-ink-muted">
+          {emptyLabel}
+        </p>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- same-origin BFF personel çerezini ister; next/image göndermez.
+        <img
+          src={identityPhotoSrc(reviewId, documentId)}
+          alt={alt}
+          className="max-h-[28rem] w-full rounded-lg border border-border-subtle bg-surface-sunken object-contain"
+        />
+      )}
+    </figure>
+  );
+}
+
+function identityPhotoSrc(reviewId: string, documentId: string): string {
+  return `/api/identity-verifications/${encodeURIComponent(reviewId)}/documents/${encodeURIComponent(documentId)}/download`;
+}

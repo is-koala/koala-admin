@@ -35,6 +35,17 @@ export function companyHref(
   return withQuery(`/companies/${companyId}`, queueState);
 }
 
+export function identityReviewsHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/identity-reviews", state);
+}
+
+export function identityReviewHref(
+  reviewId: string,
+  queueState: Readonly<Record<string, string>> = {},
+): Route {
+  return withQuery(`/identity-reviews/${reviewId}`, queueState);
+}
+
 export function disputeHref(disputeId: string): Route {
   return asRoute(`/disputes/${disputeId}`);
 }
