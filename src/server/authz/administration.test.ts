@@ -22,10 +22,10 @@ import { apiUrl, server } from "../../../test/msw";
  *
  * ## Burada kanıtlanmayan şey
  *
- * Kuralların hiçbiri. Döngü, görev ayrılığı, "sahip olmadığın izni veremezsin"
- * ve kendini kilitleme koruması **backend'in**; panelde onların bir kopyası
- * yok ve olmaması bilinçli. Bu dosyanın onlar hakkında kanıtladığı tek şey,
- * gelen reddin operatörün okuyabileceği bir cümleye dönüştüğü.
+ * Backend kurallarının hiçbiri burada üretilmez. Döngü, görev ayrılığı,
+ * "sahip olmadığın izni veremezsin" ve kendini kilitleme korumasının otoritesi
+ * backend'dir. Bu dosyanın onlar hakkında kanıtladığı şey, doğrudan çağrılan
+ * eylemin backend'e ulaştığı ve gelen reddin okunabilir bir cümleye dönüştüğü.
  */
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
@@ -623,23 +623,16 @@ describe("backend reddi bir hata kodu değil bir cümle olarak dönüyor", () =>
   });
 });
 
-describe("görev ayrılığı burada bir kural değil", () => {
-  /**
-   * Buradaki iki test bir **eksikliği** sabitliyor: koala-backend ADR-0014'ün
-   * görev ayrılığı kuralını çalışma anında uygulamıyor, ve panel de onu taklit
-   * etmiyor. Panel burada dursaydı ekran yalan söylerdi — aynı yazım `curl`
-   * ile geçerken operatör onun engellendiğini sanırdı. Teşhis ekranda
-   * (`role-graph.ts`, `/roles` ve `/staff` uyarıları), kapıda değil.
-   *
-   * **Eksik `is-koala/koala-backend#133` olarak açıldı.** O issue merge
-   * edildiği gün bu iki iddia da yanlış olacak: backend yazımı reddedecek,
-   * `include.calls`/`grant.calls` yine 1 kalacak ama sonuç `REFUSED` olacak ve
-   * panelin ekrandaki "backend bunu kabul eder" cümlelerinin de değişmesi
-   * gerekecek. Bağ buraya yazılı ki o gün kimse bunu aramak zorunda kalmasın.
-   */
-  it("iki dalı birleştiren kapsamayı gönderiyor, çünkü backend onu kabul ediyor", async () => {
+describe("görev ayrılığında nihai otorite backend", () => {
+  it("doğrudan çağrılan kapsama eyleminde backend reddini açıklıyor", async () => {
     stubMe(["role.manage"]);
-    const include = watch("post", ADD_INCLUDE);
+    const include = watch("post", ADD_INCLUDE, () =>
+      refusal(
+        409,
+        "STAFF_SEPARATION_OF_DUTIES_VIOLATED",
+        "Görev ayrılığı kuralı: güven ve finans dalları tek bir rolde ya da tek bir personelde birleşemez.",
+      ),
+    );
 
     const outcome = await runAuthorizationChange({
       kind: "ROLE_INCLUDE_ADD",
@@ -650,18 +643,21 @@ describe("görev ayrılığı burada bir kural değil", () => {
     });
 
     expect(include.calls).toBe(1);
-    expect(outcome.status).toBe("SUCCEEDED");
+    expect(outcome.status).toBe("REFUSED");
+    expect(outcome.errorCode).toBe("STAFF_SEPARATION_OF_DUTIES_VIOLATED");
+    expect(outcome.message).toContain("güven ve finans dalları");
+    expect(outcome.message).toContain("Hiçbir rol ya da personel üyeliği değiştirilmedi");
   });
 
-  it("iki dalı birleştiren rol atamasını da gönderiyor", async () => {
-    /**
-     * Üyelik tarafı, ve kuralın insanın eliyle en kolay bozulduğu yer: bir
-     * kişiye TRUST_LEAD'in yanına FINANCE_OFFICER vermek. `grantRole` yalnız
-     * "sahip olmadığın izni veremezsin" kuralını denetliyor; birleşim
-     * kabul ediliyor.
-     */
+  it("doğrudan çağrılan personel rolü eyleminde aynı reddi açıklıyor", async () => {
     stubMe(["staff.manage"]);
-    const grant = watch("post", STAFF_ROLE);
+    const grant = watch("post", STAFF_ROLE, () =>
+      refusal(
+        409,
+        "STAFF_SEPARATION_OF_DUTIES_VIOLATED",
+        "Görev ayrılığı kuralı: güven ve finans dalları tek bir rolde ya da tek bir personelde birleşemez.",
+      ),
+    );
 
     const outcome = await runAuthorizationChange({
       kind: "STAFF_ROLE_GRANT",
@@ -671,7 +667,10 @@ describe("görev ayrılığı burada bir kural değil", () => {
     });
 
     expect(grant.calls).toBe(1);
-    expect(outcome.status).toBe("SUCCEEDED");
+    expect(outcome.status).toBe("REFUSED");
+    expect(outcome.errorCode).toBe("STAFF_SEPARATION_OF_DUTIES_VIOLATED");
+    expect(outcome.message).toContain("güven ve finans dalları");
+    expect(outcome.message).toContain("Hiçbir rol ya da personel üyeliği değiştirilmedi");
   });
 });
 

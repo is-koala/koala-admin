@@ -228,20 +228,8 @@ export function excludeStaffRole(
   });
 }
 
-/**
- * koala-admin#9'un istediği ama backend'in bugün veremediği şeyler.
- *
- * İlki bir kabul maddesini **karşılanamaz** kılıyor ve bu yüzden ekranın en
- * görünür yerinde duruyor: "görev ayrılığını bozan bir birleştirme reddediliyor"
- * — reddedilmiyor. Panel bunu uydurmuyor, gösteriyor.
- */
+/** koala-admin#9'un istediği ama backend'in bugün veremediği şeyler. */
 export const ROLE_GRAPH_BACKEND_GAPS = [
-  {
-    id: "no-separation-enforcement",
-    title: "Görev ayrılığı kuralı çalışma anında uygulanmıyor",
-    detail:
-      "ADR-0014 §Rol grafiği 'OWNER dışında hiçbir rol hem trust hem finans dalını kapsayamaz' diyor, ama koala-backend'in src/main'inde bu kuralı uygulayan tek satır yok: StaffAuthorizationManager.includeRole yalnız döngüyü ve 'sahip olmadığın izni veremezsin' kuralını denetliyor. Kural yalnız StaffRoleGraphSeedTest'te yaşıyor ve o test seed XML dosyasını okuyor — ne veritabanını ne de bir isteği. Yani iki dalı birleştiren bir kapsama backend tarafından KABUL EDİLİR. Eksik is-koala/koala-backend#133 olarak açıldı. Panel bunu ekranda teşhis olarak gösterir ve istemcide reddetmez; olmayan bir kapıyı varmış gibi çizmek, kuralın var olduğu yanılgısını sürdürürdü.",
-  },
   {
     id: "no-role-lifecycle",
     title: "Rol yaratma, adlandırma ve silme ucu yok",
@@ -250,9 +238,9 @@ export const ROLE_GRAPH_BACKEND_GAPS = [
   },
   {
     id: "branch-membership-is-hardcoded",
-    title: "Dal üyeliği rol adına gömülü",
+    title: "Dal üyeliği rol kodu kuralına gömülü",
     detail:
-      "Hangi rolün 'trust' hangisinin 'finans' dalında olduğu bir veri değil, StaffRoleGraphSeedTest'teki iki sabit liste. Panel aynı listeleri taşımak zorunda (src/lib/role-graph.ts). Seed'e yeni bir rol eklendiği gün iki yerde birden güncellenmezse teşhis sessizce eksik kalır.",
+      "Dal üyeliği API verisi değil: backend güven dalını sabit rol kodlarıyla, finans dalını `FINANCE_` önekiyle sınıflandırıyor. Panel karar hesabında aynı kuralı taşır; ekrandaki finans rol listesi yalnız bugünkü seed rollerini açıklar (src/lib/role-graph.ts). Güven dalına yeni bir rol eklenirse iki taraftaki sabit liste birlikte güncellenmelidir.",
   },
   {
     id: "revoke-checks-grantability",

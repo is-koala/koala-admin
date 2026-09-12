@@ -14,9 +14,9 @@ import { renderServerComponent } from "../../../../test/render-server";
  * Yalnız HTML'in yokluğuna bakan bir test, veriyi çekip gizleyen bir sayfayı da
  * geçirirdi.
  *
- * İkinci iddia görev ayrılığı hakkında ve tersine: kural **uygulanmadığı** için
- * ekranın onu uygulandığı izlenimi vermemesi gerekiyor. Bunu ölçen testler
- * "backend kabul eder" cümlesinin gerçekten yazıldığını arıyor.
+ * İkinci iddia görev ayrılığı hakkında: backend kuralı artık çalışma anında
+ * uyguluyor. Panel geçersiz bir yazımı hazırlatmamalı, doğrudan Server Action
+ * çağrılırsa da backend'in reddi nihai karar olarak görünmeli.
  */
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
@@ -32,6 +32,7 @@ const { default: RolesPage } = await import("./page");
 const ADMIN_ME = apiUrl("/admin/me");
 const ROLES = apiUrl("/admin/roles");
 const PERMISSIONS = apiUrl("/admin/permissions");
+const STAFF = apiUrl("/admin/staff");
 
 const TRUST_LEAD_ID = "9a1c0f10-0003-4c00-8000-000000000008";
 const FINANCE_OFFICER_ID = "9a1c0f10-0003-4c00-8000-000000000009";
@@ -72,6 +73,18 @@ function envelope(path: string, data: unknown) {
     timeStamp: "2026-09-08T09:00:00.000000000Z",
     data,
   };
+}
+
+function staffPage(content: readonly unknown[]) {
+  return envelope("/admin/staff", {
+    content,
+    page: 0,
+    size: 100,
+    totalElements: content.length,
+    totalPages: content.length === 0 ? 0 : 1,
+    first: true,
+    last: true,
+  });
 }
 
 /** Seed'lenmiş grafiğin bir dilimi — ADR-0014 §Rol grafiği'nin kenarlarıyla. */
@@ -169,8 +182,9 @@ function watchGraph(): {
   readonly roles: number;
   readonly permissions: number;
   readonly details: number;
+  readonly staff: number;
 } {
-  const seen = { roles: 0, permissions: 0, details: 0 };
+  const seen = { roles: 0, permissions: 0, details: 0, staff: 0 };
 
   server.use(
     http.get(ROLES, () => {
@@ -180,6 +194,10 @@ function watchGraph(): {
     http.get(PERMISSIONS, () => {
       seen.permissions += 1;
       return HttpResponse.json(envelope("/admin/permissions", PERMISSION_ROWS));
+    }),
+    http.get(STAFF, () => {
+      seen.staff += 1;
+      return HttpResponse.json(staffPage([]));
     }),
     http.get(`${ROLES}/:roleId`, ({ params }) => {
       seen.details += 1;
@@ -242,14 +260,18 @@ describe("kapı: izin yoksa hiçbir şey çekilmiyor", () => {
     expect(html).toContain("İzinleriniz çözülemedi");
   });
 
-  it("role.manage varsa grafiği bir kez çekiyor", async () => {
+  it("role.manage var ama staff.read yoksa personel istemeden rol grafiğini çiziyor", async () => {
     stubMe(["role.manage"]);
     const graph = watchGraph();
 
-    await render();
+    const html = await render();
 
     expect(graph.roles).toBe(1);
     expect(graph.permissions).toBe(1);
+    expect(graph.staff).toBe(0);
+    expect(html).toContain(
+      "personel üyeliklerinden doğan etkiler seçenek ön izlemesinde görünmeyebilir",
+    );
   });
 });
 
@@ -390,32 +412,161 @@ describe("döngü: reddedileceği belli olan seçenek kapalı, ötekiler açık"
   });
 });
 
-describe("görev ayrılığı: gösteriliyor, uygulanmıyor", () => {
-  it("kuralın çalışma anında uygulanmadığını sayfanın en üstünde söylüyor", async () => {
-    // Kabul maddesi "reddediliyor ve sebebi ekranda yazıyor" diyor;
-    // reddedilmiyor. Ekranın bunu saklaması, kuralın var olduğu yanılgısını
-    // sürdürmek olurdu.
+describe("görev ayrılığı: backend kuralının arayüzdeki ön izlemesi", () => {
+  it("kuralın backend tarafından uygulandığını sayfanın en üstünde söylüyor", async () => {
     stubMe(["role.manage"]);
     watchGraph();
 
     const html = await render();
 
-    expect(html).toContain("Görev ayrılığı kuralı burada gösterilir, uygulanmaz.");
-    expect(html).toContain("StaffRoleGraphSeedTest");
+    expect(html).toContain("Görev ayrılığı backend tarafından uygulanır.");
+    expect(html).toContain("Panel, reddedileceği belli birleşimleri önceden seçilemez yapar");
+    expect(html).not.toContain("backend kabul eder");
+    expect(html).not.toContain("Backend bu yazımı yine de KABUL EDER");
   });
 
-  it("iki dalı birleştirecek bir kapsamayı seçilebilir bırakıyor ama uyarısını yazıyor", async () => {
-    // Seçenek **kapalı değil**: backend onu kabul ediyor ve panelin kapatması
-    // olmayan bir kapıyı varmış gibi göstermek olurdu.
+  it("iki dalı birleştirecek kapsamayı sebebiyle seçilemez yapıyor", async () => {
     stubMe(["role.manage"]);
     watchGraph();
 
     const html = await render();
+    const block = detailBlock(html, "TRUST_LEAD");
+    const option =
+      block.match(new RegExp(`<option value="[^"]*:FINANCE_OFFICER"[^>]*>[^<]*</option>`))?.[0] ??
+      "";
 
-    expect(html).toContain("Backend bu yazımı yine de KABUL EDER");
-    // Ve seçenek gerçekten seçilebilir: sebebi olan seçenekler etiketlerine
-    // "— sebep" ekliyor, bu yüzden ihlal seçeneğinin öyle bir eki olmamalı.
-    expect(html).not.toContain("FINANCE_OFFICER — Finans yetkilisi — ");
+    expect(option).toContain("disabled");
+    expect(option).toContain("görev ayrılığını bozar; backend 409 döner");
+  });
+
+  it("üst rolü iki dala taşıyacak kapsamayı da seçilemez yapıyor", async () => {
+    /**
+     * SUPPORT_AGENT tek başına FINANCE_OFFICER'ı kapsarsa yalnız finans dalına
+     * geçer. Fakat TRUST_LEAD ona MODERATOR üzerinden ulaşıyor; aynı kenar
+     * TRUST_LEAD'i iki dala taşır ve backend etkilenen üst rolleri de denetler.
+     */
+    stubMe(["role.manage"]);
+    watchGraph();
+
+    const html = await render();
+    const block = detailBlock(html, "SUPPORT_AGENT");
+    const option =
+      block.match(new RegExp(`<option value="[^"]*:FINANCE_OFFICER"[^>]*>[^<]*</option>`))?.[0] ??
+      "";
+
+    expect(option).toContain("disabled");
+    expect(option).toContain("görev ayrılığını bozar; backend 409 döner");
+  });
+
+  it("rol tek dalda kalsa bile mevcut personeli iki dala taşıyacak kapsamayı seçilemez yapıyor", async () => {
+    const catalogEditor = {
+      id: "9a1c0f10-0003-4c00-8000-000000000001",
+      code: "CATALOG_EDITOR",
+      name: "Katalog editörü",
+      permissions: [],
+      includes: [],
+    };
+    stubMe(["role.manage", "staff.read"]);
+    watchGraph();
+    server.use(
+      http.get(ROLES, () =>
+        HttpResponse.json(envelope("/admin/roles", [...ROLE_ROWS, catalogEditor])),
+      ),
+      http.get(STAFF, ({ request }) => {
+        const page = Number(new URL(request.url).searchParams.get("page") ?? 0);
+        const affectedMember = {
+          id: "b7f4a2c1-0000-4c00-8000-000000000079",
+          email: "finans-katalog@koala.local",
+          displayName: "Finans ve katalog görevlisi",
+          active: true,
+          mustChangePassword: false,
+          lockedUntil: null,
+          createdAt: "2026-09-12T10:00:00Z",
+          roles: ["FINANCE_OFFICER", "CATALOG_EDITOR"],
+        };
+
+        return HttpResponse.json(
+          envelope("/admin/staff", {
+            content: page === 1 ? [affectedMember] : [],
+            page,
+            size: 100,
+            totalElements: 1,
+            totalPages: 2,
+            first: page === 0,
+            last: page === 1,
+          }),
+        );
+      }),
+    );
+
+    const html = await render();
+    const block = detailBlock(html, "CATALOG_EDITOR");
+    const option =
+      block.match(new RegExp(`<option value="[^"]*:MODERATOR"[^>]*>[^<]*</option>`))?.[0] ?? "";
+
+    expect(option).toContain("disabled");
+    expect(option).toContain("görev ayrılığını bozar; backend 409 döner");
+  });
+
+  it("personelin sonraki sayfası okunamazsa rol ekranını açık ve eksik ön izlemeyi görünür tutuyor", async () => {
+    let staffRequests = 0;
+    stubMe(["role.manage", "staff.read"]);
+    watchGraph();
+    server.use(
+      http.get(STAFF, ({ request }) => {
+        staffRequests += 1;
+        const page = Number(new URL(request.url).searchParams.get("page") ?? 0);
+
+        if (page === 1) {
+          return HttpResponse.json(
+            {
+              success: false,
+              message: "Personel listesi geçici olarak okunamadı.",
+              httpStatus: "503 SERVICE_UNAVAILABLE",
+              errorCode: "STAFF_LIST_UNAVAILABLE",
+              errorCategory: "UNEXPECTED",
+              requestId: "rid-staff-page-2",
+              path: "/admin/staff",
+              timeStamp: "2026-09-12T10:00:00Z",
+            },
+            { status: 503 },
+          );
+        }
+
+        return HttpResponse.json(
+          envelope("/admin/staff", {
+            content: [],
+            page: 0,
+            size: 100,
+            totalElements: 1,
+            totalPages: 2,
+            first: true,
+            last: false,
+          }),
+        );
+      }),
+    );
+
+    const html = await render();
+
+    expect(staffRequests).toBe(2);
+    expect(html).toContain("Rol detayları");
+    expect(html).toContain("Personel üyeliği ön izlemesi eksik.");
+    expect(html).toContain("Backend bu birleşimi yine 409 ile reddeder.");
+    expect(html).not.toContain("rid-staff-page-2");
+  });
+
+  it("aynı dalda kalan kapsamayı seçilebilir bırakıyor", async () => {
+    stubMe(["role.manage"]);
+    watchGraph();
+
+    const html = await render();
+    const block = detailBlock(html, "TRUST_LEAD");
+    const option =
+      block.match(new RegExp(`<option value="[^"]*:SUPPORT_AGENT"[^>]*>[^<]*</option>`))?.[0] ?? "";
+
+    expect(option).not.toBe("");
+    expect(option).not.toContain("disabled");
   });
 
   it("OWNER'ı istisna, TRUST_LEAD'i tek dal olarak işaretliyor", async () => {
@@ -456,7 +607,8 @@ describe("görev ayrılığı: gösteriliyor, uygulanmıyor", () => {
     const html = await render();
 
     expect(html).toContain("İki dal — kural ihlali");
-    expect(html).toContain("Backend bu durumu reddetmez");
+    expect(html).toContain("Backend yeni rol grafiği yazımlarında bu birleşimi 409 ile reddeder");
+    expect(html).not.toContain("Backend bu durumu reddetmez");
   });
 });
 

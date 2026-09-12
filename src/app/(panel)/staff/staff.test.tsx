@@ -303,17 +303,14 @@ describe("liste, olduğu gibi", () => {
   });
 });
 
-describe("görev ayrılığı üyelik tarafında: gösteriliyor, uygulanmıyor", () => {
+describe("görev ayrılığı üyelik tarafında: backend kuralının arayüzdeki ön izlemesi", () => {
   /**
    * Kabul maddesi "görev ayrılığı ekranda görünür olsun" diyor ve kuralın
    * insanın eliyle en kolay bozulduğu yer burası: kimsenin rol grafiğine
    * dokunması gerekmiyor, bir kişiye iki dalın rollerini vermek yetiyor.
    *
-   * koala-backend bunu reddetmiyor (`is-koala/koala-backend#133`), bu yüzden
-   * ekranın iddiası da bir red değil bir teşhis — ve seçenek kapatılmıyor.
-   * O issue merge edildiği gün buradaki "kapatılmıyor" iddiaları da,
-   * `administration.test.ts`'in "istek gönderiliyor" iddiası da güncellenmek
-   * zorunda kalacak.
+   * Backend kuralı artık çalışma anında uyguluyor. Panel aynı hesabı seçenek
+   * hazırlanırken yapar; doğrudan Server Action çağrısında otorite yine backend.
    */
   function withRoles(roles: readonly string[]) {
     return [{ ...MEMBERS[0], roles: [...roles] }];
@@ -344,7 +341,7 @@ describe("görev ayrılığı üyelik tarafında: gösteriliyor, uygulanmıyor",
 
     expect(html).toContain("İki dal — kural ihlali");
     expect(html).toContain("ADR-0014 §Rol grafiği bu birleşimi OWNER dışında yasaklar");
-    expect(html).toContain("Backend bu birleşimi reddetmez");
+    expect(html).toContain("Backend yeni rol atamalarında bu birleşimi 409 ile reddeder");
   });
 
   it("tek dala değen bir kişiyi ihlal saymıyor", async () => {
@@ -369,24 +366,41 @@ describe("görev ayrılığı üyelik tarafında: gösteriliyor, uygulanmıyor",
     expect(html).not.toContain("İki dal — kural ihlali");
   });
 
-  it("ihlali kuracak rol atamasını seçilebilir bırakıyor ama uyarısını yazıyor", async () => {
-    /**
-     * Seçenek **kapalı değil**: backend atamayı kabul ediyor ve panelin
-     * kapatması olmayan bir kapıyı varmış gibi göstermek olurdu.
-     *
-     * Kişi finans dalında (FINANCE_OFFICER) ve atanabilecek ilk rol MODERATOR,
-     * yani güven dalı. Uyarı seçili seçeneğe ait olduğu için sunucudan gelen
-     * HTML'de görünen not da onunki.
-     */
+  it("ihlali kuracak rol atamasını sebebiyle seçilemez yapıyor", async () => {
     stubMe(["staff.read", "staff.manage", "role.manage"]);
     stubMembers(withRoles(["SUPPORT_AGENT", "FINANCE_OFFICER"]));
 
     const html = await render();
+    const option = html.match(/<option value="MODERATOR"[^>]*>[^<]*<\/option>/)?.[0] ?? "";
+    const formTail =
+      html.match(new RegExp(`<select id="rol-ata-${SELF_ID}-roleCode"[\\s\\S]*?</form>`))?.[0] ??
+      "";
 
-    expect(html).toContain("Backend bu yazımı yine de KABUL EDER");
-    expect(html).toContain("hem güven hem finans dalına sokar");
-    // Seçenek gerçekten seçilebilir.
-    expect(html).not.toMatch(/<option value="MODERATOR"[^>]*disabled/);
+    expect(option).toContain("disabled");
+    expect(option).toContain("görev ayrılığını bozar; backend 409 döner");
+    expect(formTail).toMatch(/<button type="submit" disabled/);
+  });
+
+  it("OWNER taşıyan personelde iki dal istisnasını seçilebilir bırakıyor", async () => {
+    stubMe(["staff.read", "staff.manage", "role.manage"]);
+    stubMembers(withRoles(["OWNER"]));
+
+    const html = await render();
+    const option = html.match(/<option value="FINANCE_OFFICER"[^>]*>[^<]*<\/option>/)?.[0] ?? "";
+
+    expect(option).not.toBe("");
+    expect(option).not.toContain("disabled");
+  });
+
+  it("aynı dalda kalan rol atamasını seçilebilir bırakıyor", async () => {
+    stubMe(["staff.read", "staff.manage", "role.manage"]);
+    stubMembers(withRoles(["SUPPORT_AGENT"]));
+
+    const html = await render();
+    const option = html.match(/<option value="MODERATOR"[^>]*>[^<]*<\/option>/)?.[0] ?? "";
+
+    expect(option).not.toBe("");
+    expect(option).not.toContain("disabled");
   });
 
   it("rol grafiği okunamasa bile doğrudan rollerden teşhis koyuyor", async () => {
@@ -410,14 +424,16 @@ describe("görev ayrılığı üyelik tarafında: gösteriliyor, uygulanmıyor",
     expect(html).toContain("İki dal — kural ihlali");
   });
 
-  it("kuralın uygulanmadığını listenin üstünde söylüyor", async () => {
+  it("kuralın backend tarafından uygulandığını listenin üstünde söylüyor", async () => {
     stubMe(["staff.read"]);
     watchStaff();
 
     const html = await render();
 
-    expect(html).toContain("Görev ayrılığı burada da gösterilir, uygulanmaz.");
-    expect(html).not.toContain("Görev ayrılığı üyelik yazımında da uygulanmıyor");
+    expect(html).toContain("Görev ayrılığı personel atamalarında da uygulanır.");
+    expect(html).toContain("Panel geçersiz rol seçeneklerini önceden kapatır");
+    expect(html).not.toContain("Backend bu yazımı yine de KABUL EDER");
+    expect(html).not.toContain("backend bunu reddetmiyor");
   });
 });
 

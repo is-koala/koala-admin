@@ -5,7 +5,7 @@ import { z } from "zod";
 import { asRoleCode } from "@/lib/role-identity";
 
 import { koalaApi, koalaRequestNoData } from "./koala";
-import { pagingQuery, type Paging, type PagingContract } from "./paging";
+import { MAX_PAGE_SIZE, pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import type { PageDto } from "./types";
 
@@ -142,6 +142,35 @@ export function getStaffMembers(
   });
 }
 
+/**
+ * Rol grafiği yazımından etkilenebilecek doğrudan üyeliklerin tamamı.
+ *
+ * Backend bir kapsama eklerken yalnız ekrandaki yirmi kişiyi değil bütün
+ * `staff_member_roles` satırlarını denetliyor. `/roles` ön izlemesinin aynı
+ * sonucu verebilmesi için sayfalı ucu son sayfaya kadar okumak zorunda; tek
+ * sayfa sessiz bir yanlış-negatif üretirdi. Bu yalnız `staff.read` taşıyan
+ * çağıranlar içindir ve nihai karar yine yazım ucundaki backend guard'ıdır.
+ */
+export async function getAllStaffMembers(accessToken: string): Promise<StaffMember[]> {
+  const members: StaffMember[] = [];
+  let pageNumber = 0;
+
+  while (true) {
+    const page = await getStaffMembers(accessToken, {
+      query: null,
+      paging: {
+        page: pageNumber,
+        size: MAX_PAGE_SIZE,
+        sort: STAFF_PAGING.defaultSort,
+      },
+    });
+    members.push(...page.content);
+
+    if (page.last || pageNumber + 1 >= page.totalPages) return members;
+    pageNumber += 1;
+  }
+}
+
 /** `POST /admin/staff` → 201. Hesap "ilk girişte parola değiştir" ile doğar. */
 export function createStaffMember(
   accessToken: string,
@@ -270,12 +299,6 @@ export const STAFF_BACKEND_GAPS = [
     title: "Hesap kilidini elle açma ucu yok",
     detail:
       "lockedUntil listede görünüyor ama onu sıfırlayan ayrı bir uç yok. Kilidi düşüren tek yol parola sıfırlamak (resetPassword failedLoginAttempts ve lockedUntil'i temizler) ya da sürenin dolmasını beklemek.",
-  },
-  {
-    id: "no-membership-separation-enforcement",
-    title: "Görev ayrılığı üyelik yazımında da uygulanmıyor",
-    detail:
-      "ADR-0014 §Rol grafiği'nin 'OWNER dışında hiçbir rol hem trust hem finans dalını kapsayamaz' kuralı kişiler için de geçerli olmalı, ama StaffAuthorizationManager.grantRole yalnız 'sahip olmadığın izni veremezsin' kuralını denetliyor: bir kişiye hem TRUST_LEAD hem FINANCE_OFFICER vermek KABUL EDİLİR. Kuralın kâğıt üzerinde bozulmasının en kolay yolu bu — kimsenin rol grafiğine dokunması bile gerekmiyor. Eksik is-koala/koala-backend#133 olarak açıldı. Panel birleşimi ekranda teşhis olarak gösteriyor ve rol seçeneğini kapatmıyor: kapatsaydı aynı yazım curl ile geçerken ekran onu engellediğini sanırdı.",
   },
   {
     id: "roles-are-direct-only",
