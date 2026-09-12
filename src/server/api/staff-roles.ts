@@ -228,20 +228,8 @@ export function excludeStaffRole(
   });
 }
 
-/**
- * koala-admin#9'un istediği ama backend'in bugün veremediği şeyler.
- *
- * İlki bir kabul maddesini **karşılanamaz** kılıyor ve bu yüzden ekranın en
- * görünür yerinde duruyor: "görev ayrılığını bozan bir birleştirme reddediliyor"
- * — reddedilmiyor. Panel bunu uydurmuyor, gösteriyor.
- */
+/** koala-admin#9'un istediği ama backend'in bugün veremediği şeyler. */
 export const ROLE_GRAPH_BACKEND_GAPS = [
-  {
-    id: "no-separation-enforcement",
-    title: "Görev ayrılığı kuralı çalışma anında uygulanmıyor",
-    detail:
-      "ADR-0014 §Rol grafiği 'OWNER dışında hiçbir rol hem trust hem finans dalını kapsayamaz' diyor, ama koala-backend'in src/main'inde bu kuralı uygulayan tek satır yok: StaffAuthorizationManager.includeRole yalnız döngüyü ve 'sahip olmadığın izni veremezsin' kuralını denetliyor. Kural yalnız StaffRoleGraphSeedTest'te yaşıyor ve o test seed XML dosyasını okuyor — ne veritabanını ne de bir isteği. Yani iki dalı birleştiren bir kapsama backend tarafından KABUL EDİLİR. Eksik is-koala/koala-backend#133 olarak açıldı. Panel bunu ekranda teşhis olarak gösterir ve istemcide reddetmez; olmayan bir kapıyı varmış gibi çizmek, kuralın var olduğu yanılgısını sürdürürdü.",
-  },
   {
     id: "no-role-lifecycle",
     title: "Rol yaratma, adlandırma ve silme ucu yok",

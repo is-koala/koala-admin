@@ -21,7 +21,7 @@ import {
   closuresWithSelf,
   separationSentence,
   separationVerdict,
-  separationVerdictAfterInclude,
+  wouldViolateSeparationAfterInclude,
   wouldCycle,
   type RoleClosures,
   type RoleGraphNode,
@@ -78,18 +78,13 @@ export const metadata: Metadata = { title: "Roller ve izinler" };
  *     `GET /admin/roles/{roleId}` — on rol için on istekti; gerekçe
  *     `src/server/api/staff-roles.ts`'te yazılı.
  *
- * ## Görev ayrılığı: gösteriliyor, uygulanmıyor
+ * ## Görev ayrılığı: backend kuralının ön izlemesi
  *
  * ADR-0014 §Rol grafiği "OWNER dışında hiçbir rol hem trust hem finans dalını
- * kapsayamaz" diyor. koala-backend bunu **çalışma anında uygulamıyor**:
- * `includeRole` yalnız döngüyü ve "sahip olmadığın izni veremezsin" kuralını
- * denetliyor; görev ayrılığı yalnız `StaffRoleGraphSeedTest`'te ve o test seed
- * XML'ini okuyor.
- *
- * Panel bu yüzden kuralı **teşhis olarak** gösteriyor ve istemcide reddetmiyor.
- * Reddetseydi, aynı yazım `curl` ile geçerken ekran onu engellediğini sanırdı —
- * yani ekran yalan söylerdi. Eksik `ROLE_GRAPH_BACKEND_GAPS`'in ilk maddesi
- * olarak sayfada yazılı.
+ * kapsayamaz" diyor. koala-backend rol grafiği yazımlarından sonra etkilenen
+ * roller ile personel üyeliklerinin kapanışını yeniden hesaplayıp ihlali 409 ile
+ * reddediyor. Panel aynı hesabı yalnız seçimden önce açıklama yapmak için taşır;
+ * nihai karar her zaman backend'indir.
  */
 export default async function RolesPage() {
   return (
@@ -274,18 +269,15 @@ function effectivePermissionsIn(
 }
 
 /**
- * Kuralın durumu, sayfanın en üstünde ve tam olarak olduğu gibi.
- *
- * Bu kutu bir uyarı değil bir düzeltme: issue'nun kabul maddesi "görev
- * ayrılığını bozan bir birleştirme reddediliyor" diyor ve **reddedilmiyor**.
- * Operatörün ekranda bir "ihlal" rozeti görüp backend'in o yazımı durduracağını
- * sanması, kuralın olmadığını hiç bilmemekten daha kötü olurdu.
+ * Arayüzdeki seçim ön izlemesinin backend otoritesinin yerine geçmediği burada
+ * görünür kalır; bayat bir sayfadan veya doğrudan eylem çağrısından gelen yazımı
+ * yine backend reddeder.
  */
 function SeparationNotice() {
   return (
     <div className="rounded-lg border border-warning/30 bg-warning-soft px-4 py-3">
       <p className="text-sm font-semibold text-warning">
-        Görev ayrılığı kuralı burada gösterilir, uygulanmaz.
+        Görev ayrılığı backend tarafından uygulanır.
       </p>
       <p className="max-w-prose text-sm text-ink">
         ADR-0014 §Rol grafiği&apos;nin kuralı şu:{" "}
@@ -293,16 +285,12 @@ function SeparationNotice() {
           OWNER dışında hiçbir rol hem güven dalını ({TRUST_BRANCH_ROLES.join(", ")}) hem finans
           dalını ({FINANCE_BRANCH_ROLES.join(", ")}) kapsayamaz.
         </strong>{" "}
-        koala-backend bu kuralı <strong>çalışma anında uygulamıyor</strong>:{" "}
-        <code className="font-mono">StaffAuthorizationManager.includeRole</code> yalnız döngüyü ve
-        &quot;sahip olmadığın izni veremezsin&quot; kuralını denetliyor. Kural yalnız{" "}
-        <code className="font-mono">StaffRoleGraphSeedTest</code>&apos;te yaşıyor ve o test seed XML
-        dosyasını okuyor — veritabanını değil, bir isteği hiç değil.
+        Backend rol grafiği yazımından sonra etkilenen bütün rol ve personel kapanışlarını yeniden
+        denetler; kuralı bozan yazımı 409 ile reddeder.
       </p>
       <p className="mt-2 max-w-prose text-sm text-ink">
-        Yani aşağıdaki &quot;kural ihlali&quot; rozetleri bir <em>teşhis</em>; backend o kapsamayı{" "}
-        <strong>kabul eder</strong>. Panel bunu istemcide reddetmiyor, çünkü reddetseydi aynı yazım{" "}
-        <code className="font-mono">curl</code> ile geçerken ekran onu engellediğini sanırdı.
+        Panel, reddedileceği belli birleşimleri önceden seçilemez yapar ve nedenini seçenekte
+        gösterir. Bu yalnız bir ön izlemedir; nihai kararı her istekte backend verir.
       </p>
     </div>
   );
@@ -357,9 +345,6 @@ function RoleDetail({
             }
           >
             {sentence}
-            {verdict.violates
-              ? " Backend bu durumu reddetmez; kural yalnız seed testinde yaşıyor."
-              : null}
           </p>
         )}
 
@@ -470,25 +455,30 @@ function RoleDetail({
               hiddenFields={{ roleId: role.id, roleCode: role.code }}
               submitLabel="Kapsamayı ekle"
               idPrefix={`kapsama-ekle-${role.code}`}
-              consequence={`${role.code}, seçilen rolün bütün etkili izinlerini devralır. Döngü yaratan bir seçim backend tarafından 409 ile reddedilir; görev ayrılığını bozan bir seçim ise REDDEDİLMEZ — yalnız aşağıda yazar.`}
+              consequence={`${role.code}, seçilen rolün bütün etkili izinlerini devralır. Döngü veya görev ayrılığı ihlali yaratan seçim backend tarafından 409 ile reddedilir.`}
               fields={[
                 {
                   name: "includedRole",
                   label: "Kapsanacak rol",
                   type: "select",
                   required: true,
-                  hint: "Döngü yaratacak roller seçilemez. İki dalı birleştirecek olanlar seçilebilir, çünkü backend onları kabul eder.",
+                  hint: "Döngü veya görev ayrılığı ihlali yaratacak roller seçilemez; backend aynı yazımları 409 ile reddeder.",
                   options: includable.map((candidate) => {
-                    // Döngü sorusu bir kez soruluyor: cevabı hem seçeneği
-                    // kapatıyor hem de kapalı bir seçeneğe uyarı yazılmasını
-                    // engelliyor.
                     const cycles = wouldCycle(closures, role.code, candidate.code);
+                    const violatesSeparation = wouldViolateSeparationAfterInclude(
+                      graph,
+                      role.code,
+                      candidate.code,
+                    );
 
                     return {
                       value: roleOptionValue(candidate),
                       label: `${candidate.code} — ${candidate.name}`,
-                      disabledReason: cycles ? "döngü yaratır, backend 409 döner" : undefined,
-                      note: cycles ? undefined : includeNote(graph, role.code, candidate.code),
+                      disabledReason: cycles
+                        ? "döngü yaratır, backend 409 döner"
+                        : violatesSeparation
+                          ? "görev ayrılığını bozar; backend 409 döner"
+                          : undefined,
                     };
                   }),
                 },
@@ -546,24 +536,6 @@ function noteForPermission(entry: StaffPermissionEntry): string | undefined {
   }
 
   return undefined;
-}
-
-/**
- * Bir kapsamanın görev ayrılığına ne yapacağı — yazılmadan önce.
- *
- * Yalnız **seçilebilir** adaylar için çağrılıyor: döngü yaratan bir seçeneğin
- * yanına ikinci bir uyarı yazmanın anlamı yok, ve döngü sorusunu burada tekrar
- * sormak çağıranın bir satır önce aldığı cevabı ikinci kez hesaplamaktı.
- */
-function includeNote(
-  graph: readonly RoleGraphNode[],
-  parent: RoleCode,
-  child: RoleCode,
-): string | undefined {
-  const after = separationVerdictAfterInclude(graph, parent, child);
-  if (!after.violates) return undefined;
-
-  return `Bu kapsama ${parent} rolünü hem güven hem finans dalına sokar; ADR-0014 §Rol grafiği bunu OWNER dışında yasaklar. Backend bu yazımı yine de KABUL EDER — kural çalışma anında uygulanmıyor.`;
 }
 
 /** Değişikliklerin nereye yazıldığı, aramanın nasıl yapıldığı. */

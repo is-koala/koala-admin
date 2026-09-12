@@ -42,11 +42,7 @@ export interface AuthorizationFieldOption {
    * olan bir isteği göndermiyor.
    */
   readonly disabledReason?: string;
-  /**
-   * Seçilebilir ama söylenmesi gereken bir şey. Görev ayrılığını bozacak bir
-   * kapsama burada: backend onu **kabul eder**, bu yüzden seçenek kapalı
-   * değil — yalnız ne yaptığı yazılı.
-   */
+  /** Seçilebilir ama gönderilmeden önce görünür kalması gereken ek bağlam. */
   readonly note?: string;
 }
 
@@ -140,6 +136,10 @@ export function AuthorizationForm({
           field.options?.find((option) => option.disabledReason === undefined)?.value ?? "",
         ]),
     ),
+  );
+  const requiredSelectionMissing = fields.some(
+    (field) =>
+      field.type === "select" && field.required === true && (selection[field.name] ?? "") === "",
   );
 
   if (disabled) {
@@ -249,7 +249,7 @@ export function AuthorizationForm({
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || requiredSelectionMissing}
           aria-describedby={`${idPrefix}-consequence`}
           className={cn(
             BUTTON_BASE,

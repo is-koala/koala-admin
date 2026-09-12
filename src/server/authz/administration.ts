@@ -59,17 +59,13 @@ import { getStaffContext } from "./staff-context";
  * yapıyor: reddedileceği belli olan bir isteği hiç göndermemek, ve gelen reddi
  * bir hata kodu yerine bir cümleye çevirmek.
  *
- * ## Görev ayrılığı burada **yok**, ve bu bilinçli
+ * ## Görev ayrılığında backend nihai otorite
  *
- * ADR-0014 §Rol grafiği'nin kuralını backend çalışma anında uygulamıyor — bkz.
- * `ROLE_GRAPH_BACKEND_GAPS` ve `STAFF_BACKEND_GAPS`, eksik
- * `is-koala/koala-backend#133`. Kuralı bozan **iki** yazım var ve ikisi de
- * burada kontrolsüz geçiyor: bir rolün iki dalı kapsaması
- * (`ROLE_INCLUDE_ADD`) ve bir kişinin iki dalın rollerini birden taşıması
- * (`STAFF_ROLE_GRANT`). Panelin burada bir kontrol koyması, var olmayan bir
- * kuralı varmış gibi göstermek olurdu: aynı yazım `curl` ile geçerdi ve ekran
- * onu engellediğini sanırdı. Teşhis ekranda, `src/lib/role-graph.ts`
- * üzerinden; kapıda değil.
+ * Arayüz, rol grafiğini bildiği anda reddedileceği belli kapsama ve üyelik
+ * seçeneklerini kapatır. Bu kapı aynı hesabı tekrarlamaz: doğrudan çağrılabilir
+ * bir Server Action bayat ya da değiştirilmiş veri taşıyabilir. Yazım backend'e
+ * gider; `StaffSeparationOfDuties` yeniden çözülen kapanış üzerinde ihlali 409
+ * ile reddeder ve aşağıdaki açıklama operatöre hiçbir şeyin değişmediğini söyler.
  */
 
 /**
@@ -494,6 +490,8 @@ async function send(accessToken: string, change: AuthorizationChange): Promise<s
 const EXPLANATION_FOR: Record<string, string> = {
   STAFF_ROLE_GRAPH_WOULD_CYCLE:
     "Kapsanmak istenen rol, bu role zaten bir yol üzerinden ulaşıyor; kenar eklenirse grafik kendi kendini içerirdi. DAG'ın DAG kalması uçtan zorlanıyor, hiçbir şey yazılmadı.",
+  STAFF_SEPARATION_OF_DUTIES_VIOLATED:
+    "OWNER dışındaki personel ve roller güven ile finans dallarını birlikte taşıyamaz. Hiçbir rol ya da personel üyeliği değiştirilmedi.",
   STAFF_PERMISSION_NOT_GRANTABLE:
     "Kural: kendinizde olmayan bir izni bir role veremez, ondan alamaz ve o izni taşıyan bir rolü kapsatamazsınız. Aktörün izinleri her yazımda veritabanından yeniden çözülüyor, bu yüzden ekranda gördüğünüz izin listesi bayatsa cevap yine budur.",
   STAFF_ROLE_MANAGE_SELF_LOCKOUT:

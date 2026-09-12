@@ -197,10 +197,10 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
   const members = page.content;
 
   /**
-   * Görev ayrılığı teşhisi, üyelik tarafında.
+   * Görev ayrılığı ön izlemesi, üyelik tarafında.
    *
    * Rol grafiği okunabildiyse kapanışlar buradan geliyor; okunamadıysa harita
-   * boş kalıyor ve teşhis kişinin **doğrudan** rollerine iniyor. İkinci hâl
+   * boş kalıyor ve ön izleme kişinin **doğrudan** rollerine iniyor. İkinci hâl
    * eksik ama sessiz değil: `TRUST_LEAD` + `FINANCE_OFFICER` gibi elle kurulan
    * birleşim grafik olmadan da görünüyor, yalnız kalıtımla gelen dallar
    * görünmez oluyor.
@@ -317,11 +317,11 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
 }
 
 /**
- * Bir kişinin taşıdığı rollerin görev ayrılığı teşhisi.
+ * Bir kişinin taşıdığı rollerin görev ayrılığı görünümü.
  *
  * Rol grafiğindeki hesabın aynısı, girdisi bir rolün kapanışı yerine kişinin
- * rollerinin birleşik kapanışı. Kapı değil: backend bu birleşimi kabul ediyor
- * (`STAFF_BACKEND_GAPS` → `no-membership-separation-enforcement`).
+ * rollerinin birleşik kapanışı. Bu yalnız ön izlemedir; backend her rol
+ * atamasından sonra aynı kuralı yeniden uygular.
  */
 function membershipVerdictOf(closures: RoleClosures, held: readonly RoleCode[]): SeparationVerdict {
   return membershipSeparationVerdict(membershipClosure(closures, held));
@@ -330,27 +330,22 @@ function membershipVerdictOf(closures: RoleClosures, held: readonly RoleCode[]):
 /**
  * Kuralın üyelik tarafındaki durumu, listenin hemen üstünde.
  *
- * `/roles` ekranındaki kutunun kardeşi ve aynı sebeple burada: rozet bir
- * **teşhis**, bir red değil. Operatörün "kural ihlali" rozetini görüp
- * backend'in o atamayı durduracağını sanması, kuralın olmadığını hiç
- * bilmemekten daha kötü olurdu — ve bu ekran, kuralın insanın eliyle en kolay
- * bozulduğu yer: kimsenin rol grafiğine dokunması gerekmiyor.
+ * `/roles` ekranındaki kutunun kardeşi. Arayüz reddedileceği belli bir seçimi
+ * hazırlatmaz; bayat veri veya doğrudan eylem çağrısı için otorite backend'dir.
  */
 function MembershipSeparationNotice() {
   return (
     <div className="rounded-lg border border-warning/30 bg-warning-soft px-4 py-3">
       <p className="text-sm font-semibold text-warning">
-        Görev ayrılığı burada da gösterilir, uygulanmaz.
+        Görev ayrılığı personel atamalarında da uygulanır.
       </p>
       <p className="max-w-prose text-sm text-ink">
         ADR-0014 §Rol grafiği&apos;nin kuralı — güven dalı ({TRUST_BRANCH_ROLES.join(", ")}) ile
         finans dalı ({FINANCE_BRANCH_ROLES.join(", ")}) OWNER dışında birleşemez — bir{" "}
-        <strong>kişide</strong> de bozulabilir: iki dalın rollerini yan yana taşımak yeter.
-        koala-backend bunu reddetmiyor;{" "}
-        <code className="font-mono">StaffAuthorizationManager.grantRole</code> yalnız &quot;sahip
-        olmadığın izni veremezsin&quot; kuralını denetliyor. Rozetler bu yüzden bir teşhis, ve rol
-        atama seçenekleri <strong>kapatılmıyor</strong>: kapatsaydı aynı yazım{" "}
-        <code className="font-mono">curl</code> ile geçerken ekran onu engellediğini sanırdı.
+        <strong>kişide</strong> de bozulabilir: iki dalın rollerini yan yana taşımak yeter. Backend
+        her rol atamasından sonra kişinin etkili rollerini yeniden denetler ve ihlali 409 ile
+        reddeder. Panel geçersiz rol seçeneklerini önceden kapatır; nihai karar yine
+        backend&apos;indir.
       </p>
     </div>
   );
@@ -478,9 +473,6 @@ function StaffDetail({
                 }
               >
                 {separation}
-                {verdict.violates
-                  ? " Backend bu birleşimi reddetmez; rolü geri almak bu ekranda elle yapılır."
-                  : null}
               </p>
             )}
           </dd>
@@ -556,18 +548,22 @@ function StaffDetail({
                       label: "Atanacak rol",
                       type: "select",
                       required: true,
-                      hint: "Üyelik uçları rolü koduyla adresler (UUID ile değil).",
-                      /**
-                       * Seçenekler **kapatılmıyor**, yalnız ne yapacakları
-                       * yazılıyor: backend iki dalı birleştiren atamayı kabul
-                       * ediyor (`is-koala/koala-backend#133`) ve panelin burada
-                       * durması, olmayan bir kapıyı varmış gibi çizmek olurdu.
-                       */
-                      options: grantable.map((role) => ({
-                        value: role.code,
-                        label: `${role.code} — ${role.name}`,
-                        note: grantNote(closures, member.roles, role.code, label),
-                      })),
+                      hint: "Görev ayrılığı ihlali yaratacak roller seçilemez; backend aynı atamaları 409 ile reddeder.",
+                      options: grantable.map((role) => {
+                        const violatesSeparation = membershipSeparationVerdictAfterGrant(
+                          closures,
+                          member.roles,
+                          role.code,
+                        ).violates;
+
+                        return {
+                          value: role.code,
+                          label: `${role.code} — ${role.name}`,
+                          disabledReason: violatesSeparation
+                            ? "görev ayrılığını bozar; backend 409 döner"
+                            : undefined,
+                        };
+                      }),
                     },
                   ]}
                   disabled={grantable.length === 0}
@@ -680,19 +676,6 @@ function CreateStaffSection() {
       />
     </section>
   );
-}
-
-/** Bir rol atamasının görev ayrılığına ne yapacağı — yazılmadan önce. */
-function grantNote(
-  closures: RoleClosures,
-  held: readonly RoleCode[],
-  granted: RoleCode,
-  label: string,
-): string | undefined {
-  const after = membershipSeparationVerdictAfterGrant(closures, held, granted);
-  if (!after.violates) return undefined;
-
-  return `Bu atama ${label} kişisini hem güven hem finans dalına sokar; ADR-0014 §Rol grafiği bunu OWNER dışında yasaklar. Backend bu yazımı yine de KABUL EDER — kural üyelik tarafında da çalışma anında uygulanmıyor.`;
 }
 
 function StaffAuditPointer() {

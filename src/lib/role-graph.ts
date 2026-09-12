@@ -17,27 +17,25 @@ import type { RoleCode } from "./role-identity";
  * görebilsin diye. Yazımın kabul edilip edilmeyeceğine backend karar verir ve
  * reddi ekranda onun cümlesiyle görünür.
  *
- * Ayrım önemli, çünkü iki kuralın backend'deki durumu **aynı değil**:
+ * Ayrım önemli, çünkü bu hesaplar yalnız backend kuralının arayüzdeki ön
+ * izlemesidir:
  *
  *  - **Döngü gerçekten reddediliyor.** `includeRole` kapanışı gezip
  *    `ConflictException(ROLE_GRAPH_WOULD_CYCLE)` fırlatıyor → 409. Buradaki
  *    {@link wouldCycle} onun aynadaki görüntüsü; bir düğmeyi önceden kapatmak
  *    için var, reddi üretmek için değil.
- *  - **Görev ayrılığı reddedilmiyor.** ADR-0014 §Rol grafiği kuralı yazıyor
- *    ama `src/main` içinde onu uygulayan tek satır yok: kural yalnız
- *    `StaffRoleGraphSeedTest`'te, ve o test seed XML'ini okuyor — çalışan
- *    veritabanını değil, bir isteği hiç değil. Yani panel bir ihlali
- *    *gösterebilir*, **engelleyemez**; engelliyormuş gibi yapmak da yanlış
- *    olurdu, çünkü backend o yazımı kabul edecek. {@link separationVerdict}
- *    bu yüzden bir "red" değil bir **teşhis** döndürüyor.
+ *  - **Görev ayrılığı da reddediliyor.** Backend rol grafiği ve üyelik
+ *    yazımlarından sonra etkilenen kapanışları yeniden çözüp ihlali 409 ile
+ *    reddediyor. {@link separationVerdict} panelin geçersiz seçeneği önceden
+ *    kapatabilmesi için aynı sonucu hesaplar; nihai karar değildir.
  *
- * ## Kural iki yerde bozulabiliyor, teşhis de iki yerde
+ * ## Kural iki yerde bozulabiliyor, ön izlemesi de iki yerde
  *
  * Bir rolün iki dalı kapsaması ({@link separationVerdictAfterInclude}) kuralın
  * yazılı hâli, ama insanın eliyle en kolay kurulan birleşim o değil: bir
  * **kişiye** hem `TRUST_LEAD` hem `FINANCE_OFFICER` vermek. Sonuç aynı yetki
- * birleşimi, ve backend onu da reddetmiyor. {@link membershipSeparationVerdict}
- * aynı teşhisi üyelik tarafına taşıyor.
+ * birleşimi ve backend onu da reddediyor. {@link membershipSeparationVerdict}
+ * aynı ön izlemeyi üyelik tarafına taşıyor.
  */
 
 /** Bir rol düğümü — `GET /admin/roles`'un tek istekte verdiği kadarı. */
@@ -170,11 +168,10 @@ function branchesOf(closure: readonly RoleCode[]): DutyBranch[] {
 }
 
 /**
- * Bir rolün (ya da yazılmamış bir kenarın sonucunun) görev ayrılığı teşhisi.
+ * Bir rolün (ya da yazılmamış bir kenarın sonucunun) görev ayrılığı ön izlemesi.
  *
- * Dönen şey bir karar değil bir okuma. Çağıranın işi bunu ekranda söylemek;
- * bir isteği durdurmak **değil** — backend o isteği kabul edecek ve panelin
- * onu durdurması, var olmayan bir kuralı varmış gibi göstermek olurdu.
+ * Dönen şey nihai karar değil bir okuma. Çağıran reddedileceği belli seçeneği
+ * kapatır; bayat veya doğrudan gönderilmiş isteği backend yeniden denetler.
  */
 export function separationVerdict(role: RoleCode, closure: readonly RoleCode[]): SeparationVerdict {
   const branches = branchesOf(closure);
@@ -194,9 +191,7 @@ export function separationVerdictOf(
 /**
  * `parent ← child` kenarı yazılsaydı görev ayrılığı ne derdi?
  *
- * Kapsama ekleme formunun yanında gösterilen uyarı bundan geliyor. Uyarı
- * *uyarıdır*: form yine gönderilebilir, çünkü backend onu kabul edecek ve
- * panelin burada durması, olmayan bir kapıyı varmış gibi çizmek olurdu.
+ * Kapsama ekleme formundaki seçilemez seçenek ve açıklaması bundan gelir.
  */
 export function separationVerdictAfterInclude(
   graph: readonly RoleGraphNode[],
@@ -204,6 +199,29 @@ export function separationVerdictAfterInclude(
   child: RoleCode,
 ): SeparationVerdict {
   return separationVerdict(parent, closureWithSelf(graph, parent, { from: parent, to: child }));
+}
+
+/**
+ * Yeni kenar, `parent`'a ulaşan rollerden herhangi birini iki dala taşır mı?
+ *
+ * Backend yalnız doğrudan değiştirilen rolü değil, ona ulaşan bütün üst rolleri
+ * yeniden denetler. Örneğin dal dışı SUPPORT_AGENT'a finans rolü eklemek kendi
+ * başına geçerli görünür; ona ulaşan TRUST_LEAD'i iki dala taşıdığı için yine
+ * reddedilir. Alakasız, önceden bozuk bir rol bu seçeneği kapatmasın diye yalnız
+ * `parent`'a ulaşan kapanışlar incelenir.
+ */
+export function wouldViolateSeparationAfterInclude(
+  graph: readonly RoleGraphNode[],
+  parent: RoleCode,
+  child: RoleCode,
+): boolean {
+  return graph.some((node) => {
+    const reachesParent = closureWithSelf(graph, node.code).includes(parent);
+    if (!reachesParent) return false;
+
+    const closureAfterInclude = closureWithSelf(graph, node.code, { from: parent, to: child });
+    return separationVerdict(node.code, closureAfterInclude).violates;
+  });
 }
 
 /** Teşhisi bir cümleye çevirir; `null` "söylenecek bir şey yok" demek. */
@@ -214,7 +232,7 @@ export function separationSentence(role: RoleCode, verdict: SeparationVerdict): 
     return `${role} her iki dalı da kapsıyor. ADR-0014 bunu yalnız OWNER için serbest bırakır; kuralın tek yazılı istisnası budur.`;
   }
 
-  return `${role} hem güven dalını (${TRUST_BRANCH_ROLES.join(", ")}) hem finans dalını (${FINANCE_BRANCH_ROLES.join(", ")}) kapsıyor. ADR-0014 §Rol grafiği bunu OWNER dışında yasaklar.`;
+  return `${role} hem güven dalını (${TRUST_BRANCH_ROLES.join(", ")}) hem finans dalını (${FINANCE_BRANCH_ROLES.join(", ")}) kapsıyor. ADR-0014 §Rol grafiği bunu OWNER dışında yasaklar. Backend yeni rol grafiği yazımlarında bu birleşimi 409 ile reddeder; mevcut bir ihlal görüyorsanız kapsamalar ayrılmalıdır.`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -243,7 +261,7 @@ export function membershipClosure(closures: RoleClosures, held: readonly RoleCod
 }
 
 /**
- * Bir kişinin rollerinin görev ayrılığı teşhisi.
+ * Bir kişinin rollerinin görev ayrılığı ön izlemesi.
  *
  * Rol tarafındaki {@link separationVerdict}'ten tek farkı istisnanın nereden
  * okunduğu: orada sorulan "bu rol OWNER mı", burada "bu kişi OWNER'a ulaşıyor
@@ -283,5 +301,5 @@ export function membershipSeparationSentence(
     return `${label} her iki dala da OWNER üzerinden ulaşıyor. ADR-0014 kuralın tek yazılı istisnası olarak OWNER'ı bırakır.`;
   }
 
-  return `${label} taşıdığı rollerle hem güven dalına (${TRUST_BRANCH_ROLES.join(", ")}) hem finans dalına (${FINANCE_BRANCH_ROLES.join(", ")}) ulaşıyor. ADR-0014 §Rol grafiği bu birleşimi OWNER dışında yasaklar; backend üyelik yazımında da bu kuralı uygulamıyor, yani bu bir teşhis, bir red değil.`;
+  return `${label} taşıdığı rollerle hem güven dalına (${TRUST_BRANCH_ROLES.join(", ")}) hem finans dalına (${FINANCE_BRANCH_ROLES.join(", ")}) ulaşıyor. ADR-0014 §Rol grafiği bu birleşimi OWNER dışında yasaklar. Backend yeni rol atamalarında bu birleşimi 409 ile reddeder; mevcut bir ihlal görüyorsanız roller ayrılmalıdır.`;
 }

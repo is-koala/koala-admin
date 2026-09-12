@@ -27,9 +27,9 @@ import { asRoleCode } from "./role-identity";
  *
  *  - `wouldCycle`, backend'in 409 ile reddettiği durumun aynadaki görüntüsü.
  *    Yanlış olursa bir düğme gereksiz yere kapanır; kimse yetki kazanmaz.
- *  - `separationVerdict`, backend'in **reddetmediği** bir kuralın teşhisi.
- *    Yanlış olursa bir uyarı yanlış yerde çıkar; yine kimse yetki kazanmaz,
- *    ama ekran yanlış söyler.
+ *  - `separationVerdict`, backend'in 409 ile reddettiği görev ayrılığı
+ *    kuralının ön izlemesi. Yanlış olursa seçenek gereksiz yere açılır veya
+ *    kapanır; yazımın nihai kararını yine backend verir.
  *
  * Hiçbiri bir kapı değil. Kapıyı ölçen dosya `administration.test.ts` ve orada
  * ölçü birimi istek sayısı.
