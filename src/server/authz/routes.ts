@@ -171,6 +171,17 @@ export const ROUTES = [
   },
   {
     /**
+     * Kuyruk `GET /admin/account-deletions`; nesne
+     * `GET /admin/account-deletions/{id}`. İkisi de `user.read_pii`.
+     * Ret ayrı: `user.deletion.manage`, form ve action'da.
+     */
+    path: "/account-deletions/[id]",
+    title: "Hesap silme talebi",
+    access: "permission",
+    permission: "user.read_pii",
+  },
+  {
+    /**
      * koala-admin#46/#47. Pazaryeri `users` tablosu, personel değil.
      * Kapı `user.read`: `GET /admin/users` ve roller onu ister. Rol yazımı
      * `user.role.manage` ve `runAuthorizationChange` her gönderimde yeniden

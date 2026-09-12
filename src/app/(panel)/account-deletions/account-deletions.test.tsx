@@ -12,6 +12,7 @@ vi.mock("@/server/auth/session", () => ({
 }));
 
 const { default: AccountDeletionsPage } = await import("./page");
+const { default: AccountDeletionDetailPage } = await import("./[id]/page");
 
 const ADMIN_ME = apiUrl("/admin/me");
 const DELETIONS = apiUrl("/admin/account-deletions");
@@ -19,6 +20,8 @@ const DELETIONS = apiUrl("/admin/account-deletions");
 const READER = ["user.read_pii"];
 const MANAGER = ["user.read_pii", "user.deletion.manage"];
 const MODERATOR = ["content.moderate"];
+const REQUEST_ID = "aaaaaaaa-1111-4111-8111-111111111111";
+const SUBJECT_ID = "bbbbbbbb-0000-4000-8000-000000000001";
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
@@ -52,8 +55,8 @@ interface DeletionRow {
 
 function row(overrides: Partial<DeletionRow> = {}): DeletionRow {
   return {
-    id: "aaaaaaaa-1111-4111-8111-111111111111",
-    subjectId: "bbbbbbbb-0000-4000-8000-000000000001",
+    id: REQUEST_ID,
+    subjectId: SUBJECT_ID,
     status: "REQUESTED",
     requestedAt: "2026-09-10T08:00:00Z",
     processedAt: null,
@@ -97,9 +100,47 @@ function watchQueue(rows: DeletionRow[]) {
   return seen;
 }
 
+function watchDetail(data: DeletionRow = row(), respond?: () => Response) {
+  const seen: { calls: number; requestId: string | null } = {
+    calls: 0,
+    requestId: null,
+  };
+
+  server.use(
+    http.get(`${DELETIONS}/:requestId`, ({ params }) => {
+      seen.calls += 1;
+      seen.requestId = String(params.requestId);
+
+      if (respond !== undefined) return respond();
+
+      return HttpResponse.json({
+        success: true,
+        message: "Hesap silme talebi getirildi.",
+        httpStatus: "200 OK",
+        path: `/admin/account-deletions/${REQUEST_ID}`,
+        requestId: "rid-deletion-one",
+        timeStamp: "2026-09-11T08:00:00.000000000Z",
+        data,
+      });
+    }),
+  );
+
+  return seen;
+}
+
 const render = async (params: Record<string, string> = {}) =>
   (
     await renderServerComponent(<AccountDeletionsPage searchParams={Promise.resolve(params)} />)
+  ).replaceAll("<!-- -->", "");
+
+const renderDetail = async (id: string = REQUEST_ID, query: Record<string, string> = {}) =>
+  (
+    await renderServerComponent(
+      <AccountDeletionDetailPage
+        params={Promise.resolve({ id })}
+        searchParams={Promise.resolve(query)}
+      />,
+    )
   ).replaceAll("<!-- -->", "");
 
 describe("who can see the queue", () => {
@@ -122,18 +163,59 @@ describe("who can see the queue", () => {
 
     expect(queue.calls).toBe(1);
     expect(queue.authorization).toBe("Bearer ACCESS-TOKEN");
-    expect(html).toContain("bbbbbbbb-0000-4000-8000-000000000001");
+    expect(html).toContain(SUBJECT_ID);
     expect(html).not.toContain("ACCESS-TOKEN");
-    expect(html).toContain("silme yönetimi yetkisi");
+    expect(html).not.toContain("Talebi reddet");
   });
 
-  it("shows the reject form only when user.deletion.manage is held", async () => {
+  it("refuses a MODERATOR on the object page and never asks GET by id", async () => {
+    stubMe(MODERATOR, ["MODERATOR"]);
+    const detail = watchDetail();
+
+    const html = await renderDetail();
+
+    expect(detail.calls).toBe(0);
+    expect(html).toContain("403 — Bu sayfa için yetkiniz yok");
+  });
+});
+
+describe("the queue is not the review", () => {
+  it("links each row to the object page and does not inline the reject form", async () => {
     stubMe(MANAGER);
+    const detail = watchDetail();
     watchQueue([row()]);
 
-    const html = await render();
+    const html = await render({ durum: "REQUESTED", sayfa: "1", boyut: "40" });
+
+    expect(detail.calls).toBe(0);
+    expect(html).toContain(`/account-deletions/${REQUEST_ID}?`);
+    expect(html).toContain("durum=REQUESTED");
+    expect(html).toContain(`/users/${SUBJECT_ID}`);
+    expect(html).toContain("İncele");
+    expect(html).not.toContain("Talebi reddet");
+    expect(html).not.toContain("Talep detayı");
+  });
+});
+
+describe("reject stays gated on the object page", () => {
+  it("shows the reject form only when user.deletion.manage is held", async () => {
+    stubMe(MANAGER);
+    watchDetail();
+
+    const html = await renderDetail();
 
     expect(html).toContain("Talebi reddet");
+    expect(html).toContain(`/users/${SUBJECT_ID}`);
+  });
+
+  it("tells a PII reader that listing is not enough to reject", async () => {
+    stubMe(READER);
+    watchDetail();
+
+    const html = await renderDetail();
+
+    expect(html).toContain("silme yönetimi yetkisi");
+    expect(html).not.toContain("Talebi reddet");
   });
 });
 

@@ -12,6 +12,7 @@ import type { PageDto } from "./types";
  *
  * ```java
  * GET  /admin/account-deletions?status=REQUESTED|ANONYMIZED|REJECTED
+ * GET  /admin/account-deletions/{requestId}
  * POST /admin/account-deletions/{requestId}/reject  { reason }
  * ```
  *
@@ -80,6 +81,23 @@ export function getAccountDeletions(
       ...(query.status !== undefined ? { status: query.status } : {}),
       ...pagingQuery(query.paging),
     },
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+export function accountDeletionDetailPath(requestId: string): string {
+  return `${ACCOUNT_DELETIONS_PATH}/${encodeURIComponent(requestId)}`;
+}
+
+/** `GET /admin/account-deletions/{requestId}` — same AccountDeletionDto as the queue. */
+export function getAccountDeletion(
+  accessToken: string,
+  requestId: string,
+): Promise<AccountDeletion> {
+  return koalaApi.get({
+    path: accountDeletionDetailPath(requestId),
+    schema: accountDeletionSchema,
     accessToken,
     cache: "no-store",
   });
