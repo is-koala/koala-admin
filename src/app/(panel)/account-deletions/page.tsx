@@ -2,15 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/panel/page-header";
+import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
-  DecisionForm,
-  QueueFilters,
-  QueueLoadFailure,
-  QueuePager,
-  type DecisionOption,
-} from "@/components/panel/queue";
-import {
-  Badge,
   EmptyState,
   Table,
   TableBody,
@@ -18,15 +11,12 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
-  type BadgeTone,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
-import { userHrefOrNull } from "@/lib/panel-href";
+import { accountDeletionHref } from "@/lib/panel-href";
 import {
   DELETION_PAGING,
   DELETION_STATUS_FILTERS,
-  REJECTION_MAX_REASON_LENGTH,
-  REJECTION_MIN_REASON_LENGTH,
   deletionStatusLabel,
   getAccountDeletions,
   type DeletionStatus,
@@ -41,13 +31,17 @@ import {
 } from "@/server/api/paging";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
-import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
-import { submitDeletionRejection } from "./actions";
+import { DeletionStatusBadge, DeletionSubjectLink } from "./deletion-detail";
 
 export const metadata: Metadata = { title: "Hesap silme talepleri" };
 
+/**
+ * Hesap silme kuyruğu. Liste `AccountDeletionDto`; detay ve ret
+ * `/account-deletions/[id]` üzerinde. Kapı `user.read_pii`: yoksa GET çıkmaz.
+ * Ret ayrı kapı: `user.deletion.manage`.
+ */
 export default async function AccountDeletionsPage({
   searchParams,
 }: {
@@ -62,7 +56,7 @@ export default async function AccountDeletionsPage({
         description={
           <>
             Kullanıcının açtığı silme talepleri. Anonimleştirme zamanlayıcı işidir — panel
-            onaylamaz, yalnız reddeder.
+            onaylamaz, yalnız reddeder. Ret talep sayfasındadır.
           </>
         }
       />
@@ -73,12 +67,6 @@ export default async function AccountDeletionsPage({
     </div>
   );
 }
-
-const STATUS_TONES: Record<string, BadgeTone> = {
-  REQUESTED: "warning",
-  ANONYMIZED: "neutral",
-  REJECTED: "danger",
-};
 
 const SORT_OPTIONS = [
   { value: "requestedAt,desc", label: "En yeni talep önce" },
@@ -96,13 +84,13 @@ async function DeletionQueue({ params }: { params: SearchParams }) {
   );
   const status: DeletionStatus | undefined = filter === "ALL" ? undefined : filter;
   const paging = readPaging(params, DELETION_PAGING);
-  const canReject = (await getStaffContext()).has("user.deletion.manage");
 
   const viewState = {
     durum: filter,
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
   };
+  const objectQuery = { ...viewState, sayfa: String(paging.page) };
 
   const filters = (
     <QueueFilters
@@ -124,7 +112,7 @@ async function DeletionQueue({ params }: { params: SearchParams }) {
         },
       ]}
       carry={{ boyut: String(paging.size) }}
-      notice="Durum ve sıralama sunucuya gider. Durum seçilmezse backend üç durumu birden döner."
+      notice="Durum ve sıralama sunucuya gider. Durum seçilmezse backend üç durumu birden döner. Ret talep sayfasındadır."
     />
   );
 
@@ -160,147 +148,55 @@ async function DeletionQueue({ params }: { params: SearchParams }) {
           description="Kuyruk sunucudaki sayfadır; panel gelen satırları süzmez."
         />
       ) : (
-        <>
-          <Table caption="Hesap silme kuyruğu">
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Talep</TableHeaderCell>
-                <TableHeaderCell>Durum</TableHeaderCell>
-                <TableHeaderCell>Kullanıcı</TableHeaderCell>
-                <TableHeaderCell>İstendi</TableHeaderCell>
-                <TableHeaderCell>İşlendi</TableHeaderCell>
-                <TableHeaderCell>Not</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    <a href={`#talep-${row.id}`} className="font-mono text-brand hover:underline">
-                      {row.id.slice(0, 8)}
-                    </a>
-                  </TableCell>
-                  <TableCell>
-                    <Badge tone={STATUS_TONES[row.status] ?? "neutral"}>
-                      {deletionStatusLabel(row.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    <SubjectLink subjectId={row.subjectId} />
-                  </TableCell>
-                  <TableCell>{formatDateTime(row.requestedAt)}</TableCell>
-                  <TableCell>{formatDateTime(row.processedAt)}</TableCell>
-                  <TableCell className="max-w-72 truncate">
-                    {row.blockedReason ?? EMPTY_VALUE}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-
-          <QueuePager window={pageWindow(page)} state={viewState} unit="talep" />
-
-          <section className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold">Talep detayı</h2>
+        <Table caption="Hesap silme kuyruğu">
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell>Talep</TableHeaderCell>
+              <TableHeaderCell>Durum</TableHeaderCell>
+              <TableHeaderCell>Kullanıcı</TableHeaderCell>
+              <TableHeaderCell>İstendi</TableHeaderCell>
+              <TableHeaderCell>İşlendi</TableHeaderCell>
+              <TableHeaderCell>Not</TableHeaderCell>
+              <TableHeaderCell>Detay</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {rows.map((row) => (
-              <DeletionDetail key={row.id} row={row} canReject={canReject} />
+              <TableRow key={row.id}>
+                <TableCell>
+                  <Link
+                    href={accountDeletionHref(row.id, objectQuery)}
+                    className="font-mono text-brand hover:underline"
+                  >
+                    {row.id.slice(0, 8)}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <DeletionStatusBadge status={row.status} />
+                </TableCell>
+                <TableCell className="font-mono text-xs">
+                  <DeletionSubjectLink subjectId={row.subjectId} />
+                </TableCell>
+                <TableCell>{formatDateTime(row.requestedAt)}</TableCell>
+                <TableCell>{formatDateTime(row.processedAt)}</TableCell>
+                <TableCell className="max-w-72 truncate">
+                  {row.blockedReason ?? EMPTY_VALUE}
+                </TableCell>
+                <TableCell>
+                  <Link
+                    href={accountDeletionHref(row.id, objectQuery)}
+                    className="text-brand hover:underline"
+                  >
+                    İncele
+                  </Link>
+                </TableCell>
+              </TableRow>
             ))}
-          </section>
-        </>
+          </TableBody>
+        </Table>
       )}
+
+      <QueuePager window={pageWindow(page)} state={viewState} unit="talep" />
     </div>
-  );
-}
-
-function SubjectLink({ subjectId }: { subjectId: string | null }) {
-  const href = userHrefOrNull(subjectId);
-  if (subjectId === null) return EMPTY_VALUE;
-  if (href === null) return subjectId;
-  return (
-    <Link href={href} className="text-brand hover:underline">
-      {subjectId}
-    </Link>
-  );
-}
-
-const REJECT_OPTION: DecisionOption = {
-  value: "REJECT",
-  label: "Reddet",
-  consequence:
-    "Talep reddedilir ve anonimleştirme bu kayıt için durur. Gerekçe kayda geçer. Bu geri alınamaz.",
-  irreversible: true,
-};
-
-function DeletionDetail({
-  row,
-  canReject,
-}: {
-  row: {
-    id: string;
-    subjectId: string | null;
-    status: string;
-    requestedAt: string | null;
-    processedAt: string | null;
-    blockedReason: string | null;
-  };
-  canReject: boolean;
-}) {
-  const open = row.status === "REQUESTED";
-
-  return (
-    <details
-      id={`talep-${row.id}`}
-      className="rounded-lg border border-border-subtle bg-surface px-4 py-3"
-    >
-      <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-ink">
-        <span className="font-mono text-xs text-ink-subtle">{row.id.slice(0, 8)}</span>
-        <Badge tone={STATUS_TONES[row.status] ?? "neutral"}>
-          {deletionStatusLabel(row.status)}
-        </Badge>
-        <span className="text-ink-muted">{formatDateTime(row.requestedAt)}</span>
-      </summary>
-
-      <div className="mt-4 flex flex-col gap-4">
-        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[10rem_1fr]">
-          <dt className="text-sm text-ink-muted">Talep kimliği</dt>
-          <dd className="font-mono text-sm break-all">{row.id}</dd>
-          <dt className="text-sm text-ink-muted">Kullanıcı</dt>
-          <dd className="font-mono text-sm break-all">
-            <SubjectLink subjectId={row.subjectId} />
-          </dd>
-          <dt className="text-sm text-ink-muted">İstendi</dt>
-          <dd className="text-sm">{formatDateTime(row.requestedAt)}</dd>
-          <dt className="text-sm text-ink-muted">İşlendi</dt>
-          <dd className="text-sm">{formatDateTime(row.processedAt)}</dd>
-          <dt className="text-sm text-ink-muted">Not</dt>
-          <dd className="text-sm whitespace-pre-wrap">{row.blockedReason ?? EMPTY_VALUE}</dd>
-        </dl>
-
-        {canReject ? (
-          <DecisionForm
-            action={submitDeletionRejection}
-            hiddenFields={{ requestId: row.id }}
-            options={[REJECT_OPTION]}
-            legend="Ret"
-            noteLabel="Ret gerekçesi"
-            noteHint={`En az ${REJECTION_MIN_REASON_LENGTH}, en fazla ${REJECTION_MAX_REASON_LENGTH} karakter. Backend gerekçeyi zorunlu tutar.`}
-            submitLabel="Talebi reddet"
-            minNoteLength={REJECTION_MIN_REASON_LENGTH}
-            maxNoteLength={REJECTION_MAX_REASON_LENGTH}
-            idPrefix={`talep-${row.id}`}
-            disabled={!open}
-            disabledReason={
-              open
-                ? undefined
-                : `Bu talep "${deletionStatusLabel(row.status)}" — backend işlenmiş bir talebi tekrar reddetmiyor (409).`
-            }
-          />
-        ) : (
-          <p className="text-sm text-ink-muted">
-            Bu talebi reddetmek için silme yönetimi yetkisi gerekir. Listeyi görebilmek yetmez.
-          </p>
-        )}
-      </div>
-    </details>
   );
 }

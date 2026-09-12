@@ -46,6 +46,17 @@ export function identityReviewHref(
   return withQuery(`/identity-reviews/${reviewId}`, queueState);
 }
 
+export function accountDeletionsHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/account-deletions", state);
+}
+
+export function accountDeletionHref(
+  requestId: string,
+  queueState: Readonly<Record<string, string>> = {},
+): Route {
+  return withQuery(`/account-deletions/${requestId}`, queueState);
+}
+
 export function disputeHref(disputeId: string): Route {
   return asRoute(`/disputes/${disputeId}`);
 }

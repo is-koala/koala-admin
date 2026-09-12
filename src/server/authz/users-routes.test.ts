@@ -32,3 +32,14 @@ describe("the marketplace user directory is gated on user.read", () => {
     expect(navigationFor(["user.read"]).map((entry) => entry.href)).not.toContain("/users/[id]");
   });
 });
+
+describe("the account deletion object page is gated on user.read_pii", () => {
+  it("is registered and stays off the menu", () => {
+    const entry = entryFor("/account-deletions/[id]");
+
+    expect(entry).toMatchObject({ permission: "user.read_pii" });
+    expect(navigationFor(["user.read_pii"]).map((entry) => entry.href)).toEqual([
+      "/account-deletions",
+    ]);
+  });
+});
