@@ -114,21 +114,17 @@ async function RoleGraph() {
 
   let roles: StaffRole[];
   let catalog: StaffPermissionEntry[];
-  let memberRoles: readonly (readonly RoleCode[])[];
+  let memberRoles: readonly (readonly RoleCode[])[] = [];
+  let membershipPreviewComplete = false;
   try {
     /**
-     * Rol ve izin kataloğu zorunlu iki istek. `staff.read` varsa personel
-     * üyelikleri de son sayfaya kadar okunuyor; backend bir kapsama yazımında
-     * rol kapanışlarının yanında etkilenen kişileri de denetliyor.
+     * Rol ve izin kataloğu ekranın zorunlu verisi: ikisinden biri okunamazsa
+     * rol grafiği doğru çizilemez ve mevcut yükleme hatası gösterilir.
      */
-    const [loadedRoles, loadedCatalog, members] = await Promise.all([
+    [roles, catalog] = await Promise.all([
       getStaffRoles(accessToken),
       getStaffPermissionCatalog(accessToken),
-      context.has("staff.read") ? getAllStaffMembers(accessToken) : Promise.resolve([]),
     ]);
-    roles = loadedRoles;
-    catalog = loadedCatalog;
-    memberRoles = members.map((member) => member.roles);
   } catch (error) {
     return (
       <div className="flex flex-col gap-4">
@@ -139,6 +135,20 @@ async function RoleGraph() {
         />
       </div>
     );
+  }
+
+  if (context.has("staff.read")) {
+    try {
+      /**
+       * Üyelikler yalnız seçim ön izlemesini derinleştirir. Backend yazımda
+       * bütün üyelikleri tekrar denetlediği için bu okumanın hatası rol
+       * yönetimini kapatmamalı; eksik ön izleme aşağıda açıkça söylenir.
+       */
+      memberRoles = (await getAllStaffMembers(accessToken)).map((member) => member.roles);
+      membershipPreviewComplete = true;
+    } catch {
+      memberRoles = [];
+    }
   }
 
   const graph: RoleGraphNode[] = roles.map((role) => ({
@@ -169,7 +179,10 @@ async function RoleGraph() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SeparationNotice membershipPreviewComplete={context.has("staff.read")} />
+      <SeparationNotice
+        membershipPreviewComplete={membershipPreviewComplete}
+        canReadMemberships={context.has("staff.read")}
+      />
 
       {roles.length === 0 ? (
         <EmptyState
@@ -284,8 +297,10 @@ function effectivePermissionsIn(
  */
 function SeparationNotice({
   membershipPreviewComplete,
+  canReadMemberships,
 }: {
   readonly membershipPreviewComplete: boolean;
+  readonly canReadMemberships: boolean;
 }) {
   return (
     <div className="rounded-lg border border-warning/30 bg-warning-soft px-4 py-3">
@@ -307,9 +322,16 @@ function SeparationNotice({
       </p>
       {membershipPreviewComplete ? null : (
         <p className="mt-2 max-w-prose text-sm text-ink">
-          Bu oturum <code className="font-mono">staff.read</code> taşımadığı için personel
-          üyeliklerinden doğan etkiler seçenek ön izlemesinde görünmeyebilir. Backend bu birleşimi
-          yine 409 ile reddeder.
+          <strong>Personel üyeliği ön izlemesi eksik.</strong>{" "}
+          {canReadMemberships ? (
+            <>Personel kayıtlarının tamamı okunamadı.</>
+          ) : (
+            <>
+              Bu oturum <code className="font-mono">staff.read</code> taşımadığı için personel
+              üyeliklerinden doğan etkiler seçenek ön izlemesinde görünmeyebilir.
+            </>
+          )}{" "}
+          Backend bu birleşimi yine 409 ile reddeder.
         </p>
       )}
     </div>

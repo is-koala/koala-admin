@@ -260,14 +260,18 @@ describe("kapı: izin yoksa hiçbir şey çekilmiyor", () => {
     expect(html).toContain("İzinleriniz çözülemedi");
   });
 
-  it("role.manage varsa grafiği bir kez çekiyor", async () => {
+  it("role.manage var ama staff.read yoksa personel istemeden rol grafiğini çiziyor", async () => {
     stubMe(["role.manage"]);
     const graph = watchGraph();
 
-    await render();
+    const html = await render();
 
     expect(graph.roles).toBe(1);
     expect(graph.permissions).toBe(1);
+    expect(graph.staff).toBe(0);
+    expect(html).toContain(
+      "personel üyeliklerinden doğan etkiler seçenek ön izlemesinde görünmeyebilir",
+    );
   });
 });
 
@@ -502,6 +506,54 @@ describe("görev ayrılığı: backend kuralının arayüzdeki ön izlemesi", ()
 
     expect(option).toContain("disabled");
     expect(option).toContain("görev ayrılığını bozar; backend 409 döner");
+  });
+
+  it("personelin sonraki sayfası okunamazsa rol ekranını açık ve eksik ön izlemeyi görünür tutuyor", async () => {
+    let staffRequests = 0;
+    stubMe(["role.manage", "staff.read"]);
+    watchGraph();
+    server.use(
+      http.get(STAFF, ({ request }) => {
+        staffRequests += 1;
+        const page = Number(new URL(request.url).searchParams.get("page") ?? 0);
+
+        if (page === 1) {
+          return HttpResponse.json(
+            {
+              success: false,
+              message: "Personel listesi geçici olarak okunamadı.",
+              httpStatus: "503 SERVICE_UNAVAILABLE",
+              errorCode: "STAFF_LIST_UNAVAILABLE",
+              errorCategory: "UNEXPECTED",
+              requestId: "rid-staff-page-2",
+              path: "/admin/staff",
+              timeStamp: "2026-09-12T10:00:00Z",
+            },
+            { status: 503 },
+          );
+        }
+
+        return HttpResponse.json(
+          envelope("/admin/staff", {
+            content: [],
+            page: 0,
+            size: 100,
+            totalElements: 1,
+            totalPages: 2,
+            first: true,
+            last: false,
+          }),
+        );
+      }),
+    );
+
+    const html = await render();
+
+    expect(staffRequests).toBe(2);
+    expect(html).toContain("Rol detayları");
+    expect(html).toContain("Personel üyeliği ön izlemesi eksik.");
+    expect(html).toContain("Backend bu birleşimi yine 409 ile reddeder.");
+    expect(html).not.toContain("rid-staff-page-2");
   });
 
   it("aynı dalda kalan kapsamayı seçilebilir bırakıyor", async () => {
