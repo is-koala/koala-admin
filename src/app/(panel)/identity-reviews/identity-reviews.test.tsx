@@ -18,8 +18,10 @@ const ADMIN_ME = apiUrl("/admin/me");
 const REVIEWS = apiUrl("/admin/identity-verifications");
 
 const REVIEW_ID = "a1000000-0000-4000-8000-000000000001";
+const SELFIE_ID = "e5000000-0000-4000-8000-000000000005";
 const FRONT_ID = "c3000000-0000-4000-8000-000000000003";
 const BACK_ID = "d4000000-0000-4000-8000-000000000004";
+const TOGETHER_ID = "f6000000-0000-4000-8000-000000000006";
 
 const REVIEWER = ["identity.review"];
 const MODERATOR = ["content.moderate"];
@@ -37,8 +39,10 @@ const PENDING_REVIEW = {
   rejectedAt: null,
   verifiedAt: null,
   reviewedByStaffId: null,
+  selfieDocumentId: SELFIE_ID,
   frontDocumentId: FRONT_ID,
   backDocumentId: BACK_ID,
+  togetherDocumentId: TOGETHER_ID,
   createdAt: "2026-09-11T12:00:00Z",
   fileUrl: "s3://koala-secret/tckk.jpg",
   storageKey: "images/tckk.jpg",
@@ -196,20 +200,32 @@ describe("the queue is not the review", () => {
 });
 
 describe("TCKK photos on the object page", () => {
-  it("points front and back imgs at the same-origin BFF and never at storage", async () => {
+  it("points all four imgs at the same-origin BFF and never at storage", async () => {
     stubMe(REVIEWER);
     watchDetail(PENDING_REVIEW);
 
     const html = await renderDetail();
 
     expect(html).toContain(
+      `/api/identity-verifications/${REVIEW_ID}/documents/${SELFIE_ID}/download`,
+    );
+    expect(html).toContain(
       `/api/identity-verifications/${REVIEW_ID}/documents/${FRONT_ID}/download`,
     );
     expect(html).toContain(
       `/api/identity-verifications/${REVIEW_ID}/documents/${BACK_ID}/download`,
     );
+    expect(html).toContain(
+      `/api/identity-verifications/${REVIEW_ID}/documents/${TOGETHER_ID}/download`,
+    );
+    expect(html).toContain("Yüz");
+    expect(html).toContain("TCKK ön");
+    expect(html).toContain("TCKK arka");
+    expect(html).toContain("TCKK yüzün altında");
+    expect(html).toMatch(/alt="Yüz fotoğrafı"/);
     expect(html).toMatch(/alt="TCKK ön yüz"/);
     expect(html).toMatch(/alt="TCKK arka yüz"/);
+    expect(html).toMatch(/alt="TCKK yüzün altında"/);
     expect(html).not.toContain("s3://");
     expect(html).not.toContain("/uploads/images/");
     expect(html).not.toContain("koala-backend.test");
@@ -223,8 +239,10 @@ describe("TCKK photos on the object page", () => {
     stubMe(REVIEWER);
     watchDetail({
       ...PENDING_REVIEW,
+      selfieDocumentId: null,
       frontDocumentId: null,
       backDocumentId: null,
+      togetherDocumentId: null,
       fileUrl: undefined,
       storageKey: undefined,
     });
@@ -232,8 +250,10 @@ describe("TCKK photos on the object page", () => {
     const html = await renderDetail();
 
     expect(html).not.toContain("/documents/");
-    expect(html).toContain("Ön yüz fotoğrafı yok");
-    expect(html).toContain("Arka yüz fotoğrafı yok");
+    expect(html).toContain("Yüz fotoğrafı yok");
+    expect(html).toContain("TCKK ön fotoğrafı yok");
+    expect(html).toContain("TCKK arka fotoğrafı yok");
+    expect(html).toContain("TCKK yüzün altında fotoğrafı yok");
     expect(html).toContain("Kimliği onayla");
     expect(html).toContain("İncelemeyi reddet");
   });
