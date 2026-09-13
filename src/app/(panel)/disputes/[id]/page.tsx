@@ -11,6 +11,7 @@ import { isKoalaApiError } from "@/server/api/errors";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
+import { SignedDownloadAllowlistNotice } from "@/server/evidence/signed-download-notice";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
 import { DisputeDetail, type EvidenceResult, type SummaryEntry } from "../dispute-detail";
@@ -81,6 +82,7 @@ async function DisputeObject({ id }: { id: string }) {
 
   return (
     <div className="flex flex-col gap-6">
+      <SignedDownloadAllowlistNotice subject="Kanıt dosyaları" />
       {!canReadSummaries ? (
         <ErrorState
           title="Emanet tutarlarını görüntüleme izniniz yok."

@@ -2,8 +2,10 @@ import { env } from "@/env";
 import { disputeEvidencePath, getDisputeEvidence } from "@/server/api/disputes";
 import { isKoalaApiError } from "@/server/api/errors";
 import { buildKoalaUrl, KOALA_ACCEPT_LANGUAGE } from "@/server/api/koala";
+import { DOWNLOAD_ERROR_HEADER, type DownloadErrorReason } from "@/lib/evidence-download";
 import { isStaffAuthError } from "@/server/auth/errors";
 import { getKoalaAccessToken } from "@/server/auth/session";
+import { allowedSignedDownload } from "@/server/evidence/signed-download";
 
 interface RouteContext {
   params: Promise<{ disputeId: string; evidenceId: string }>;
@@ -47,12 +49,12 @@ export async function GET(request: Request, { params }: RouteContext): Promise<R
     );
 
     if (upstream.status === 302) {
-      const signedUrl = allowedSignedDownload(upstream.headers.get("location"));
-      if (signedUrl === null) {
-        return upstreamFailure();
+      const signed = allowedSignedDownload(upstream.headers.get("location"));
+      if (!signed.ok) {
+        return upstreamFailure(signed.reason);
       }
 
-      const stored = await fetch(signedUrl, {
+      const stored = await fetch(signed.url, {
         method: "GET",
         headers: new Headers(),
         cache: "no-store",
@@ -60,7 +62,7 @@ export async function GET(request: Request, { params }: RouteContext): Promise<R
         signal: AbortSignal.any([request.signal, AbortSignal.timeout(env.KOALA_API_TIMEOUT_MS)]),
       });
       if (stored.status !== 200) {
-        return upstreamFailure();
+        return upstreamFailure("upstream");
       }
       return attachmentResponse(stored, file.fileName);
     }
@@ -69,7 +71,7 @@ export async function GET(request: Request, { params }: RouteContext): Promise<R
       return concealedNotFound();
     }
     if (upstream.status !== 200) {
-      return upstreamFailure();
+      return upstreamFailure("upstream");
     }
 
     return attachmentResponse(upstream, file.fileName);
@@ -81,21 +83,12 @@ export async function GET(request: Request, { params }: RouteContext): Promise<R
     ) {
       return concealedNotFound();
     }
-    return upstreamFailure();
+    return upstreamFailure("upstream");
   }
 }
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
-
-function allowedSignedDownload(location: string | null): string | null {
-  if (location === null || !URL.canParse(location)) return null;
-
-  const url = new URL(location);
-  if (url.username.length > 0 || url.password.length > 0) return null;
-  if (!env.EVIDENCE_DOWNLOAD_ALLOWED_ORIGINS.includes(url.origin)) return null;
-  return url.toString();
 }
 
 function attachmentResponse(upstream: Response, fileName: string): Response {
@@ -147,9 +140,17 @@ function concealedNotFound(): Response {
   });
 }
 
-function upstreamFailure(): Response {
+/**
+ * Gövde personelin gördüğü cümle; neden başlıkta. Tarayıcı `img onError`
+ * içinde başlığı okuyamaz, fotoğraf kutusu `HEAD` ile geri gelip okur.
+ */
+function upstreamFailure(reason: DownloadErrorReason): Response {
   return new Response("Kanıt dosyası indirilemedi.", {
     status: 502,
-    headers: { ...SECURITY_HEADERS, "Content-Type": "text/plain; charset=utf-8" },
+    headers: {
+      ...SECURITY_HEADERS,
+      "Content-Type": "text/plain; charset=utf-8",
+      [DOWNLOAD_ERROR_HEADER]: reason,
+    },
   });
 }
