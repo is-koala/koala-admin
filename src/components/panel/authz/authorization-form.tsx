@@ -142,11 +142,20 @@ export function AuthorizationForm({
       field.type === "select" && field.required === true && (selection[field.name] ?? "") === "",
   );
 
+  // Kapalı satır formu gizler; başarı cümlesi useActionState'te kalır. Göstermezsek
+  // yenilemeden sonra operatör "oldu mu?" diye tekrar basar.
   if (disabled) {
     return (
-      <p className="rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 text-sm text-ink-muted">
-        {disabledReason ?? "Bu değişiklik yapılamaz."}
-      </p>
+      <div className="flex flex-col gap-2">
+        {state.status === "SUCCEEDED" ? (
+          <p role="status" className="rounded-md bg-success-soft px-3 py-2 text-sm text-success">
+            {state.message}
+          </p>
+        ) : null}
+        <p className="rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 text-sm text-ink-muted">
+          {disabledReason ?? "Bu değişiklik yapılamaz."}
+        </p>
+      </div>
     );
   }
 

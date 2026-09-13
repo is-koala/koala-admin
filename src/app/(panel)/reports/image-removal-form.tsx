@@ -6,7 +6,7 @@ import { initialDecisionState } from "@/components/panel/queue/decision-state";
 
 import { submitImageRemoval } from "./actions";
 
-export function ImageRemovalForm({ imageId, reportId }: { imageId: string; reportId?: string }) {
+export function ImageRemovalForm({ imageId, reportId }: { imageId: string; reportId: string }) {
   const [state, action, pending] = useActionState(submitImageRemoval, initialDecisionState);
 
   return (
@@ -15,7 +15,7 @@ export function ImageRemovalForm({ imageId, reportId }: { imageId: string; repor
       className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-4 py-3"
     >
       <input type="hidden" name="imageId" value={imageId} />
-      {reportId === undefined ? null : <input type="hidden" name="reportId" value={reportId} />}
+      <input type="hidden" name="reportId" value={reportId} />
       <p className="text-sm text-ink">
         Görseli bütün ilan ve şirket galerilerinden düşürür. Depodaki dosya durur. Geri alınamaz.
       </p>

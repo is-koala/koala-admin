@@ -1,5 +1,8 @@
 "use server";
 
+import type { Route } from "next";
+import { redirect } from "next/navigation";
+
 import {
   decisionRejected,
   decisionSucceeded,
@@ -121,12 +124,17 @@ export async function submitImageRemoval(
   if (imageId === "") {
     return decisionRejected("Görsel kimliği gelmedi. Sayfayı yenileyip tekrar deneyin.");
   }
+  if (reportId === "") {
+    return decisionRejected("Şikayet kimliği gelmedi. Sayfayı yenileyip tekrar deneyin.");
+  }
 
   try {
     await removeAdminImage(await getKoalaAccessToken(), imageId);
-    revalidateAfterWrite(...(reportId === "" ? [] : [`/reports/${reportId}`]), "/reports", "/");
-    return decisionSucceeded("Görsel kaldırıldı. İlan ve şirket galerilerinden düştü.");
   } catch (error) {
     return decisionFailureFrom(error, "Görsel kaldırılamadı.");
   }
+
+  revalidateAfterWrite(`/reports/${reportId}`, "/reports", "/");
+  // Form, görsel id'si düşünce ağaçtan düşer; bildirim URL'de kalsın.
+  redirect(`/reports/${reportId}?sonuc=gorsel-kaldirildi` as Route);
 }

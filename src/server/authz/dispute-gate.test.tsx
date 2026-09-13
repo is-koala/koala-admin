@@ -455,6 +455,36 @@ describe("the selected dispute", () => {
     expect(html).toContain("Kararı gözden geçir");
   });
 
+  it("keeps the recorded resolution as a status after the dispute closes", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    watchDispute(() =>
+      HttpResponse.json({
+        success: true,
+        message: "Uyuşmazlık getirildi.",
+        httpStatus: "200 OK",
+        path: `/admin/disputes/${DISPUTE}`,
+        requestId: "rid-dispute",
+        timeStamp: "2026-09-06T09:00:00.000000000Z",
+        data: {
+          ...DISPUTE_ROW,
+          status: "RESOLVED",
+          resolution: "RELEASE_TO_WORKER",
+          resolutionNote: "Kanıtlar işçinin teslimatını doğruluyor.",
+          resolvedAt: "2026-09-06T10:00:00.000000000Z",
+        },
+      }),
+    );
+    watchSummary();
+    watchEvidence();
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Karar kaydedildi");
+    expect(html).toContain("İşçiye çıkar");
+    expect(html).toContain("Bu uyuşmazlık kapanmış");
+    expect(html).not.toContain("Kararı gözden geçir");
+  });
+
   it("contains an evidence failure inside its panel and keeps the rest of the dispute usable", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDispute();

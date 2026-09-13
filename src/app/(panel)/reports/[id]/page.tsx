@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
+import { readParam, type SearchParams } from "@/server/api/paging";
 import { getReport, reportReasonLabel, reportStatusLabel } from "@/server/api/reports";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
@@ -21,8 +22,16 @@ const OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
  * Şikayet nesne sayfası. Karar ve görsel kaldırma burada; kuyruk yalnız listeler.
  * Kapı `content.moderate`: izni olmayan kişide GET /admin/reports/{id} çıkmaz.
  */
-export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ReportDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<SearchParams>;
+}) {
   const { id } = await params;
+  const query = searchParams === undefined ? {} : await searchParams;
+  const imageRemoved = readParam(query, "sonuc") === "gorsel-kaldirildi";
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,6 +46,12 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           </>
         }
       />
+
+      {imageRemoved ? (
+        <p role="status" className="rounded-md bg-success-soft px-3 py-2 text-sm text-success">
+          Görsel kaldırıldı. İlan ve şirket galerilerinden düştü.
+        </p>
+      ) : null}
 
       <RequirePermission permission="content.moderate">
         <ReportObject id={id} />
