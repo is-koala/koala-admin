@@ -1,5 +1,8 @@
 "use server";
 
+import type { Route } from "next";
+import { redirect } from "next/navigation";
+
 import {
   decisionRejected,
   decisionSucceeded,
@@ -14,6 +17,7 @@ import {
 } from "@/server/api/reports";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { decisionFailureFrom, guardDecision } from "@/server/queue/decisions";
+import { revalidateAfterWrite } from "@/server/queue/revalidate-after-write";
 
 /**
  * The one mutating thing the report queue does.
@@ -25,11 +29,10 @@ import { decisionFailureFrom, guardDecision } from "@/server/queue/decisions";
  * action = "report.review")` on `ReportsController.review` remains the
  * authority; this refuses earlier and in words.
  *
- * Nothing here revalidates a path deliberately. `(panel)/layout.tsx` is
- * `force-dynamic` and every Koala call is `cache: "no-store"`, so there is no
- * cached page to invalidate — the router re-renders the route with the action's
- * response and the queue is re-fetched on the way. A `revalidatePath` here
- * would be a no-op that read like a safeguard.
+ * Başarıdan sonra detay, kuyruk ve ana ekran yenilenir. `force-dynamic` RSC
+ * gövdesini önbelleğe almaz; istemci router'ı kuyruk satırını ve ana ekran
+ * sayılarını yine de tutar. Yenilemezsek operatör kapalı şikayeti hâlâ açık
+ * görür ve ortak karar formundan ikinci kez gönderir.
  *
  * Nothing but an async function is exported, either: a `"use server"` module
  * that exports a constant fails the build with every one of its exports
@@ -96,6 +99,7 @@ export async function submitReportReview(
       note,
     });
 
+    revalidateAfterWrite(`/reports/${reportId}`, "/reports", "/");
     return decisionSucceeded(
       `Şikayet "${reportStatusLabel(reviewed.status)}" olarak kaydedildi. Karar mobil taraftaki GET /reports/me yanıtına da yansır.`,
     );
@@ -116,14 +120,21 @@ export async function submitImageRemoval(
   if (denied !== null) return denied;
 
   const imageId = field(formData, "imageId").trim();
+  const reportId = field(formData, "reportId").trim();
   if (imageId === "") {
     return decisionRejected("Görsel kimliği gelmedi. Sayfayı yenileyip tekrar deneyin.");
+  }
+  if (reportId === "") {
+    return decisionRejected("Şikayet kimliği gelmedi. Sayfayı yenileyip tekrar deneyin.");
   }
 
   try {
     await removeAdminImage(await getKoalaAccessToken(), imageId);
-    return decisionSucceeded("Görsel kaldırıldı. İlan ve şirket galerilerinden düştü.");
   } catch (error) {
     return decisionFailureFrom(error, "Görsel kaldırılamadı.");
   }
+
+  revalidateAfterWrite(`/reports/${reportId}`, "/reports", "/");
+  // Form, görsel id'si düşünce ağaçtan düşer; bildirim URL'de kalsın.
+  redirect(`/reports/${reportId}?sonuc=gorsel-kaldirildi` as Route);
 }

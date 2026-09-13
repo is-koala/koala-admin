@@ -17,11 +17,14 @@ import { apiUrl, server } from "../../../../test/msw";
  */
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+const revalidatePath = vi.fn<(path: string) => void>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
   backendSaysPasswordMustChange: () => Promise.resolve(false),
 }));
+
+vi.mock("next/cache", () => ({ revalidatePath }));
 
 const { IDLE_AUTHORIZATION_OUTCOME } = await import("@/lib/authorization-change");
 const {
@@ -49,12 +52,14 @@ const MEMBER = {
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  revalidatePath.mockReset();
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   getKoalaAccessToken.mockReset();
+  revalidatePath.mockReset();
 });
 
 function stubMe(permissions: readonly string[]) {
@@ -117,6 +122,7 @@ describe("personel oluşturma", () => {
     // Kabul maddesi değil ama ekranın söylemesi gereken şey: yeni hesap hiçbir
     // ekrana ulaşamaz, çünkü rolü yok.
     expect(outcome.message).toContain("henüz hiçbir rolü yok");
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual(["/staff", "/"]);
   });
 
   it("görünen ad boşsa alanı hiç göndermiyor", async () => {
@@ -155,6 +161,7 @@ describe("personel oluşturma", () => {
 
     expect(create.calls).toBe(0);
     expect(outcome.status).toBe("BLOCKED");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
 
@@ -198,6 +205,45 @@ describe("rol üyeliği", () => {
 
     expect(grant.path).toBe(`/admin/staff/${STAFF_ID}/roles/SUPPORT_AGENT`);
     expect(grant.body).toBe("");
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual(["/staff", "/"]);
+  });
+
+  it("aynı rolü ikinci kez vermek listeyi yeniden yenilemez", async () => {
+    stubMe(["staff.manage"]);
+    watch("post", apiUrl(`/admin/staff/${STAFF_ID}/roles/:roleCode`));
+
+    const first = await grantRoleToStaff(
+      IDLE_AUTHORIZATION_OUTCOME,
+      form({ staffId: STAFF_ID, staffLabel: "Biri", roleCode: "SUPPORT_AGENT" }),
+    );
+    expect(first.status).toBe("SUCCEEDED");
+    revalidatePath.mockClear();
+
+    server.use(
+      http.post(apiUrl(`/admin/staff/${STAFF_ID}/roles/:roleCode`), () =>
+        HttpResponse.json(
+          {
+            success: false,
+            message: "Rol zaten verilmiş.",
+            httpStatus: "409 CONFLICT",
+            errorCode: "STAFF_ROLE_ALREADY_GRANTED",
+            errorCategory: "DATA_CONFLICT",
+            requestId: "rid-409-replay",
+            path: `/admin/staff/${STAFF_ID}/roles/SUPPORT_AGENT`,
+            timeStamp: "2026-09-08T09:00:00.000000000Z",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const second = await grantRoleToStaff(
+      IDLE_AUTHORIZATION_OUTCOME,
+      form({ staffId: STAFF_ID, staffLabel: "Biri", roleCode: "SUPPORT_AGENT" }),
+    );
+
+    expect(second.status).toBe("REFUSED");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("rolü geri alırken iptalin anında geçerli olduğunu söylüyor", async () => {
@@ -222,6 +268,7 @@ describe("rol üyeliği", () => {
 
     expect(grant.calls).toBe(0);
     expect(outcome.field).toBe("roleCode");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
 

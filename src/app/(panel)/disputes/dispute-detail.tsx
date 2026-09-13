@@ -268,9 +268,24 @@ export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailP
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">Uyuşmazlığı çöz</h3>
           {dispute.status === "RESOLVED" ? (
-            <p className="max-w-prose text-sm text-ink-muted">
-              Bu uyuşmazlık kapanmış. Backend ikinci bir çözümü 409 ile reddeder.
-            </p>
+            <div className="flex flex-col gap-2">
+              <p
+                role="status"
+                className="rounded-md bg-success-soft px-3 py-2 text-sm text-success"
+              >
+                Karar kaydedildi
+                {dispute.resolution === null
+                  ? "."
+                  : `: ${
+                      DISPUTE_RESOLUTION_SPECS.find(
+                        (spec) => spec.resolution === dispute.resolution,
+                      )?.label ?? dispute.resolution
+                    }.`}
+              </p>
+              <p className="max-w-prose text-sm text-ink-muted">
+                Bu uyuşmazlık kapanmış. Backend ikinci bir çözümü 409 ile reddeder.
+              </p>
+            </div>
           ) : (
             <>
               <p className="max-w-prose text-xs text-ink-muted">

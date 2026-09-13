@@ -192,7 +192,7 @@ export function ReportDecision({
       />
 
       {hasImageTarget && report.imageId !== null ? (
-        <ImageRemovalForm imageId={report.imageId} />
+        <ImageRemovalForm imageId={report.imageId} reportId={report.id} />
       ) : null}
     </div>
   );

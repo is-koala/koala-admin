@@ -6,10 +6,13 @@ import { apiUrl, server } from "../../../../test/msw";
 import { INITIAL_PAYOUT_RECONCILIATION_STATE } from "@/lib/payout-reconciliation";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+const revalidatePath = vi.fn<(path: string) => void>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
 }));
+
+vi.mock("next/cache", () => ({ revalidatePath }));
 
 const { submitPayoutReconciliation } = await import("./actions");
 
@@ -40,12 +43,14 @@ const PAYOUT = {
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  revalidatePath.mockReset();
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   getKoalaAccessToken.mockReset();
+  revalidatePath.mockReset();
 });
 
 function stubMe(permissions: readonly string[]) {
@@ -106,6 +111,7 @@ describe("the reconciliation action fails closed", () => {
     expect(reconcile.calls).toBe(0);
     expect(state.status).toBe("BLOCKED");
     expect(state.message).toContain("Hakedişi banka ekstresiyle mutabık kıl");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("re-resolves permission even when the submitted evidence is malformed", async () => {
@@ -152,6 +158,10 @@ describe("the reconciliation action keeps the backend authoritative", () => {
     expect(reconcile.calls).toBe(1);
     expect(state.status).toBe("SUCCEEDED");
     expect(state.payout?.id).toBe(PAYOUT_ID);
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual([
+      "/payout-reconciliation",
+      "/",
+    ]);
   });
 
   it("forwards exact trimmed evidence, keeping the amount as decimal text", async () => {
@@ -216,6 +226,7 @@ describe("the reconciliation action keeps the backend authoritative", () => {
     expect(state.errorCode).toBe(errorCode);
     expect(state.requestId).toBe(`rid-${status}`);
     expect(state.payout).toBeNull();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("does not expose a backend 5xx detail but keeps its safe request id", async () => {
@@ -341,6 +352,7 @@ describe("the reconciliation action keeps the backend authoritative", () => {
     expect(state.status).toBe("REFUSED");
     expect(state.payout).toBeNull();
     expect(state.message).toContain("doğrulanamadı");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("allows the same evidence to reach backend idempotency on a later submission", async () => {
@@ -354,5 +366,37 @@ describe("the reconciliation action keeps the backend authoritative", () => {
     expect(second.status).toBe("SUCCEEDED");
     expect(me.calls).toBe(2);
     expect(reconcile.calls).toBe(2);
+  });
+
+  it("does not open a second success path from a stale pending queue row", async () => {
+    stubMe(["payout.reconcile"]);
+    watchReconcile();
+
+    const first = await submit();
+    expect(first.status).toBe("SUCCEEDED");
+    expect(revalidatePath).toHaveBeenCalledWith("/payout-reconciliation");
+    revalidatePath.mockClear();
+
+    watchReconcile(() =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Hakediş artık mutabakat beklemiyor.",
+          httpStatus: "409 CONFLICT",
+          errorCode: "PAYOUT_NOT_AWAITING_SETTLEMENT",
+          errorCategory: "DATA_CONFLICT",
+          requestId: "rid-409-replay",
+          path: `/admin/payouts/${PAYOUT_ID}/reconcile`,
+          timeStamp: "2026-09-09T09:31:00Z",
+        },
+        { status: 409 },
+      ),
+    );
+
+    const second = await submit();
+
+    expect(second.status).toBe("REFUSED");
+    expect(second.errorCode).toBe("PAYOUT_NOT_AWAITING_SETTLEMENT");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

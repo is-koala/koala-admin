@@ -18,11 +18,14 @@ import { apiUrl, server } from "../../../../test/msw";
  */
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+const revalidatePath = vi.fn<(path: string) => void>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
   backendSaysPasswordMustChange: () => Promise.resolve(false),
 }));
+
+vi.mock("next/cache", () => ({ revalidatePath }));
 
 const { IDLE_AUTHORIZATION_OUTCOME } = await import("@/lib/authorization-change");
 const { addRoleInclude, grantPermissionToRole, removeRoleInclude, revokePermissionFromRole } =
@@ -34,12 +37,14 @@ const CHILD_ID = "9a1c0f10-0003-4c00-8000-000000000009";
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  revalidatePath.mockReset();
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   getKoalaAccessToken.mockReset();
+  revalidatePath.mockReset();
 });
 
 function stubMe(permissions: readonly string[]) {
@@ -98,6 +103,45 @@ describe("izin formunun alanları", () => {
     expect(grant.calls).toBe(1);
     expect(JSON.parse(grant.body ?? "{}")).toEqual({ permission: "category.manage" });
     expect(outcome.status).toBe("SUCCEEDED");
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual(["/roles", "/"]);
+  });
+
+  it("aynı izni ikinci kez vermek listeyi yeniden yenilemez", async () => {
+    stubMe(["role.manage", "category.manage"]);
+    watch("post", apiUrl(`/admin/roles/${ROLE_ID}/permissions`));
+
+    const first = await grantPermissionToRole(
+      IDLE_AUTHORIZATION_OUTCOME,
+      form({ roleId: ROLE_ID, roleCode: "TRUST_LEAD", permission: "category.manage" }),
+    );
+    expect(first.status).toBe("SUCCEEDED");
+    revalidatePath.mockClear();
+
+    server.use(
+      http.post(apiUrl(`/admin/roles/${ROLE_ID}/permissions`), () =>
+        HttpResponse.json(
+          {
+            success: false,
+            message: "İzin zaten verilmiş.",
+            httpStatus: "409 CONFLICT",
+            errorCode: "ROLE_PERMISSION_ALREADY_GRANTED",
+            errorCategory: "DATA_CONFLICT",
+            requestId: "rid-409-replay",
+            path: `/admin/roles/${ROLE_ID}/permissions`,
+            timeStamp: "2026-09-08T09:00:00.000000000Z",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const second = await grantPermissionToRole(
+      IDLE_AUTHORIZATION_OUTCOME,
+      form({ roleId: ROLE_ID, roleCode: "TRUST_LEAD", permission: "category.manage" }),
+    );
+
+    expect(second.status).toBe("REFUSED");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("izni geri alırken adı yola koyuyor ve gövde göndermiyor", async () => {
@@ -125,6 +169,7 @@ describe("izin formunun alanları", () => {
 
     expect(grant.calls).toBe(0);
     expect(outcome.field).toBe("permission");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
 
@@ -242,5 +287,6 @@ describe("izin olmadan hiçbir eylem istek yapmıyor", () => {
     ]);
 
     expect(calls.map((call) => call.calls)).toEqual([0, 0, 0, 0]);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

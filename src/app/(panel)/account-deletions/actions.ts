@@ -12,6 +12,7 @@ import {
 } from "@/server/api/account-deletions";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { decisionFailureFrom, guardDecision } from "@/server/queue/decisions";
+import { revalidateAfterWrite } from "@/server/queue/revalidate-after-write";
 
 function field(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -53,6 +54,7 @@ export async function submitDeletionRejection(
 
   try {
     await rejectAccountDeletion(await getKoalaAccessToken(), requestId, note);
+    revalidateAfterWrite(`/account-deletions/${requestId}`, "/account-deletions", "/");
     return decisionSucceeded("Hesap silme talebi reddedildi. Anonimleştirme bu talep için durur.");
   } catch (error) {
     return decisionFailureFrom(error, "Ret gönderilemedi.");

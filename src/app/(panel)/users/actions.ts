@@ -1,10 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
 import type { AuthorizationChangeOutcome } from "@/lib/authorization-change";
 import { asMarketplaceRole } from "@/server/api/marketplace-user-roles";
 import { runAuthorizationChange } from "@/server/authz/administration";
+import { revalidateAfterWrite } from "@/server/queue/revalidate-after-write";
 
 /**
  * Pazaryeri kullanıcı rollerinin iki yazımı — koala-admin#47.
@@ -12,6 +11,9 @@ import { runAuthorizationChange } from "@/server/authz/administration";
  * Sayfanın kapısı `user.read`. Bu eylemler `user.role.manage` ister ve o
  * kontrol `runAuthorizationChange`'de: bir Server Action kendi URL'i olan bir
  * POST ucudur, `<RequirePermission>` onun için çalışmaz.
+ *
+ * Başarıda nesne, liste ve ana ekran yenilenir. Aksi halde nesne eski rolleri
+ * çizer ve ana ekran sayıları bayat kalır.
  */
 
 export async function grantMarketplaceRole(
@@ -24,7 +26,7 @@ export async function grantMarketplaceRole(
     userLabel: text(formData, "userLabel"),
     role: asMarketplaceRole(text(formData, "role")),
   });
-  return afterWrite(outcome);
+  return afterWrite(text(formData, "userId"), outcome);
 }
 
 export async function revokeMarketplaceRole(
@@ -37,12 +39,15 @@ export async function revokeMarketplaceRole(
     userLabel: text(formData, "userLabel"),
     role: asMarketplaceRole(text(formData, "role")),
   });
-  return afterWrite(outcome);
+  return afterWrite(text(formData, "userId"), outcome);
 }
 
-function afterWrite(outcome: AuthorizationChangeOutcome): AuthorizationChangeOutcome {
+function afterWrite(
+  userId: string,
+  outcome: AuthorizationChangeOutcome,
+): AuthorizationChangeOutcome {
   if (outcome.status === "SUCCEEDED") {
-    revalidatePath("/users");
+    revalidateAfterWrite(`/users/${userId}`, "/users", "/");
   }
   return outcome;
 }

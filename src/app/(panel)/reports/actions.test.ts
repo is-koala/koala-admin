@@ -15,10 +15,19 @@ import { apiUrl, server } from "../../../../test/msw";
  */
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+const revalidatePath = vi.fn<(path: string) => void>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
 }));
+
+vi.mock("next/cache", () => ({ revalidatePath }));
+
+const redirect = vi.fn<(path: string) => never>((path) => {
+  throw new Error(`NEXT_REDIRECT:${path}`);
+});
+
+vi.mock("next/navigation", () => ({ redirect }));
 
 const { initialDecisionState } = await import("@/components/panel/queue/decision-state");
 const { REVIEW_MIN_NOTE_LENGTH } = await import("@/server/api/reports");
@@ -34,12 +43,15 @@ const GOOD_NOTE = "Mesaj kayıtları şikayeti doğruladı.";
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  revalidatePath.mockReset();
+  redirect.mockClear();
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   getKoalaAccessToken.mockReset();
+  revalidatePath.mockReset();
 });
 
 function stubMe(permissions: readonly string[]) {
@@ -134,6 +146,7 @@ describe("the action refuses before it acts", () => {
     expect(review.calls).toBe(0);
     expect(state.outcome).toBe("error");
     expect(state.message).toContain("İçerik denetle");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("will not review without a written reason", async () => {
@@ -193,6 +206,11 @@ describe("the action, when it is allowed to act", () => {
     expect(state.message).toContain("Haklı bulundu");
     // The mobile side reads the same row through GET /reports/me.
     expect(state.message).toContain("/reports/me");
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual([
+      `/reports/${REPORT_ID}`,
+      "/reports",
+      "/",
+    ]);
   });
 
   it("trims the reason before sending it", async () => {
@@ -227,6 +245,40 @@ describe("the action, when it is allowed to act", () => {
     expect(state.outcome).toBe("error");
     expect(state.message).toContain("sizden önce sonuçlandırılmış olabilir");
     expect(state.requestId).toBe("rid-409");
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("does not open a second success path from a stale pending form", async () => {
+    stubMe(["content.moderate"]);
+    const review = watchReview();
+
+    const first = await submit({ reportId: REPORT_ID, decision: "ACTIONED", note: GOOD_NOTE });
+    expect(first.outcome).toBe("success");
+    expect(review.calls).toBe(1);
+    expect(revalidatePath).toHaveBeenCalledWith("/reports");
+    revalidatePath.mockClear();
+
+    watchReview(() =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Şikayet zaten sonuçlandırılmış.",
+          httpStatus: "409 CONFLICT",
+          errorCode: "REPORT_ALREADY_REVIEWED",
+          errorCategory: "DATA_CONFLICT",
+          requestId: "rid-409-replay",
+          path: `/admin/reports/${REPORT_ID}/review`,
+          timeStamp: "2026-09-06T09:32:00.000000000Z",
+        },
+        { status: 409 },
+      ),
+    );
+
+    const second = await submit({ reportId: REPORT_ID, decision: "ACTIONED", note: GOOD_NOTE });
+
+    expect(second.outcome).toBe("error");
+    expect(second.errorCode).toBe("REPORT_ALREADY_REVIEWED");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("shows a backend refusal as the backend's, even though the panel let it through", async () => {
@@ -275,16 +327,69 @@ describe("image removal", () => {
     expect(state.outcome).toBe("error");
   });
 
-  it("DELETEs the reported image and reports what the backend recorded", async () => {
+  it("refuses a submission with no report id so the detail path cannot be skipped", async () => {
     stubMe(["content.moderate"]);
     const deletion = watchImageDelete();
 
     const state = await remove({ imageId: IMAGE_ID });
 
+    expect(deletion.calls).toBe(0);
+    expect(state.outcome).toBe("error");
+    expect(redirect).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("DELETEs the reported image and keeps the notice on the detail URL", async () => {
+    stubMe(["content.moderate"]);
+    const deletion = watchImageDelete();
+
+    await expect(remove({ imageId: IMAGE_ID, reportId: REPORT_ID })).rejects.toThrow(
+      `NEXT_REDIRECT:/reports/${REPORT_ID}?sonuc=gorsel-kaldirildi`,
+    );
+
     expect(deletion.calls).toBe(1);
     expect(deletion.id).toBe(IMAGE_ID);
-    expect(state.outcome).toBe("success");
-    expect(state.message).toContain("kaldırıldı");
+    expect(redirect).toHaveBeenCalledWith(`/reports/${REPORT_ID}?sonuc=gorsel-kaldirildi`);
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual([
+      `/reports/${REPORT_ID}`,
+      "/reports",
+      "/",
+    ]);
+  });
+
+  it("does not open a second success path from a stale removal form", async () => {
+    stubMe(["content.moderate"]);
+    watchImageDelete();
+
+    await expect(remove({ imageId: IMAGE_ID, reportId: REPORT_ID })).rejects.toThrow(
+      "NEXT_REDIRECT:",
+    );
+    expect(revalidatePath).toHaveBeenCalledWith("/reports");
+    revalidatePath.mockClear();
+    redirect.mockClear();
+
+    watchImageDelete(() =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Görsel bulunamadı.",
+          httpStatus: "404 NOT_FOUND",
+          errorCode: "IMAGE_NOT_FOUND",
+          errorCategory: "NOT_FOUND",
+          requestId: "rid-img-stale",
+          path: `/admin/images/${IMAGE_ID}`,
+          timeStamp: "2026-09-11T20:00:00.000000000Z",
+        },
+        { status: 404 },
+      ),
+    );
+
+    const second = await remove({ imageId: IMAGE_ID, reportId: REPORT_ID });
+
+    expect(second.outcome).toBe("error");
+    expect(second.errorCode).toBe("IMAGE_NOT_FOUND");
+    expect(redirect).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("shows an already-gone image as the backend's 404", async () => {
@@ -305,11 +410,12 @@ describe("image removal", () => {
       ),
     );
 
-    const state = await remove({ imageId: IMAGE_ID });
+    const state = await remove({ imageId: IMAGE_ID, reportId: REPORT_ID });
 
     expect(state.outcome).toBe("error");
     expect(state.message).toContain("Görsel bulunamadı");
     expect(state.errorCode).toBe("IMAGE_NOT_FOUND");
     expect(state.requestId).toBe("rid-img-404");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

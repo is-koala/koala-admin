@@ -117,7 +117,11 @@ describe("pazaryeri rol yazımları izni yeniden çözer", () => {
     expect(grant.calls).toBe(1);
     expect(JSON.parse(grant.body ?? "{}")).toEqual({ role: "ROLE_ADMIN" });
     expect(outcome.status).toBe("SUCCEEDED");
-    expect(revalidatePath).toHaveBeenCalledWith("/users");
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual([
+      `/users/${USER_ID}`,
+      "/users",
+      "/",
+    ]);
   });
 
   it("geri almayı path'teki rolle yapar", async () => {
@@ -132,6 +136,49 @@ describe("pazaryeri rol yazımları izni yeniden çözer", () => {
     expect(revoke.calls).toBe(1);
     expect(revoke.path).toBe(`/admin/users/${USER_ID}/roles/ROLE_ADMIN`);
     expect(outcome.status).toBe("SUCCEEDED");
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual([
+      `/users/${USER_ID}`,
+      "/users",
+      "/",
+    ]);
+  });
+
+  it("ikinci gönderim 409 ile durur ve dizini yeniden yenilemez", async () => {
+    stubMe(["user.role.manage"]);
+    watch("post", USER_ROLES);
+
+    const first = await grantMarketplaceRole(
+      IDLE_AUTHORIZATION_OUTCOME,
+      form({ userId: USER_ID, userLabel: "Ada Yılmaz", role: "ROLE_ADMIN" }),
+    );
+    expect(first.status).toBe("SUCCEEDED");
+    revalidatePath.mockClear();
+
+    server.use(
+      http.post(USER_ROLES, () =>
+        HttpResponse.json(
+          {
+            success: false,
+            message: "Rol zaten verilmiş.",
+            httpStatus: "409 CONFLICT",
+            errorCode: "ADMIN_USER_ROLE_ALREADY_GRANTED",
+            errorCategory: "DATA_CONFLICT",
+            requestId: "rid-409-replay",
+            path: `/admin/users/${USER_ID}/roles`,
+            timeStamp: "2026-09-11T14:00:00.000000000Z",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const second = await grantMarketplaceRole(
+      IDLE_AUTHORIZATION_OUTCOME,
+      form({ userId: USER_ID, userLabel: "Ada Yılmaz", role: "ROLE_ADMIN" }),
+    );
+
+    expect(second.status).toBe("REFUSED");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("reddedilen yazım dizini yenilemez", async () => {

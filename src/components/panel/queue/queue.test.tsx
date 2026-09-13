@@ -6,6 +6,7 @@ import { DecisionForm } from "./decision-form";
 import {
   decisionFailed,
   decisionRejected,
+  decisionSucceeded,
   initialDecisionState,
   type DecisionAction,
   type DecisionState,
@@ -349,6 +350,34 @@ describe("a decision says what it will do, and will not go without a reason", ()
       />,
     );
 
+    expect(screen.getByText("Bu şikayet zaten sonuçlandırılmış.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Kararı gönder" })).toBeNull();
+  });
+
+  it("keeps the success notice after the record closes on refresh", async () => {
+    const action = stubAction(decisionSucceeded("Şikayet haklı bulundu olarak kaydedildi."));
+    const props = {
+      action,
+      hiddenFields: { reportId: "report-3" },
+      options: OPTIONS,
+      legend: "Karar",
+      noteLabel: "Gerekçe",
+      submitLabel: "Kararı gönder",
+      idPrefix: "report-3",
+    };
+
+    const { rerender } = render(<DecisionForm {...props} />);
+
+    await userEvent.type(screen.getByLabelText(/Gerekçe/), "Yeterince uzun bir gerekçe.");
+    await userEvent.click(screen.getByRole("button", { name: "Kararı gönder" }));
+
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("haklı bulundu"));
+
+    rerender(
+      <DecisionForm {...props} disabled disabledReason="Bu şikayet zaten sonuçlandırılmış." />,
+    );
+
+    expect(screen.getByRole("status").textContent).toContain("haklı bulundu");
     expect(screen.getByText("Bu şikayet zaten sonuçlandırılmış.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Kararı gönder" })).toBeNull();
   });

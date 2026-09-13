@@ -8,13 +8,14 @@ import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment"
 import { apiUrl, server } from "../../../test/msw";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+const revalidatePath = vi.fn<(path: string) => void>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
   backendSaysPasswordMustChange: () => Promise.resolve(false),
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath }));
 
 const { submitEscrowOperation } = await import("./actions");
 const { clearEscrowSubmissions } = await import("./operations");
@@ -77,6 +78,7 @@ function submit(fields: Record<string, string>) {
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  revalidatePath.mockReset();
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   clearEscrowSubmissions();
   clearRecentOperations();
@@ -85,6 +87,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   getKoalaAccessToken.mockReset();
+  revalidatePath.mockReset();
 });
 
 describe("the escrow Server Action boundary", () => {
@@ -164,6 +167,7 @@ describe("the escrow Server Action boundary", () => {
     expect(state.message).toContain("payout.release");
     expect(summary.calls).toBe(0);
     expect(resolve.calls).toBe(0);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("sends zero requests for a financial resolution without payment.read", async () => {
@@ -187,5 +191,151 @@ describe("the escrow Server Action boundary", () => {
     expect(state.message).toContain("payment.read");
     expect(summary.calls).toBe(0);
     expect(resolve.calls).toBe(0);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("revalidates the dispute, the queue and home after a successful resolution", async () => {
+    stubMe(["dispute.resolve", "payment.read", "payout.release"]);
+    watch("get", SUMMARY, () =>
+      HttpResponse.json(envelope(`/admin/job-assignments/${ASSIGNMENT}`, SUMMARY_BODY)),
+    );
+    const resolve = watch("post", RESOLVE, () =>
+      HttpResponse.json(
+        envelope(`/admin/disputes/${DISPUTE}/resolve`, {
+          id: DISPUTE,
+          jobAssignmentId: ASSIGNMENT,
+          openedBy: { id: "w-1", firstName: "Ayşe", lastName: "Yılmaz", username: "ayse" },
+          status: "RESOLVED",
+          reason: "İtiraz",
+          resolution: "RELEASE_TO_WORKER",
+          resolutionNote: "Kanıtlar işçinin teslimatını doğruluyor.",
+          resolvedAt: "2026-09-06T10:00:00.000000000Z",
+          createdAt: "2026-09-05T08:00:00.000000000Z",
+        }),
+      ),
+    );
+
+    const state = await submit({
+      operationKey: "resolve-ok",
+      kind: "RESOLVE_DISPUTE",
+      assignmentId: ASSIGNMENT,
+      disputeId: DISPUTE,
+      resolution: "RELEASE_TO_WORKER",
+      reason: "Kanıtlar işçinin teslimatını doğruluyor.",
+      confirmedAmount: "1240.50",
+    });
+
+    expect(state.status).toBe("SUCCEEDED");
+    expect(resolve.calls).toBe(1);
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual([
+      `/disputes/${DISPUTE}`,
+      "/disputes",
+      "/",
+    ]);
+  });
+
+  it("collapses a second submit of the same operation key without another mutation", async () => {
+    stubMe(["dispute.resolve", "payment.read", "payout.release"]);
+    watch("get", SUMMARY, () =>
+      HttpResponse.json(envelope(`/admin/job-assignments/${ASSIGNMENT}`, SUMMARY_BODY)),
+    );
+    const resolve = watch("post", RESOLVE, () =>
+      HttpResponse.json(
+        envelope(`/admin/disputes/${DISPUTE}/resolve`, {
+          id: DISPUTE,
+          jobAssignmentId: ASSIGNMENT,
+          openedBy: { id: "w-1", firstName: "Ayşe", lastName: "Yılmaz", username: "ayse" },
+          status: "RESOLVED",
+          reason: "İtiraz",
+          resolution: "RELEASE_TO_WORKER",
+          resolutionNote: "Kanıtlar işçinin teslimatını doğruluyor.",
+          resolvedAt: "2026-09-06T10:00:00.000000000Z",
+          createdAt: "2026-09-05T08:00:00.000000000Z",
+        }),
+      ),
+    );
+
+    const fields = {
+      operationKey: "resolve-once",
+      kind: "RESOLVE_DISPUTE",
+      assignmentId: ASSIGNMENT,
+      disputeId: DISPUTE,
+      resolution: "RELEASE_TO_WORKER",
+      reason: "Kanıtlar işçinin teslimatını doğruluyor.",
+      confirmedAmount: "1240.50",
+    };
+
+    const first = await submit(fields);
+    const second = await submit(fields);
+
+    expect(first.status).toBe("SUCCEEDED");
+    expect(second.status).toBe("SUCCEEDED");
+    expect(second.deduplicated).toBe(true);
+    expect(resolve.calls).toBe(1);
+  });
+
+  it("does not open a second success path from a stale resolve form", async () => {
+    stubMe(["dispute.resolve", "payment.read", "payout.release"]);
+    watch("get", SUMMARY, () =>
+      HttpResponse.json(envelope(`/admin/job-assignments/${ASSIGNMENT}`, SUMMARY_BODY)),
+    );
+    const resolve = watch("post", RESOLVE, () =>
+      HttpResponse.json(
+        envelope(`/admin/disputes/${DISPUTE}/resolve`, {
+          id: DISPUTE,
+          jobAssignmentId: ASSIGNMENT,
+          openedBy: { id: "w-1", firstName: "Ayşe", lastName: "Yılmaz", username: "ayse" },
+          status: "RESOLVED",
+          reason: "İtiraz",
+          resolution: "RELEASE_TO_WORKER",
+          resolutionNote: "Kanıtlar işçinin teslimatını doğruluyor.",
+          resolvedAt: "2026-09-06T10:00:00.000000000Z",
+          createdAt: "2026-09-05T08:00:00.000000000Z",
+        }),
+      ),
+    );
+
+    const first = await submit({
+      operationKey: "resolve-first",
+      kind: "RESOLVE_DISPUTE",
+      assignmentId: ASSIGNMENT,
+      disputeId: DISPUTE,
+      resolution: "RELEASE_TO_WORKER",
+      reason: "Kanıtlar işçinin teslimatını doğruluyor.",
+      confirmedAmount: "1240.50",
+    });
+    expect(first.status).toBe("SUCCEEDED");
+    expect(resolve.calls).toBe(1);
+    revalidatePath.mockClear();
+
+    watch("post", RESOLVE, () =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Bu uyuşmazlık zaten sonuçlandırılmış.",
+          httpStatus: "409 CONFLICT",
+          errorCode: "DISPUTE_ALREADY_RESOLVED",
+          errorCategory: "DATA_CONFLICT",
+          requestId: "rid-409-replay",
+          path: `/admin/disputes/${DISPUTE}/resolve`,
+          timeStamp: "2026-09-06T10:01:00.000000000Z",
+        },
+        { status: 409 },
+      ),
+    );
+
+    const second = await submit({
+      operationKey: "resolve-stale",
+      kind: "RESOLVE_DISPUTE",
+      assignmentId: ASSIGNMENT,
+      disputeId: DISPUTE,
+      resolution: "RELEASE_TO_WORKER",
+      reason: "Kanıtlar işçinin teslimatını doğruluyor.",
+      confirmedAmount: "1240.50",
+    });
+
+    expect(second.status).toBe("REFUSED");
+    expect(second.errorCode).toBe("DISPUTE_ALREADY_RESOLVED");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

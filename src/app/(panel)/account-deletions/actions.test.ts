@@ -5,10 +5,13 @@ import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+const revalidatePath = vi.fn<(path: string) => void>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
 }));
+
+vi.mock("next/cache", () => ({ revalidatePath }));
 
 const { initialDecisionState } = await import("@/components/panel/queue/decision-state");
 const { REJECTION_MIN_REASON_LENGTH } = await import("@/server/api/account-deletions");
@@ -22,12 +25,14 @@ const GOOD_NOTE = "Yasal saklama incelemesi sürüyor.";
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  revalidatePath.mockReset();
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   getKoalaAccessToken.mockReset();
+  revalidatePath.mockReset();
 });
 
 function stubMe(permissions: readonly string[]) {
@@ -96,6 +101,7 @@ describe("the action refuses before it acts", () => {
     expect(reject.calls).toBe(0);
     expect(state.outcome).toBe("error");
     expect(state.message).toContain("Hesap silme taleplerini yönet");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("will not reject without a written reason", async () => {
@@ -128,6 +134,50 @@ describe("the action posts the rejection", () => {
     expect(reject.calls).toBe(1);
     expect(reject.body).toEqual({ reason: GOOD_NOTE });
     expect(state.outcome).toBe("success");
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual([
+      `/account-deletions/${REQUEST_ID}`,
+      "/account-deletions",
+      "/",
+    ]);
+  });
+
+  it("does not open a second success path from a stale pending form", async () => {
+    stubMe(["user.deletion.manage"]);
+    watchReject();
+
+    const first = await submit({
+      requestId: REQUEST_ID,
+      decision: "REJECT",
+      note: GOOD_NOTE,
+    });
+    expect(first.outcome).toBe("success");
+    expect(revalidatePath).toHaveBeenCalledWith("/account-deletions");
+    revalidatePath.mockClear();
+
+    watchReject(() =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Talep daha önce işlendi.",
+          httpStatus: "409 CONFLICT",
+          errorCode: "DELETION_ALREADY_PROCESSED",
+          errorCategory: "DATA_CONFLICT",
+          requestId: "rid-409-replay",
+          path: `/admin/account-deletions/${REQUEST_ID}/reject`,
+        },
+        { status: 409 },
+      ),
+    );
+
+    const second = await submit({
+      requestId: REQUEST_ID,
+      decision: "REJECT",
+      note: GOOD_NOTE,
+    });
+
+    expect(second.outcome).toBe("error");
+    expect(second.errorCode).toBe("DELETION_ALREADY_PROCESSED");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("turns a 409 into an operator sentence", async () => {
@@ -156,5 +206,6 @@ describe("the action posts the rejection", () => {
     expect(state.outcome).toBe("error");
     expect(state.errorCode).toBe("DELETION_ALREADY_PROCESSED");
     expect(state.message).toContain("sonuçlandırılmış");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

@@ -6,10 +6,13 @@ import { apiUrl, server } from "../../../../test/msw";
 import { INITIAL_IBAN_VERIFICATION_STATE } from "@/lib/iban-verification";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
+const revalidatePath = vi.fn<(path: string) => void>();
 
 vi.mock("@/server/auth/session", () => ({
   getKoalaAccessToken: () => getKoalaAccessToken(),
 }));
+
+vi.mock("next/cache", () => ({ revalidatePath }));
 
 const { submitIbanVerification } = await import("./actions");
 
@@ -34,12 +37,14 @@ const ACCOUNT = {
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
+  revalidatePath.mockReset();
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   getKoalaAccessToken.mockReset();
+  revalidatePath.mockReset();
 });
 
 function stubMe(permissions: readonly string[]) {
@@ -104,6 +109,7 @@ describe("the IBAN confirm action fails closed", () => {
     expect(confirm.calls).toBe(0);
     expect(state.status).toBe("BLOCKED");
     expect(state.message).toContain("Banka hesaplarını doğrula");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("re-resolves permission even when the IBAN is malformed", async () => {
@@ -149,6 +155,7 @@ describe("the confirm action keeps the backend authoritative", () => {
     expect(typeof (confirm.body as { amount: unknown }).amount).toBe("string");
     expect(state.status).toBe("SUCCEEDED");
     expect(state.account).toEqual(ACCOUNT);
+    expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual(["/iban-verifications", "/"]);
   });
 
   it("forwards an optional sender name when present", async () => {
@@ -211,6 +218,7 @@ describe("the confirm action keeps the backend authoritative", () => {
     expect(state.errorCode).toBe(errorCode);
     expect(state.requestId).toBe(`rid-${status}`);
     expect(state.account).toBeNull();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("does not expose a backend 5xx detail", async () => {
@@ -247,5 +255,38 @@ describe("the confirm action keeps the backend authoritative", () => {
     expect(state.status).toBe("REFUSED");
     expect(state.account).toBeNull();
     expect(state.message).toContain("doğrulanamadı");
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("does not open a second success path from a stale pending row", async () => {
+    stubMe(["bank.account.verify"]);
+    watchConfirm();
+
+    const first = await submit();
+    expect(first.status).toBe("SUCCEEDED");
+    expect(revalidatePath).toHaveBeenCalledWith("/iban-verifications");
+    revalidatePath.mockClear();
+
+    watchConfirm(() =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Bu banka hesabı zaten doğrulanmış.",
+          httpStatus: "409 CONFLICT",
+          errorCode: "BANK_ACCOUNT_VERIFICATION_ALREADY_VERIFIED",
+          errorCategory: "DATA_CONFLICT",
+          requestId: "rid-409-replay",
+          path: `/admin/bank-account-verifications/${REFERENCE}/confirm`,
+          timeStamp: "2026-09-11T15:00:00Z",
+        },
+        { status: 409 },
+      ),
+    );
+
+    const second = await submit();
+
+    expect(second.status).toBe("REFUSED");
+    expect(second.errorCode).toBe("BANK_ACCOUNT_VERIFICATION_ALREADY_VERIFIED");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

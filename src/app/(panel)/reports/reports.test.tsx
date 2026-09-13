@@ -496,6 +496,23 @@ describe("the decision", () => {
     expect(html).toContain("cccccccc-0000-4000-8000-000000000003");
     expect(html).not.toContain("henüz yok");
   });
+
+  it("keeps the image-removal notice after the redirect refresh", async () => {
+    stubMe(MODERATOR);
+    watchDetail(row({ imageId: null }));
+
+    const html = (
+      await renderServerComponent(
+        <ReportDetailPage
+          params={Promise.resolve({ id: row().id })}
+          searchParams={Promise.resolve({ sonuc: "gorsel-kaldirildi" })}
+        />,
+      )
+    ).replaceAll("<!-- -->", "");
+
+    expect(html).toContain("Görsel kaldırıldı");
+    expect(html).toContain("galerilerinden düştü");
+  });
 });
 
 describe("unfinished-work copy stays off the screen", () => {
