@@ -108,21 +108,22 @@ Kalan sessiz yol: origin `https` iken istek düz HTTP ise tarayıcı `Secure`
 ## Kapılar
 
 `package.json` script'leri. Ajan kapıyı Yusuf'un Mac'inde koşturur; GitHub
-kuyruğunu beklemez. Mac org runner kaydedilmez. PR yeşil tiki Hetzner
-`self-hosted` üzerindedir. Yerel tam kapı, PR açılmadan:
+kuyruğunu beklemez. Mac org runner kaydedilmez. GitHub PR ve `main` push'ta
+kalite işi koşmaz. Hetzner `self-hosted` yalnız `workflow_dispatch` ile
+isteğe bağlıdır. Yerel tam kapı, PR açılmadan:
 
 ```
 pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm verify:server-only
 ```
 
-CI (`.github/workflows/ci.yml`) bugün `format:check` **koşmuyor**. Koştuğu:
-`lint`, `typecheck`, `test`, `build`, ayrı işte `verify:server-only`.
-`format:check`'i yerel kapıdan düşürme — CI'ın koşmaması, script'in
-olmaması değil.
+İsteğe bağlı dispatch (`.github/workflows/ci.yml`) bugün `format:check`
+**koşmuyor**. Koştuğu: `lint`, `typecheck`, `test`, `build`, ayrı işte
+`verify:server-only`. `format:check`'i yerel kapıdan düşürme — YAML'ın
+koşmaması, script'in olmaması değil.
 
 `pnpm build` `KOALA_API_BASE_URL` ve `ADMIN_PUBLIC_ORIGIN` ister
-(`.env.example` → `.env.local`; Git'e girmez). CI bunları iş akışı `env`
-bloğunda placeholder olarak verir; sır değiller.
+(`.env.example` → `.env.local`; Git'e girmez). Dispatch bunları iş akışı
+`env` bloğunda placeholder olarak verir; sır değiller.
 
 ### `verify:server-only`
 

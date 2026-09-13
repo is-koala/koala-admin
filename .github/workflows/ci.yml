@@ -1,9 +1,7 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -74,7 +72,8 @@ jobs:
 
       # Plants a Client Component that imports the server-only API client and
       # asserts `next build` fails. A green build there would mean the panel
-      # could ship an access token to the browser, so this runs on every PR
-      # rather than living in a runbook nobody opens.
+      # could ship an access token to the browser, so this stays in the
+      # optional dispatch workflow rather than living in a runbook nobody
+      # opens. The Mac quality gate also runs it.
       - name: Verify the server-only guard breaks the build
         run: pnpm verify:server-only
