@@ -10,6 +10,7 @@ import { getDisputes } from "./disputes";
 import { getFinanceSummary, type FinanceSummary } from "./finance";
 import { getPendingIbanVerifications, IBAN_PENDING_PAGING } from "./iban-verification";
 import { getIdentityReviews, IDENTITY_REVIEW_PAGING } from "./identity-reviews";
+import { getPayouts, PAYOUT_PAGING } from "./payout-reconciliation";
 import { getReports, REPORT_PAGING } from "./reports";
 import type { Paging } from "./paging";
 
@@ -25,6 +26,7 @@ export type OpsQueueHref =
   | "/companies"
   | "/disputes"
   | "/iban-verifications"
+  | "/payout-reconciliation"
   | "/account-deletions";
 
 export interface OpsQueueTile {
@@ -32,6 +34,8 @@ export interface OpsQueueTile {
   readonly label: string;
   readonly count: number | null;
   readonly oldestAt: string | null;
+  /** Doluysa sayı yoktur; boş kuyruk `count: 0` ile gelir, hata uydurulmaz. */
+  readonly loadError: string | null;
 }
 
 export interface OpsHome {
@@ -65,10 +69,24 @@ export async function loadOpsHome(
     );
   }
   if (held.has("content.moderate")) {
+    // Tek status alanı var; UNDER_REVIEW'i istemezsek incelemedeki şikayet
+    // evde yok sayılır. İkisini de isteyip toplamak fail-closed: biri düşerse
+    // karo hata verir, kısmi toplam "iş yok" gibi durmaz.
     jobs.push(
-      countTile("/reports", "Şikayetler", () =>
-        getReports(accessToken, { status: "OPEN", paging: countPaging(REPORT_PAGING) }),
-      ),
+      countTile("/reports", "Şikayetler", async () => {
+        const paging: Paging = {
+          ...countPaging(REPORT_PAGING),
+          sort: { field: "createdAt", direction: "asc" },
+        };
+        const [open, inReview] = await Promise.all([
+          getReports(accessToken, { status: "OPEN", paging }),
+          getReports(accessToken, { status: "UNDER_REVIEW", paging }),
+        ]);
+        return {
+          totalElements: open.totalElements + inReview.totalElements,
+          content: olderRow([open.content[0], inReview.content[0]]),
+        };
+      }),
     );
   }
   if (held.has("company.approve")) {
@@ -93,6 +111,21 @@ export async function loadOpsHome(
     jobs.push(
       countTile("/iban-verifications", "IBAN doğrulama", () =>
         getPendingIbanVerifications(accessToken, countPaging(IBAN_PENDING_PAGING)),
+      ),
+    );
+  }
+  if (held.has("payout.reconcile")) {
+    // Status gönderilmezse backend PROCESSING'e düşer; ev karosu niyeti
+    // açık tutmak için PROCESSING'i açık ister — escrow çıkışı (PENDING) karışmasın.
+    jobs.push(
+      countTile("/payout-reconciliation", "Hakediş mutabakatı", () =>
+        getPayouts(accessToken, {
+          status: "PROCESSING",
+          paging: {
+            ...countPaging(PAYOUT_PAGING),
+            sort: { field: "createdAt", direction: "asc" },
+          },
+        }),
       ),
     );
   }
@@ -134,9 +167,22 @@ async function countTile(
 ): Promise<OpsQueueTile> {
   try {
     const page = await load();
-    return { href, label, count: page.totalElements, oldestAt: oldestTimestamp(page.content[0]) };
+    return {
+      href,
+      label,
+      count: page.totalElements,
+      oldestAt: oldestTimestamp(page.content[0]),
+      loadError: null,
+    };
   } catch {
-    return { href, label, count: null, oldestAt: null };
+    // Sayı uydurmak (0 veya "—") operatörü "iş yok" sanır; karo durur, diğerleri devam eder.
+    return {
+      href,
+      label,
+      count: null,
+      oldestAt: null,
+      loadError: `${label} yüklenemedi.`,
+    };
   }
 }
 
@@ -147,6 +193,22 @@ function oldestTimestamp(row: unknown): string | null {
   const record = row as { createdAt?: unknown; requestedAt?: unknown; startedAt?: unknown };
   const value = record.createdAt ?? record.requestedAt ?? record.startedAt;
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function olderRow(rows: readonly unknown[]): unknown[] {
+  let oldest: unknown;
+  let oldestTs: string | null = null;
+  for (const row of rows) {
+    const ts = oldestTimestamp(row);
+    if (ts === null) {
+      continue;
+    }
+    if (oldestTs === null || ts < oldestTs) {
+      oldest = row;
+      oldestTs = ts;
+    }
+  }
+  return oldest === undefined ? [] : [oldest];
 }
 
 async function readFinance(accessToken: string): Promise<FinanceSummary | null> {

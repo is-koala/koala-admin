@@ -51,6 +51,26 @@ function emptyPage(totalElements: number) {
   };
 }
 
+function reportRow(status: string, createdAt: string, id: string) {
+  return {
+    id,
+    reporter: null,
+    reportedUser: null,
+    reportedUserId: null,
+    jobId: null,
+    messageId: null,
+    imageId: null,
+    reason: "SPAM",
+    description: null,
+    status,
+    reviewedBy: null,
+    reviewNote: null,
+    reviewedAt: null,
+    createdAt,
+    reportedUserReportCount: 0,
+  };
+}
+
 function watchQueues() {
   const seen: string[] = [];
   server.use(
@@ -67,7 +87,8 @@ function watchQueues() {
       });
     }),
     http.get(apiUrl("/admin/reports"), ({ request }) => {
-      seen.push(`reports:${new URL(request.url).searchParams.get("status")}`);
+      const status = new URL(request.url).searchParams.get("status");
+      seen.push(`reports:${status}`);
       return HttpResponse.json({
         success: true,
         message: "ok",
@@ -75,7 +96,7 @@ function watchQueues() {
         path: "/admin/reports",
         requestId: "rid-rep",
         timeStamp: "2026-09-11T12:00:00.000000000Z",
-        data: emptyPage(7),
+        data: emptyPage(status === "UNDER_REVIEW" ? 0 : 7),
       });
     }),
     http.get(apiUrl("/admin/companies"), ({ request }) => {
@@ -124,6 +145,18 @@ function watchQueues() {
         requestId: "rid-del",
         timeStamp: "2026-09-11T12:00:00.000000000Z",
         data: emptyPage(1),
+      });
+    }),
+    http.get(apiUrl("/admin/payouts"), ({ request }) => {
+      seen.push(`payouts:${new URL(request.url).searchParams.get("status")}`);
+      return HttpResponse.json({
+        success: true,
+        message: "ok",
+        httpStatus: "200 OK",
+        path: "/admin/payouts",
+        requestId: "rid-payouts",
+        timeStamp: "2026-09-11T12:00:00.000000000Z",
+        data: emptyPage(6),
       });
     }),
     http.get(apiUrl("/admin/finance/summary"), () => {
@@ -191,12 +224,14 @@ describe("Güncel durum", () => {
 
     const html = await render();
 
-    expect(seen).toEqual(["reports:OPEN"]);
+    expect(seen).toEqual(expect.arrayContaining(["reports:OPEN", "reports:UNDER_REVIEW"]));
+    expect(seen).toHaveLength(2);
     expect(html).toContain("Şikayetler");
     expect(html).not.toContain("Kimlik incelemeleri");
     expect(html).not.toContain("Uyuşmazlıklar");
     expect(html).not.toContain("IBAN doğrulama");
     expect(html).not.toContain("Hesap silme");
+    expect(html).not.toContain("Hakediş mutabakatı");
     expect(html).not.toContain("Finans");
     expect(html).not.toContain("Katalog Editörü");
   });
@@ -213,6 +248,110 @@ describe("Güncel durum", () => {
     expect(html).toContain("Hesap silme");
     expect(html).toContain('href="/iban-verifications"');
     expect(html).toContain('href="/account-deletions"');
+  });
+
+  it("shows a PROCESSING payout reconciliation tile only for payout.reconcile", async () => {
+    stubMe(["payout.reconcile"]);
+    const seen = watchQueues();
+
+    const html = await render();
+
+    expect(seen).toEqual(["payouts:PROCESSING"]);
+    expect(html).toContain("Hakediş mutabakatı");
+    expect(html).toContain("6");
+    expect(html).toContain('href="/payout-reconciliation"');
+  });
+
+  it("counts OPEN and UNDER_REVIEW reports together so in-review complaints stay visible", async () => {
+    stubMe(["content.moderate"]);
+    const seen: string[] = [];
+    server.use(
+      http.get(apiUrl("/admin/reports"), ({ request }) => {
+        const status = new URL(request.url).searchParams.get("status");
+        seen.push(`reports:${status}`);
+        const totalElements = status === "OPEN" ? 3 : status === "UNDER_REVIEW" ? 4 : 0;
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          httpStatus: "200 OK",
+          path: "/admin/reports",
+          requestId: "rid-rep",
+          timeStamp: "2026-09-11T12:00:00.000000000Z",
+          data: emptyPage(totalElements),
+        });
+      }),
+    );
+
+    const html = await render();
+
+    expect(seen).toEqual(expect.arrayContaining(["reports:OPEN", "reports:UNDER_REVIEW"]));
+    expect(html).toContain("Şikayetler");
+    expect(html).toContain("7");
+  });
+
+  it("shows a Turkish load error and retry hint instead of a zero when one queue fails", async () => {
+    stubMe(["identity.review", "content.moderate"]);
+    watchQueues();
+    server.use(http.get(apiUrl("/admin/reports"), () => HttpResponse.error()));
+
+    const html = await render();
+
+    expect(html).toContain("Kimlik incelemeleri");
+    expect(html).toContain("4");
+    expect(html).toContain("Şikayetler");
+    expect(html).toContain("Şikayetler yüklenemedi.");
+    expect(html).toContain("Sayfayı yenileyerek yeniden deneyin.");
+    expect(html).not.toContain("Şikayetler</span></span>0");
+  });
+
+  it("fails the reports tile closed when UNDER_REVIEW cannot be loaded", async () => {
+    stubMe(["content.moderate"]);
+    server.use(
+      http.get(apiUrl("/admin/reports"), ({ request }) => {
+        const status = new URL(request.url).searchParams.get("status");
+        if (status === "UNDER_REVIEW") {
+          return HttpResponse.error();
+        }
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          httpStatus: "200 OK",
+          path: "/admin/reports",
+          requestId: "rid-rep",
+          timeStamp: "2026-09-11T12:00:00.000000000Z",
+          data: emptyPage(3),
+        });
+      }),
+    );
+
+    const html = await render();
+
+    expect(html).toContain("Şikayetler yüklenemedi.");
+    expect(html).toContain("Sayfayı yenileyerek yeniden deneyin.");
+    expect(html).not.toContain(">3<");
+  });
+
+  it("shows a zero count when a queue is empty rather than a load error", async () => {
+    stubMe(["payout.reconcile"]);
+    server.use(
+      http.get(apiUrl("/admin/payouts"), () =>
+        HttpResponse.json({
+          success: true,
+          message: "ok",
+          httpStatus: "200 OK",
+          path: "/admin/payouts",
+          requestId: "rid-payouts",
+          timeStamp: "2026-09-11T12:00:00.000000000Z",
+          data: emptyPage(0),
+        }),
+      ),
+    );
+
+    const html = await render();
+
+    expect(html).toContain("Hakediş mutabakatı");
+    expect(html).toContain("0");
+    expect(html).not.toContain("yüklenemedi");
   });
 
   it("shows identity queue age from the oldest pending row", async () => {
@@ -263,6 +402,89 @@ describe("Güncel durum", () => {
 
     expect(html).toContain("Kimlik incelemeleri");
     expect(html).toContain("4");
+    expect(html).toContain("En eski 11.08.2026");
+  });
+
+  it("shows report queue age from the older of OPEN and UNDER_REVIEW", async () => {
+    stubMe(["content.moderate"]);
+    server.use(
+      http.get(apiUrl("/admin/reports"), ({ request }) => {
+        const status = new URL(request.url).searchParams.get("status");
+        const row =
+          status === "UNDER_REVIEW"
+            ? reportRow(
+                "UNDER_REVIEW",
+                "2026-07-01T09:00:00.000Z",
+                "22222222-2222-4222-8222-222222222222",
+              )
+            : reportRow("OPEN", "2026-08-11T09:00:00.000Z", "11111111-1111-4111-8111-111111111111");
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          httpStatus: "200 OK",
+          path: "/admin/reports",
+          requestId: "rid-rep",
+          timeStamp: "2026-09-11T12:00:00.000000000Z",
+          data: {
+            content: [row],
+            page: 0,
+            size: 1,
+            totalElements: 1,
+            totalPages: 1,
+            first: true,
+            last: true,
+          },
+        });
+      }),
+    );
+
+    const html = await render();
+
+    expect(html).toContain("Şikayetler");
+    expect(html).toContain("2");
+    expect(html).toContain("En eski 01.07.2026");
+    expect(html).not.toContain("En eski 11.08.2026");
+  });
+
+  it("shows payout queue age from the oldest PROCESSING row", async () => {
+    stubMe(["payout.reconcile"]);
+    server.use(
+      http.get(apiUrl("/admin/payouts"), () =>
+        HttpResponse.json({
+          success: true,
+          message: "ok",
+          httpStatus: "200 OK",
+          path: "/admin/payouts",
+          requestId: "rid-payouts",
+          timeStamp: "2026-09-11T12:00:00.000000000Z",
+          data: {
+            content: [
+              {
+                id: "9c000000-0000-4000-8000-000000000033",
+                jobAssignmentId: "8c000000-0000-4000-8000-000000000034",
+                amount: "100.00",
+                currency: "TRY",
+                status: "PROCESSING",
+                failureReason: null,
+                completedAt: null,
+                createdAt: "2026-08-11T09:00:00.000Z",
+              },
+            ],
+            page: 0,
+            size: 1,
+            totalElements: 2,
+            totalPages: 2,
+            first: true,
+            last: false,
+          },
+        }),
+      ),
+    );
+
+    const html = await render();
+
+    expect(html).toContain("Hakediş mutabakatı");
+    expect(html).toContain("2");
     expect(html).toContain("En eski 11.08.2026");
   });
 

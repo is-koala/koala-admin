@@ -34,13 +34,28 @@ export default async function PanelHomePage() {
               className="flex flex-col gap-1 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm hover:bg-surface-muted"
             >
               <span className="text-xs font-medium text-ink-muted">{tile.label}</span>
-              <span className="text-2xl font-semibold tracking-tight text-ink">
-                {tile.count === null ? "—" : formatInteger(tile.count)}
-              </span>
-              {tile.oldestAt !== null ? (
-                <span className="text-xs text-ink-subtle">En eski {formatDate(tile.oldestAt)}</span>
+              {tile.loadError !== null ? (
+                <>
+                  <span className="text-sm font-semibold tracking-tight text-ink">
+                    {tile.loadError}
+                  </span>
+                  <span className="text-xs text-ink-subtle">
+                    Sayfayı yenileyerek yeniden deneyin.
+                  </span>
+                </>
               ) : (
-                <span className="text-xs text-ink-subtle">Kuyruğu aç</span>
+                <>
+                  <span className="text-2xl font-semibold tracking-tight text-ink">
+                    {tile.count === null ? "—" : formatInteger(tile.count)}
+                  </span>
+                  {tile.oldestAt !== null ? (
+                    <span className="text-xs text-ink-subtle">
+                      En eski {formatDate(tile.oldestAt)}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-ink-subtle">Kuyruğu aç</span>
+                  )}
+                </>
               )}
             </Link>
           ))}
