@@ -241,6 +241,9 @@ describe("TCKK photos on the object page", () => {
     expect(html).not.toContain("/uploads/images/");
     expect(html).not.toContain("koala-backend.test");
     expect(html).not.toContain("ACCESS-TOKEN");
+    // vitest.config.mts listeyi dolu verir; uyarı yalnız boş listede çıkar
+    // (src/server/evidence/signed-download-notice.test.tsx).
+    expect(html).not.toContain("İmzalı indirme kaynakları tanımlı değil");
     expect(html).toContain("Kimliği onayla");
     expect(enabledApproveControls(html)).toHaveLength(1);
     expect(html).toContain("İncelemeyi reddet");

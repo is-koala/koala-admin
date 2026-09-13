@@ -105,6 +105,18 @@ doğrulama yazılmadan önceki tehlikeydi. `src/env.ts` açılışta fail-fast:
 Kalan sessiz yol: origin `https` iken istek düz HTTP ise tarayıcı `Secure`
 çerezi saklamaz. Onu env kapatır; şema/host uyumsuzluğu hâlâ operatör işi.
 
+## `EVIDENCE_DOWNLOAD_ALLOWED_ORIGINS`
+
+Üç indirme BFF'i (kimlik fotoğrafı, şirket galerisi, uyuşmazlık kanıtı)
+backend'in 302 ile verdiği imzalı depo adresini yalnız origin'i bu listedeyse
+takip eder (`src/server/evidence/signed-download.ts`). Boş liste fail-closed:
+S3'lü bir backend'de her fotoğraf "indirilemedi" olur. Ret sessiz değildir —
+`console.warn` yalnız origin'i ve env anahtarını yazar, 502
+`X-Koala-Download-Error` başlığı taşır, fotoğraf kutusu `HEAD` ile nedeni
+okuyup 404/yapılandırma/depo cümlelerini ayırır, liste boşken nesne
+sayfalarının üstünde personel uyarısı çıkar. Değeri backend
+`STORAGE_*` ayarından türetme: `docs/evidence-download-origins.md`.
+
 ## Kapılar
 
 `package.json` script'leri. Ajan kapıyı Yusuf'un Mac'inde koşturur; GitHub

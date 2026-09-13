@@ -440,6 +440,7 @@ describe("the selected dispute", () => {
     expect(html).toContain(`/api/disputes/${DISPUTE}/evidence/${EVIDENCE_ID}/download`);
     expect(html).toContain(`/assignments?atama=${ASSIGNMENT}`);
     expect(html).not.toContain("koala-backend.test");
+    expect(html).not.toContain("İmzalı indirme kaynakları tanımlı değil");
   });
 
   it("keeps decision controls usable when no evidence was attached", async () => {

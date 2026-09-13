@@ -358,6 +358,7 @@ describe("the safe review projection", () => {
     expect(html).toContain(
       `/api/companies/${COMPANY_REVIEW_ID}/images/${COMPANY_GALLERY_IMAGE_ID}/download`,
     );
+    expect(html).not.toContain("İmzalı indirme kaynakları tanımlı değil");
   });
 
   it("says when a company has no registered address or gallery photos", async () => {

@@ -9,6 +9,7 @@ import { getIdentityReview } from "@/server/api/identity-reviews";
 import { readParam, type SearchParams } from "@/server/api/paging";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
+import { SignedDownloadAllowlistNotice } from "@/server/evidence/signed-download-notice";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
 import { IdentityReviewBody, IdentityStatusBadge, identityDisplayName } from "../identity-review";
@@ -99,6 +100,7 @@ async function IdentityObject({
 
   return (
     <section className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface px-4 py-4">
+      <SignedDownloadAllowlistNotice subject="TCKK fotoğrafları" />
       {decisionResult === null ? null : (
         <p role="status" className="rounded-md bg-success-soft px-3 py-2 text-sm text-success">
           {decisionResult === "approved" ? "Onay" : "Ret"} kararı backend tarafından kaydedildi.

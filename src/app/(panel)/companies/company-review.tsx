@@ -14,6 +14,7 @@ import {
 } from "@/server/api/companies";
 
 import { submitCompanyDecision } from "./actions";
+import { GalleryPhoto } from "./gallery-photo";
 
 export function ApprovalStatusBadge({ status }: { status: string }) {
   const tone = status === "APPROVED" ? "success" : status === "REJECTED" ? "danger" : "warning";
@@ -141,11 +142,9 @@ function CompanyGallery({
           <figcaption className="text-xs font-medium text-ink-muted">
             Fotoğraf {index + 1}
           </figcaption>
-          {/* eslint-disable-next-line @next/next/no-img-element -- same-origin BFF personel çerezini ister; next/image göndermez. */}
-          <img
+          <GalleryPhoto
             src={companyGallerySrc(companyId, imageId)}
             alt={`${index + 1}. galeri fotoğrafı`}
-            className="h-40 w-full rounded-lg border border-border-subtle bg-surface-sunken object-cover"
           />
         </figure>
       ))}
