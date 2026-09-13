@@ -3,42 +3,41 @@
 import type { AuthorizationChangeOutcome } from "@/lib/authorization-change";
 import { asRoleCode, asRoleId, parseRoleOptionValue } from "@/lib/role-identity";
 import { runAuthorizationChange } from "@/server/authz/administration";
+import { revalidateAfterWrite } from "@/server/queue/revalidate-after-write";
 
 /**
  * Rol→izin DAG'ının dört yazımı.
  *
- * Dördü de tek satırda aynı kapıdan geçiyor ve bu dosyada başka hiçbir mantık
- * yok — bilerek. Bir Server Action kendi URL'i olan bir POST ucudur ve
- * `/roles` sayfasındaki `<RequirePermission permission="role.manage">` onun
- * için hiç çalışmaz; izni yeniden çözen, girdiyi doğrulayan ve backend'in
- * reddini Türkçeye çeviren yer `runAuthorizationChange`.
- *
- * `"use server"` bir modülün yalnız async fonksiyon yayımlamasına izin veriyor,
- * bu yüzden ne bir sabit ne bir tip burada duruyor.
+ * Dördü de aynı kapıdan geçiyor. Başarıdan sonra `/roles` ve ana ekran
+ * yenilenir — nesne rotası yok; liste aksi halde eski izin/kapsama çizer.
  */
 
 export async function grantPermissionToRole(
   _state: AuthorizationChangeOutcome,
   formData: FormData,
 ): Promise<AuthorizationChangeOutcome> {
-  return runAuthorizationChange({
-    kind: "ROLE_PERMISSION_GRANT",
-    roleId: asRoleId(text(formData, "roleId")),
-    roleCode: asRoleCode(text(formData, "roleCode")),
-    permission: text(formData, "permission"),
-  });
+  return afterWrite(
+    await runAuthorizationChange({
+      kind: "ROLE_PERMISSION_GRANT",
+      roleId: asRoleId(text(formData, "roleId")),
+      roleCode: asRoleCode(text(formData, "roleCode")),
+      permission: text(formData, "permission"),
+    }),
+  );
 }
 
 export async function revokePermissionFromRole(
   _state: AuthorizationChangeOutcome,
   formData: FormData,
 ): Promise<AuthorizationChangeOutcome> {
-  return runAuthorizationChange({
-    kind: "ROLE_PERMISSION_REVOKE",
-    roleId: asRoleId(text(formData, "roleId")),
-    roleCode: asRoleCode(text(formData, "roleCode")),
-    permission: text(formData, "permission"),
-  });
+  return afterWrite(
+    await runAuthorizationChange({
+      kind: "ROLE_PERMISSION_REVOKE",
+      roleId: asRoleId(text(formData, "roleId")),
+      roleCode: asRoleCode(text(formData, "roleCode")),
+      permission: text(formData, "permission"),
+    }),
+  );
 }
 
 export async function addRoleInclude(
@@ -58,26 +57,37 @@ export async function addRoleInclude(
    */
   const included = parseRoleOptionValue(text(formData, "includedRole"));
 
-  return runAuthorizationChange({
-    kind: "ROLE_INCLUDE_ADD",
-    roleId: asRoleId(text(formData, "roleId")),
-    roleCode: asRoleCode(text(formData, "roleCode")),
-    includedRoleId: included?.id ?? asRoleId(""),
-    includedRoleCode: included?.code ?? asRoleCode(""),
-  });
+  return afterWrite(
+    await runAuthorizationChange({
+      kind: "ROLE_INCLUDE_ADD",
+      roleId: asRoleId(text(formData, "roleId")),
+      roleCode: asRoleCode(text(formData, "roleCode")),
+      includedRoleId: included?.id ?? asRoleId(""),
+      includedRoleCode: included?.code ?? asRoleCode(""),
+    }),
+  );
 }
 
 export async function removeRoleInclude(
   _state: AuthorizationChangeOutcome,
   formData: FormData,
 ): Promise<AuthorizationChangeOutcome> {
-  return runAuthorizationChange({
-    kind: "ROLE_INCLUDE_REMOVE",
-    roleId: asRoleId(text(formData, "roleId")),
-    roleCode: asRoleCode(text(formData, "roleCode")),
-    includedRoleId: asRoleId(text(formData, "includedRoleId")),
-    includedRoleCode: asRoleCode(text(formData, "includedRoleCode")),
-  });
+  return afterWrite(
+    await runAuthorizationChange({
+      kind: "ROLE_INCLUDE_REMOVE",
+      roleId: asRoleId(text(formData, "roleId")),
+      roleCode: asRoleCode(text(formData, "roleCode")),
+      includedRoleId: asRoleId(text(formData, "includedRoleId")),
+      includedRoleCode: asRoleCode(text(formData, "includedRoleCode")),
+    }),
+  );
+}
+
+function afterWrite(outcome: AuthorizationChangeOutcome): AuthorizationChangeOutcome {
+  if (outcome.status === "SUCCEEDED") {
+    revalidateAfterWrite("/roles", "/");
+  }
+  return outcome;
 }
 
 /**

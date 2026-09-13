@@ -10,6 +10,7 @@ import { isKoalaApiError } from "@/server/api/errors";
 import { confirmIbanVerification } from "@/server/api/iban-verification";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { guardDecision } from "@/server/queue/decisions";
+import { revalidateAfterWrite } from "@/server/queue/revalidate-after-write";
 
 const MONEY = /^\d{1,17}(?:\.\d{1,2})?$/;
 
@@ -95,6 +96,7 @@ export async function submitIbanVerification(
       };
     }
 
+    revalidateAfterWrite("/iban-verifications", "/");
     return {
       status: "SUCCEEDED",
       message: "IBAN doğrulaması tamamlandı.",

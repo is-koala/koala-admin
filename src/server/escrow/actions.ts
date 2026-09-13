@@ -1,9 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
 import { ESCROW_FIELD, type EscrowFormState } from "@/lib/escrow-form";
 import { isDisputeResolution, type DisputeResolution } from "@/server/api/disputes";
+import { revalidateAfterWrite } from "@/server/queue/revalidate-after-write";
 
 import { runEscrowOperation, type EscrowOperationKind } from "./operations";
 
@@ -57,21 +56,24 @@ export async function submitEscrowOperation(
   const resolution: DisputeResolution | null = isDisputeResolution(rawResolution)
     ? rawResolution
     : null;
+  const disputeId = optionalText(formData, ESCROW_FIELD.disputeId);
 
   const outcome = await runEscrowOperation({
     operationKey,
     kind,
     assignmentId: text(formData, ESCROW_FIELD.assignmentId).trim(),
-    disputeId: optionalText(formData, ESCROW_FIELD.disputeId),
+    disputeId,
     resolution,
     reason: text(formData, ESCROW_FIELD.reason),
     confirmedAmount: optionalText(formData, ESCROW_FIELD.confirmedAmount),
   });
 
   if (outcome.status === "SUCCEEDED") {
-    // The queue only lists active disputes, so a resolved one has to disappear
-    // and a released assignment has to stop offering the button.
-    revalidatePath("/disputes");
+    revalidateAfterWrite(
+      ...(disputeId === null ? [] : [`/disputes/${disputeId}`]),
+      "/disputes",
+      "/",
+    );
   }
 
   return {
