@@ -107,7 +107,9 @@ Kalan sessiz yol: origin `https` iken istek düz HTTP ise tarayıcı `Secure`
 
 ## Kapılar
 
-`package.json` script'leri. Yerel tam kapı, PR açılmadan:
+`package.json` script'leri. Ajan kapıyı Yusuf'un Mac'inde koşturur; GitHub
+kuyruğunu beklemez. Mac org runner kaydedilmez. PR yeşil tiki Hetzner
+`self-hosted` üzerindedir. Yerel tam kapı, PR açılmadan:
 
 ```
 pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm verify:server-only

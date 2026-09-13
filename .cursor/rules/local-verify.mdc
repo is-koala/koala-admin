@@ -1,0 +1,10 @@
+---
+description: Doğrula bu Mac'te; CI Hetzner'de; Mac GitHub runner değil
+alwaysApply: true
+---
+
+# Yerel doğrulama
+
+Ajanın kendi kapısı Yusuf'un Mac'inde: `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test`. GitHub kuyruğunu bekleme.
+
+Mac'i org GitHub Actions runner kaydetme. PR yeşil tiki `self-hosted` Hetzner'de kalır.
