@@ -1,10 +1,10 @@
 ---
-description: Doğrula bu Mac'te; CI Hetzner'de; Mac GitHub runner değil
+description: Doğrula bu Mac'te; GitHub PR testi koşmaz; Mac GitHub runner değil
 alwaysApply: true
 ---
 
 # Yerel doğrulama
 
-Ajanın kendi kapısı Yusuf'un Mac'inde: `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test`. GitHub kuyruğunu bekleme.
+Ajanın kendi kapısı Yusuf'un Mac'inde: `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm verify:server-only`. GitHub kuyruğunu bekleme.
 
-Mac'i org GitHub Actions runner kaydetme. PR yeşil tiki `self-hosted` Hetzner'de kalır.
+Mac'i org GitHub Actions runner kaydetme. GitHub PR ve `main` push'ta kalite işi koşmaz. Hetzner `self-hosted` yalnız `workflow_dispatch` ile isteğe bağlı kalır. `format:check` yerel kapıdadır; isteğe bağlı dispatch YAML'ı onu koşturmaz.
