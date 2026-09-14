@@ -7,6 +7,8 @@ import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import type { PageDto } from "./types";
 
+export { companyContactRoleLabel } from "./shared/company-contact-role";
+
 /**
  * The company approval queue's contract with `webAPI/AdminController.java`.
  *
@@ -62,12 +64,26 @@ const companyAddressSchema = z
   .nullish()
   .transform((value) => value ?? null);
 
+/** `CompanyContactDto` — yetkili: kullanıcı (`SafeUserDto`) ve şirketteki rolü (`shared/company-contact-role`). */
+export const companyContactSchema = z.object({
+  id: z.string(),
+  user: safeUserSchema.nullish().transform((value) => value ?? null),
+  role: nullableString,
+});
+
+export type CompanyContact = z.infer<typeof companyContactSchema>;
+
 /**
  * `core/dtos/company/response/CompanyReviewDto.java`.
  *
- * Address and gallery image ids are on the review DTO; contacts and storage
- * keys are not. Zod strips unknown fields, including any accidental expansion of
+ * Address and gallery image ids are on the review DTO; storage keys are not.
+ * Zod strips unknown fields, including any accidental expansion of
  * `createdBy`, so the page can only render the backend's safe projection.
+ *
+ * koala-backend#283 alanları — yetkililer, web sitesi, açıklama, kararı veren
+ * personel, ilan sayısı — isteğe bağlı: eski sunucu göndermez, sayfa
+ * bölümü gizler. `companyContacts` `null` (sunucu vermedi) ile `[]`
+ * (yetkili yok) ayrımını korur.
  */
 export const companyReviewSchema = z.object({
   id: z.string(),
@@ -77,9 +93,12 @@ export const companyReviewSchema = z.object({
   taxNumber: nullableString,
   type: nullableString,
   logoUrl: nullableString,
+  website: nullableString,
+  description: nullableString,
   approvalStatus: z.string(),
   approvalNote: nullableString,
   approvalDecidedAt: nullableString,
+  approvedByStaffId: nullableString,
   createdAt: nullableString,
   createdBy: safeUserSchema.nullish().transform((value) => value ?? null),
   address: companyAddressSchema,
@@ -87,6 +106,16 @@ export const companyReviewSchema = z.object({
     .array(z.string())
     .nullish()
     .transform((value) => value ?? []),
+  companyContacts: z
+    .array(companyContactSchema)
+    .nullish()
+    .transform((value) => value ?? null),
+  jobCount: z
+    .number()
+    .int()
+    .nonnegative()
+    .nullish()
+    .transform((value) => value ?? null),
 });
 
 export type CompanyReview = z.infer<typeof companyReviewSchema>;

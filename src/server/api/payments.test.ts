@@ -16,6 +16,7 @@ import {
   getPayment,
   paymentCurrency,
   paymentPath,
+  refundOriginLabel,
 } from "./payments";
 
 /**
@@ -134,5 +135,54 @@ describe("getPayment", () => {
         },
       }),
     ).toBe("USD");
+  });
+});
+
+/** koala-admin#100 / koala-backend#283: `payoutId` ve iadenin kaynağı. */
+describe("payout id and refund origin", () => {
+  it("reads origin, originId and payoutId, and nulls them for a #265 server", async () => {
+    const refunds = adminPaymentFixture().refunds as Array<Record<string, unknown>>;
+    let body: unknown = adminPaymentFixture({
+      payoutId: "9c000000-0000-4000-8000-000000000033",
+      refunds: [
+        { ...refunds[0], origin: "DISPUTE", originId: "6d000000-0000-4000-8000-000000000061" },
+      ],
+    });
+    server.use(
+      http.get(apiUrl(paymentPath(PAYMENT_ID)), () =>
+        HttpResponse.json(envelope(paymentPath(PAYMENT_ID), body)),
+      ),
+    );
+
+    const payment = await getPayment("TOKEN", PAYMENT_ID);
+    expect(payment.payoutId).toBe("9c000000-0000-4000-8000-000000000033");
+    expect(payment.refunds[0]?.origin).toBe("DISPUTE");
+    expect(payment.refunds[0]?.originId).toBe("6d000000-0000-4000-8000-000000000061");
+
+    body = adminPaymentFixture();
+    const legacy = await getPayment("TOKEN", PAYMENT_ID);
+    expect(legacy.payoutId).toBeNull();
+    expect(legacy.refunds[0]?.origin).toBeNull();
+    expect(legacy.refunds[0]?.originId).toBeNull();
+  });
+
+  /** Kaynak yalnız gösterim: bilinmeyen kod sayfayı düşürmez, etiket kodu yazar. */
+  it("keeps a refund origin the panel cannot name and labels it by its code", async () => {
+    const refunds = adminPaymentFixture().refunds as Array<Record<string, unknown>>;
+    server.use(
+      http.get(apiUrl(paymentPath(PAYMENT_ID)), () =>
+        HttpResponse.json(
+          envelope(
+            paymentPath(PAYMENT_ID),
+            adminPaymentFixture({ refunds: [{ ...refunds[0], origin: "CHARGEBACK" }] }),
+          ),
+        ),
+      ),
+    );
+
+    const payment = await getPayment("TOKEN", PAYMENT_ID);
+    expect(payment.refunds[0]?.origin).toBe("CHARGEBACK");
+    expect(refundOriginLabel("CHARGEBACK")).toBe("CHARGEBACK");
+    expect(refundOriginLabel("DISPUTE")).toBe("Uyuşmazlık");
   });
 });

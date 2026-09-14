@@ -209,3 +209,18 @@ describe("a reference that is not pending", () => {
     expect(seen.calls).toBe(0);
   });
 });
+
+/** koala-admin#100 / koala-backend#283: kalan deneme hakkı; eski sunucuda "—". */
+describe("the attempts left", () => {
+  it("draws attemptsLeft when the DTO carries it and the empty value when it does not", async () => {
+    stubMe(OFFICER);
+    watchQueue([pendingRow({ attemptsLeft: 2, status: "PENDING" })]);
+    const html = await render();
+    expect(html).toMatch(/Kalan deneme<\/dt><dd[^>]*><span[^>]*>2</);
+
+    stubMe(OFFICER);
+    watchQueue([pendingRow()]);
+    const legacy = await render();
+    expect(legacy).toMatch(/Kalan deneme<\/dt><dd[^>]*>—</);
+  });
+});

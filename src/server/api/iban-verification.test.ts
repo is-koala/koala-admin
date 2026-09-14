@@ -268,3 +268,23 @@ describe("findPendingIbanVerification", () => {
     expect(await findPendingIbanVerification("TOKEN", REFERENCE)).toBeNull();
   });
 });
+
+/** koala-admin#100 / koala-backend#283: `attemptsLeft`; eski sunucuda `null`. DTO'nun `status`u okunmaz. */
+describe("attempts left", () => {
+  it("reads it when present, nulls it for a #265 server and never parses status", async () => {
+    let content: unknown[] = [{ ...PENDING, status: "PENDING", attemptsLeft: 2 }];
+    server.use(http.get(apiUrl(IBAN_PENDING_PATH), () => pageSuccess(content)));
+
+    const page = await getPendingIbanVerifications("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: IBAN_PENDING_PAGING.defaultSort },
+    });
+    expect(page.content[0]?.attemptsLeft).toBe(2);
+    expect(page.content[0]).not.toHaveProperty("status");
+
+    content = [PENDING];
+    const legacy = await getPendingIbanVerifications("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: IBAN_PENDING_PAGING.defaultSort },
+    });
+    expect(legacy.content[0]?.attemptsLeft).toBeNull();
+  });
+});

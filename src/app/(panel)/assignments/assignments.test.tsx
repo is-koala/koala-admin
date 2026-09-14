@@ -309,3 +309,44 @@ describe("the search box — koala-admin#94", () => {
     expect(html).not.toContain("Atama kuyruğu yüklenemedi.");
   });
 });
+
+/** koala-admin#100: `?isci=` / `?isveren=` backend'in `workerId` / `employerId` süzgeçlerine gider. */
+describe("the party filters — koala-admin#100", () => {
+  const WORKER = "aaaaaaaa-0000-4000-8000-000000000001";
+  const EMPLOYER = "bbbbbbbb-0000-4000-8000-000000000002";
+
+  it("sends isci as workerId and isveren as employerId, and offers to drop them", async () => {
+    stubMe(ANALYST);
+    const list = watchList();
+
+    const html = await render({ isci: WORKER, isveren: EMPLOYER, boyut: "10" });
+
+    expect(list.url?.searchParams.get("workerId")).toBe(WORKER);
+    expect(list.url?.searchParams.get("employerId")).toBe(EMPLOYER);
+    expect(html).toContain('data-testid="assignment-party-filter"');
+    expect(html).toContain(WORKER);
+    expect(html).toContain(EMPLOYER);
+    expect(html).toContain('href="/assignments?boyut=10"');
+  });
+
+  it("sends only workerId when the URL names a worker and names the empty result", async () => {
+    stubMe(ANALYST);
+    const list = watchList([]);
+
+    const html = await render({ isci: WORKER });
+
+    expect(list.url?.searchParams.get("workerId")).toBe(WORKER);
+    expect(list.url?.searchParams.has("employerId")).toBe(false);
+    expect(html).toContain("Bu kullanıcının bu roldeki ataması yok.");
+  });
+
+  it("drops a party id that is not a UUID before it reaches the backend", async () => {
+    stubMe(ANALYST);
+    const list = watchList();
+
+    const html = await render({ isci: "not-a-uuid" });
+
+    expect(list.url?.searchParams.has("workerId")).toBe(false);
+    expect(html).not.toContain('data-testid="assignment-party-filter"');
+  });
+});

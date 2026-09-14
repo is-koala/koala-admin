@@ -135,3 +135,31 @@ describe("helpers", () => {
     ).toBeNull();
   });
 });
+
+/** koala-admin#100 / koala-backend#283: `companyId` süzgeci (backend `employerId` de alır; panelde tüketen yok). */
+describe("the company filter", () => {
+  it("sends companyId next to status and omits it when null", async () => {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(JOBS_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json(pageEnvelope(JOBS_PATH, []));
+      }),
+    );
+
+    await getAdminJobs("TOKEN", {
+      status: "OPEN",
+      paging: readPaging({}, JOB_PAGING),
+      companyId: "c1000000-0000-4000-8000-000000000001",
+    });
+    expect(seen.url?.searchParams.get("companyId")).toBe("c1000000-0000-4000-8000-000000000001");
+    expect(seen.url?.searchParams.get("status")).toBe("OPEN");
+
+    await getAdminJobs("TOKEN", {
+      status: null,
+      paging: readPaging({}, JOB_PAGING),
+      companyId: null,
+    });
+    expect(seen.url?.searchParams.has("companyId")).toBe(false);
+  });
+});

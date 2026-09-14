@@ -372,12 +372,14 @@ describe("what a report points at", () => {
     reportedUser: null,
     reportedUserId: null,
     jobId: null,
+    jobAssignmentId: null,
     messageId: null,
     imageId: null,
     reason: "SPAM",
     description: null,
     status: "OPEN",
     reviewedBy: null,
+    reviewedByStaffId: null,
     reviewNote: null,
     reviewedAt: null,
     createdAt: "2026-09-01T08:00:00Z",
@@ -475,5 +477,54 @@ describe("the report queue search goes to the backend as query", () => {
       query: "k".repeat(120),
     });
     expect(seen.url?.searchParams.get("query")).toHaveLength(100);
+  });
+});
+
+/** koala-admin#100 / koala-backend#283: `reporterId` süzgeci ve yeni iki alan. */
+describe("the reporter filter and the #283 report fields", () => {
+  it("sends reporterId, alone or with reportedUserId, and omits it when null", async () => {
+    const seen = watchQueue();
+
+    await getReports("ACCESS-TOKEN", {
+      status: "OPEN",
+      reporterId: "dddddddd-0000-4000-8000-000000000004",
+      reportedUserId: "aaaaaaaa-0000-4000-8000-000000000001",
+      paging: readPaging({}, REPORT_PAGING),
+    });
+    expect(seen.url?.searchParams.get("reporterId")).toBe("dddddddd-0000-4000-8000-000000000004");
+    expect(seen.url?.searchParams.get("reportedUserId")).toBe(
+      "aaaaaaaa-0000-4000-8000-000000000001",
+    );
+
+    await getReports("ACCESS-TOKEN", {
+      status: "OPEN",
+      reporterId: null,
+      paging: readPaging({}, REPORT_PAGING),
+    });
+    expect(seen.url?.searchParams.has("reporterId")).toBe(false);
+  });
+
+  it("reads jobAssignmentId and reviewedByStaffId, and nulls them for a #265 server", async () => {
+    const seen = watchQueue([
+      {
+        id: "r-1",
+        reason: "SPAM",
+        status: "OPEN",
+        jobAssignmentId: "9a1c0f10-0001-4c00-8000-0000000000aa",
+        reviewedByStaffId: "5f000000-0000-4000-8000-000000000055",
+      } as Partial<Report>,
+      { id: "r-2", reason: "SPAM", status: "OPEN" },
+    ]);
+
+    const page = await getReports("ACCESS-TOKEN", {
+      status: "OPEN",
+      paging: readPaging({}, REPORT_PAGING),
+    });
+
+    expect(seen.url).not.toBeNull();
+    expect(page.content[0]?.jobAssignmentId).toBe("9a1c0f10-0001-4c00-8000-0000000000aa");
+    expect(page.content[0]?.reviewedByStaffId).toBe("5f000000-0000-4000-8000-000000000055");
+    expect(page.content[1]?.jobAssignmentId).toBeNull();
+    expect(page.content[1]?.reviewedByStaffId).toBeNull();
   });
 });

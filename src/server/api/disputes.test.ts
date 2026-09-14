@@ -351,3 +351,64 @@ describe("the dispute queue search goes to the backend as query", () => {
     expect(seen.url?.searchParams.get("query")).toHaveLength(100);
   });
 });
+
+/** koala-admin#100 / koala-backend#283: `userId` süzgeci; açan tarafın rolü ve çözen personel. */
+describe("the user filter and the #283 dispute fields", () => {
+  it("sends userId next to status and omits it when null", async () => {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(DISPUTES_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json(searchEnvelope(DISPUTES_PATH));
+      }),
+    );
+
+    await getDisputes("ACCESS-TOKEN", {
+      status: "RESOLVED",
+      userId: "aaaaaaaa-0000-4000-8000-000000000001",
+    });
+    expect(seen.url?.searchParams.get("userId")).toBe("aaaaaaaa-0000-4000-8000-000000000001");
+    expect(seen.url?.searchParams.get("status")).toBe("RESOLVED");
+
+    await getDisputes("ACCESS-TOKEN", { userId: null });
+    expect(seen.url?.searchParams.has("userId")).toBe(false);
+  });
+
+  it("reads openedBySide and resolvedByStaffId, and nulls them for a #265 server", async () => {
+    const id = "d1000000-0000-4c00-8000-000000000001";
+    let extra: Record<string, unknown> = {
+      openedBySide: "EMPLOYER",
+      resolvedByStaffId: "5f000000-0000-4000-8000-000000000055",
+    };
+    server.use(
+      http.get(apiUrl(`${DISPUTES_PATH}/${id}`), () =>
+        HttpResponse.json({
+          success: true,
+          message: "Getirildi.",
+          httpStatus: "200 OK",
+          path: `${DISPUTES_PATH}/${id}`,
+          requestId: "rid-dispute",
+          timeStamp: "2026-09-14T08:00:00Z",
+          data: {
+            id,
+            jobAssignmentId: "9a1c0f10-0001-4c00-8000-0000000000aa",
+            openedBy: null,
+            status: "OPEN",
+            reason: "x",
+            createdAt: "2026-09-05T08:00:00Z",
+            ...extra,
+          },
+        }),
+      ),
+    );
+
+    const dispute = await getDispute("ACCESS-TOKEN", id);
+    expect(dispute.openedBySide).toBe("EMPLOYER");
+    expect(dispute.resolvedByStaffId).toBe("5f000000-0000-4000-8000-000000000055");
+
+    extra = {};
+    const legacy = await getDispute("ACCESS-TOKEN", id);
+    expect(legacy.openedBySide).toBeNull();
+    expect(legacy.resolvedByStaffId).toBeNull();
+  });
+});

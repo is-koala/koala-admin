@@ -1,3 +1,5 @@
+import { isUuid } from "@/lib/panel-href";
+
 import type { PageDto } from "./types";
 
 /**
@@ -86,6 +88,16 @@ export function readEnumParam<T extends string>(
 ): T {
   const raw = readParam(params, key);
   return raw !== null && (allowed as readonly string[]).includes(raw) ? (raw as T) : fallback;
+}
+
+/**
+ * Bir kimlik süzgeci (`?isci=`, `?sirket=`, `?kullanici=`): UUID değilse
+ * `null`. Yanlış biçim backend'e gitmez — Spring `UUID` bağlayamayınca 400
+ * dönerdi ve bir yer imi hata sayfasına dönüşürdü; kuyruk süzgeçsiz açılır.
+ */
+export function readUuidParam(params: SearchParams, key: string): string | null {
+  const raw = readParam(params, key)?.trim() ?? "";
+  return raw.length > 0 && isUuid(raw) ? raw : null;
 }
 
 /** `?onaylandi=true` → `true`. Anything that is not exactly `true` is `false`. */

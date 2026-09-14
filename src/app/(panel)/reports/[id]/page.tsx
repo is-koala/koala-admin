@@ -94,7 +94,12 @@ async function ReportObject({ id }: { id: string }) {
         <span className="text-sm font-medium">{reportReasonLabel(report.reason)}</span>
         <span className="text-sm text-ink-muted">{formatDateTime(report.createdAt)}</span>
       </header>
-      <ReportDecision report={report} content={content} canOpenJob={context.has("job.read")} />
+      <ReportDecision
+        report={report}
+        content={content}
+        canOpenJob={context.has("job.read")}
+        canOpenAssignment={context.has("payment.read")}
+      />
       <ObjectAuditPointer resourceId={report.id} linkLabel="Bu şikayetin denetim kayıtlarını aç">
         Karar ve görsel kaldırma backend tarafından bu şikayet kimliğiyle denetim kaydına yazılır;
         personelin bu kaydı açması da kayda düşer.

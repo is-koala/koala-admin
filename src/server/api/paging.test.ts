@@ -10,6 +10,7 @@ import {
   readEnumParam,
   readPaging,
   readParam,
+  readUuidParam,
   sortParam,
   type PagingContract,
 } from "./paging";
@@ -127,5 +128,19 @@ describe("the window a pager draws from", () => {
       last: false,
     });
     expect(window).not.toHaveProperty("content");
+  });
+});
+
+/** koala-admin#100: beş liste sayfasının ortak kimlik süzgeci okuyucusu. */
+describe("readUuidParam", () => {
+  it("returns a trimmed UUID and null for anything Spring could not bind", () => {
+    expect(readUuidParam({ isci: " aaaaaaaa-0000-4000-8000-000000000001 " }, "isci")).toBe(
+      "aaaaaaaa-0000-4000-8000-000000000001",
+    );
+    expect(readUuidParam({ isci: "not-a-uuid" }, "isci")).toBeNull();
+    expect(readUuidParam({}, "isci")).toBeNull();
+    expect(readUuidParam({ isci: ["aaaaaaaa-0000-4000-8000-000000000001", "x"] }, "isci")).toBe(
+      "aaaaaaaa-0000-4000-8000-000000000001",
+    );
   });
 });

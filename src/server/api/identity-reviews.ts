@@ -53,6 +53,8 @@ export const identityReviewSchema = z.object({
   rejectedAt: nullableString,
   verifiedAt: nullableString,
   reviewedByStaffId: nullableString,
+  /** koala-backend#283: kararı veren personelin adı; eski sunucuda yok. */
+  reviewedByStaffName: nullableString,
   selfieDocumentId: nullableString,
   frontDocumentId: nullableString,
   backDocumentId: nullableString,

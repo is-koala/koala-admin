@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  FilterId,
+  FilterNotice,
   ListSearchForm,
   QueueLoadFailure,
   QueuePager,
@@ -31,14 +33,20 @@ import {
   formatInteger,
   formatPercent,
 } from "@/lib/format";
-import { assignmentHref, userHrefOrNull } from "@/lib/panel-href";
+import { assignmentHref, assignmentsHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   ASSIGNMENT_PAGING,
   getAdminAssignments,
   getEscrowSummary,
   type EscrowSummary,
 } from "@/server/api/escrow";
-import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
+import {
+  pageWindow,
+  readPaging,
+  readParam,
+  readUuidParam,
+  type SearchParams,
+} from "@/server/api/paging";
 import {
   SEARCH_QUERY_TOO_LONG_MESSAGE,
   isSearchQueryTooLong,
@@ -66,6 +74,10 @@ export const metadata: Metadata = { title: "Atama özeti" };
  * Satırın "Aç" bağlantısı nesne sayfasına gider (`/assignments/{id}`,
  * koala-admin#95); `?atama=` bakışı kısa özet olarak kaldı ve oradan da
  * nesne sayfasına bağlantı verir.
+ *
+ * `?isci=` ve `?isveren=` (koala-admin#100) kuyruğu bir kullanıcıya süzer:
+ * backend'in `workerId` / `employerId` parametreleri (koala-backend#283).
+ * Kullanıcı sayfasındaki sayaçlar buraya gelir. UUID olmayan değer düşer.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -103,20 +115,52 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
   const invalid = candidate !== null && !UUID.test(candidate);
   const query = readSearchQuery(readParam(params, SEARCH_PARAM));
   const search = activeSearch(query);
+  const workerId = readUuidParam(params, "isci");
+  const employerId = readUuidParam(params, "isveren");
+  const partyFilter = {
+    ...(workerId === null ? {} : { isci: workerId }),
+    ...(employerId === null ? {} : { isveren: employerId }),
+  };
 
   const viewState = {
     boyut: String(paging.size),
     ...(candidate === null ? {} : { atama: candidate }),
     ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+    ...partyFilter,
   };
 
   const form = (
     <LookupForm
       value={candidate ?? ""}
       error={invalid ? "Geçerli bir atama kimliği girin." : null}
-      carry={query === null ? {} : { [SEARCH_PARAM]: query }}
+      carry={{ ...(query === null ? {} : { [SEARCH_PARAM]: query }), ...partyFilter }}
     />
   );
+
+  const partyNotice =
+    workerId === null && employerId === null ? null : (
+      <FilterNotice
+        testId="assignment-party-filter"
+        clearHref={assignmentsHref({
+          boyut: String(paging.size),
+          ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+        })}
+      >
+        Bu görünüm{" "}
+        {workerId !== null ? (
+          <>
+            işçisi <FilterId value={workerId} />
+          </>
+        ) : null}
+        {workerId !== null && employerId !== null ? " ve " : null}
+        {employerId !== null ? (
+          <>
+            işvereni <FilterId value={employerId} />
+          </>
+        ) : null}{" "}
+        olan atamaları süzüyor.
+      </FilterNotice>
+    );
 
   const searchForm = (error: string | null = null) => (
     <ListSearchForm
@@ -135,12 +179,13 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
 
   let list;
   try {
-    list = await getAdminAssignments(accessToken, { paging, query });
+    list = await getAdminAssignments(accessToken, { paging, query, workerId, employerId });
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return (
         <div className="flex flex-col gap-6">
           {form}
+          {partyNotice}
           {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
         </div>
       );
@@ -148,6 +193,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
     return (
       <div className="flex flex-col gap-6">
         {form}
+        {partyNotice}
         {searchForm()}
         <QueueLoadFailure
           subject="Atama kuyruğu"
@@ -176,6 +222,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
   return (
     <div className="flex flex-col gap-6">
       {form}
+      {partyNotice}
       {searchForm()}
 
       <section className="flex flex-col gap-3" aria-labelledby="assignment-queue-heading">
@@ -193,7 +240,13 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
 
         {list.content.length === 0 ? (
           <EmptyState
-            title={search === null ? "Atama yok." : searchEmptyTitle(search)}
+            title={
+              search !== null
+                ? searchEmptyTitle(search)
+                : partyNotice !== null
+                  ? "Bu kullanıcının bu roldeki ataması yok."
+                  : "Atama yok."
+            }
             description={
               search === null
                 ? "Kuyruk boşsa yine de yukarıdan bir atama kimliğiyle bakabilirsiniz."

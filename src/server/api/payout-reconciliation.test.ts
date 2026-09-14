@@ -283,3 +283,81 @@ describe("getPayoutDetail", () => {
     expect(detail.amount).toBeNull();
   });
 });
+
+/** koala-admin#100 / koala-backend#283: `workerId` süzgeci ve hakediş kaynağı alanları. */
+describe("the worker filter and the #283 payout fields", () => {
+  it("sends workerId, still without status, and omits it when null", async () => {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(PAYOUTS_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json(searchEnvelope(PAYOUTS_PATH));
+      }),
+    );
+
+    await getPayouts("ACCESS-TOKEN", {
+      paging: readPaging({}, PAYOUT_PAGING),
+      workerId: "aaaaaaaa-0000-4000-8000-000000000001",
+    });
+    expect(seen.url?.searchParams.get("workerId")).toBe("aaaaaaaa-0000-4000-8000-000000000001");
+    expect(seen.url?.searchParams.has("status")).toBe(false);
+
+    await getPayouts("ACCESS-TOKEN", { paging: readPaging({}, PAYOUT_PAGING), workerId: null });
+    expect(seen.url?.searchParams.has("workerId")).toBe(false);
+  });
+
+  it("joins a status list into one comma-separated parameter Spring binds as List<PayoutStatus>", async () => {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(PAYOUTS_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json(searchEnvelope(PAYOUTS_PATH));
+      }),
+    );
+
+    await getPayouts("ACCESS-TOKEN", {
+      paging: readPaging({}, PAYOUT_PAGING),
+      status: ["PENDING", "COMPLETED"],
+    });
+    expect(seen.url?.searchParams.get("status")).toBe("PENDING,COMPLETED");
+
+    await getPayouts("ACCESS-TOKEN", { paging: readPaging({}, PAYOUT_PAGING), status: [] });
+    expect(seen.url?.searchParams.has("status")).toBe(false);
+  });
+
+  it("reads releaseOrigin, settledAt, reconciledByStaffId and bankAccountId, nulling them otherwise", async () => {
+    const id = "9c000000-0000-4000-8000-000000000033";
+    let body: unknown = adminPayoutDetailFixture({
+      releaseOrigin: "AUTO_COMPLETION",
+      settledAt: "2026-09-03T10:15:00Z",
+      reconciledByStaffId: "5f000000-0000-4000-8000-000000000055",
+      bankAccountId: "3b000000-0000-4000-8000-000000000031",
+    });
+    server.use(
+      http.get(apiUrl(payoutPath(id)), () =>
+        HttpResponse.json({
+          success: true,
+          message: "Getirildi.",
+          httpStatus: "200 OK",
+          path: payoutPath(id),
+          requestId: "rid-payout",
+          timeStamp: "2026-09-14T08:00:00Z",
+          data: body,
+        }),
+      ),
+    );
+
+    const payout = await getPayoutDetail("ACCESS-TOKEN", id);
+    expect(payout.releaseOrigin).toBe("AUTO_COMPLETION");
+    expect(payout.settledAt).toBe("2026-09-03T10:15:00Z");
+    expect(payout.reconciledByStaffId).toBe("5f000000-0000-4000-8000-000000000055");
+    expect(payout.bankAccountId).toBe("3b000000-0000-4000-8000-000000000031");
+
+    body = adminPayoutDetailFixture();
+    const legacy = await getPayoutDetail("ACCESS-TOKEN", id);
+    expect(legacy.releaseOrigin).toBeNull();
+    expect(legacy.settledAt).toBeNull();
+    expect(legacy.reconciledByStaffId).toBeNull();
+    expect(legacy.bankAccountId).toBeNull();
+  });
+});

@@ -214,6 +214,12 @@ export interface JobQueueQuery {
   /** `null` her durum demektir — backend'e `status` gitmez. */
   readonly status?: JobStatus | null;
   readonly query?: string | null;
+  /**
+   * koala-backend#283: yalnız bu şirketin ilanları; durum ve arama ile
+   * kesişir. Backend `employerId` de alır; panelde tüketen sayfa olmadığı
+   * için buraya konmadı.
+   */
+  readonly companyId?: string | null;
 }
 
 export function getAdminJobs(
@@ -226,6 +232,7 @@ export function getAdminJobs(
     query: {
       ...(query.status ? { status: query.status } : {}),
       query: searchQueryParam(query.query),
+      companyId: query.companyId ?? undefined,
       ...pagingQuery(query.paging),
     },
     accessToken,

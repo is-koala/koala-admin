@@ -396,3 +396,157 @@ describe("an assignment that does not exist", () => {
     expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });
+
+/**
+ * koala-admin#100 / koala-backend#283: başvuru → mesai → iptal → değerlendirme
+ * çizelgesi, `employerType`, notlar. #265 sunucusu bu alanları göndermez;
+ * kartlar yalnız yoklukla eksilir, sayfa aynı kalır.
+ */
+describe("the extended timeline and its cards", () => {
+  const APPLICATION_ID = "ap000000-0000-4000-8000-000000000001";
+  const CANCELLATION_ID = "ca000000-0000-4000-8000-000000000001";
+  const REFUND_ID = "8f000000-0000-4000-8000-000000000081";
+
+  function extended(overrides: Record<string, unknown> = {}) {
+    return adminAssignmentDetailFixture({
+      employerType: "COMPANY",
+      expectedCompletionDateTime: "2026-09-01T17:00:00Z",
+      notes: "Servis 08:00'de başlar.",
+      createdAt: "2026-08-30T09:00:00Z",
+      updatedAt: "2026-09-03T09:00:00Z",
+      application: {
+        id: APPLICATION_ID,
+        status: "ACCEPTED",
+        applicationDateTime: "2026-08-29T12:00:00Z",
+        answeredDateTime: "2026-08-30T09:00:00Z",
+        rejectionReason: null,
+      },
+      workSessions: [
+        {
+          id: "ws000000-0000-4000-8000-000000000001",
+          jobAssignmentId: ASSIGNMENT_ID,
+          checkInAt: "2026-09-01T07:58:00Z",
+          checkOutAt: "2026-09-01T16:02:00Z",
+          checkInClientEventId: null,
+          checkInCapturedAt: "2026-09-01T07:58:00Z",
+          checkInReceivedAt: "2026-09-01T07:58:10Z",
+          checkInPlausibilityFlags: [],
+          checkOutClientEventId: null,
+          checkOutCapturedAt: "2026-09-01T16:02:00Z",
+          checkOutReceivedAt: "2026-09-01T16:02:05Z",
+          checkOutPlausibilityFlags: ["OUTSIDE_JOB_WINDOW", "FUTURE_FLAG"],
+          checkInLatitude: 40.98,
+          checkInLongitude: 29.03,
+          checkOutLatitude: 40.98,
+          checkOutLongitude: 29.03,
+          minutes: 484,
+        },
+      ],
+      cancellation: {
+        id: CANCELLATION_ID,
+        cancelledByParty: "EMPLOYER",
+        cancelledBy: { id: "e-1", firstName: "Mehmet", lastName: "Demir", username: "mehmet" },
+        reason: "Mekân kapandı.",
+        noticeMinutes: 90,
+        feeRate: "0.2500",
+        feeAmount: "344.58",
+        refundAmount: "1033.75",
+        refundId: REFUND_ID,
+        cancelledAt: "2026-09-01T06:30:00Z",
+      },
+      reviews: [
+        {
+          id: "rv000000-0000-4000-8000-000000000001",
+          authorId: "e-1",
+          subjectId: "w-1",
+          rating: 5,
+          comment: "Dakik ve güler yüzlü.",
+          anonymous: true,
+          createdAt: "2026-09-02T12:00:00Z",
+        },
+      ],
+      ...overrides,
+    });
+  }
+
+  it("draws the application, work sessions with flags, cancellation and reviews", async () => {
+    stubMe(ANALYST);
+    watch(extended());
+
+    const html = await render();
+
+    expect(html).toContain('data-testid="assignment-application"');
+    expect(html).toContain(APPLICATION_ID);
+    expect(html).toContain("Kabul edildi");
+    expect(html).toContain("29.08.2026 15:00");
+
+    expect(html).toContain("Mesai oturumları");
+    expect(html).toContain("01.09.2026 10:58");
+    expect(html).toContain("İş penceresi dışında");
+    // Panelin tanımadığı bayrak kodu olduğu gibi yazılır, satır düşmez.
+    expect(html).toContain("FUTURE_FLAG");
+    expect(html).toContain("484 dk");
+    expect(html).toContain("40.98, 29.03");
+
+    expect(html).toContain('data-testid="assignment-cancellation"');
+    expect(html).toContain("Mekân kapandı.");
+    expect(html).toContain("90 dk");
+    expect(html).toContain("₺344,58");
+    expect(html).toContain("%25");
+    expect(html).toContain("₺1.033,75");
+    expect(html).toContain(REFUND_ID);
+
+    expect(html).toContain('data-testid="assignment-reviews"');
+    expect(html).toContain("Dakik ve güler yüzlü.");
+    expect(html).toContain("5/5");
+    expect(html).toContain("Anonim");
+
+    expect(html).toMatch(/İşveren türü<\/dt><dd[^>]*>Şirket</);
+    expect(html).toContain("Servis 08:00&#x27;de başlar.");
+    expect(html).toContain("Beklenen tamamlanma");
+  });
+
+  it("orders the timeline from application through cancellation and review", async () => {
+    stubMe(ANALYST);
+    watch(extended());
+
+    const html = await render();
+
+    const order = [
+      "Başvuru yapıldı",
+      "Başvuru yanıtlandı",
+      "Atama oluşturuldu",
+      "Atama zamanı",
+      "Mesai girişi",
+      "Mesai çıkışı",
+      "Atama iptal edildi",
+      "Değerlendirme yazıldı",
+    ];
+    const timeline = html.slice(html.indexOf("Zaman çizelgesi"));
+    const positions = order.map((label) => timeline.indexOf(label));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    // İptal 06:30, mesai girişi 07:58: çizelge etikete değil zamana göre sıralanır.
+    expect(timeline.indexOf("Atama iptal edildi")).toBeLessThan(timeline.indexOf("Mesai girişi"));
+    expect(timeline.indexOf("Başvuru yapıldı")).toBeLessThan(timeline.indexOf("Atama oluşturuldu"));
+  });
+
+  it("says when the server sent empty sessions and reviews, and hides the cards a #265 server never sent", async () => {
+    stubMe(ANALYST);
+    watch(extended({ workSessions: [], reviews: [], cancellation: null }));
+    const empty = await render();
+    expect(empty).toContain("Bu atama için mesai kaydı yok.");
+    expect(empty).toContain("Bu atama için değerlendirme yazılmamış.");
+    expect(empty).not.toContain('data-testid="assignment-cancellation"');
+
+    stubMe(ANALYST);
+    watch();
+    const legacy = await render();
+    expect(legacy).not.toContain('data-testid="assignment-application"');
+    expect(legacy).not.toContain('data-testid="assignment-cancellation"');
+    expect(legacy).not.toContain('data-testid="assignment-reviews"');
+    expect(legacy).not.toContain("Mesai oturumları");
+    expect(legacy).toMatch(/İşveren türü<\/dt><dd[^>]*>—</);
+    expect(legacy).toContain("Atama zamanı");
+    expect(legacy).not.toContain("Başvuru yapıldı");
+  });
+});

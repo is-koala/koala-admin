@@ -12,6 +12,7 @@ import {
   escrowReleasePath,
   escrowSummaryPath,
   getAdminAssignments,
+  getAssignmentDetail,
   getEscrowSummary,
   refundEmployer,
   releaseEscrow,
@@ -344,5 +345,90 @@ describe("the assignment search goes to the backend as query", () => {
       query: "k".repeat(120),
     });
     expect(seen.url?.searchParams.get("query")).toHaveLength(100);
+  });
+});
+
+/** koala-admin#100 / koala-backend#283: taraf süzgeçleri ve zaman çizelgesi alanları. */
+describe("the party filters and the #283 detail fields", () => {
+  const WORKER = "aaaaaaaa-0000-4000-8000-000000000001";
+  const EMPLOYER = "bbbbbbbb-0000-4000-8000-000000000002";
+
+  it("sends workerId and employerId next to the search and omits them when null", async () => {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(ASSIGNMENTS_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json(searchEnvelope(ASSIGNMENTS_PATH));
+      }),
+    );
+
+    await getAdminAssignments("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: ASSIGNMENT_PAGING.defaultSort },
+      workerId: WORKER,
+      employerId: EMPLOYER,
+    });
+    expect(seen.url?.searchParams.get("workerId")).toBe(WORKER);
+    expect(seen.url?.searchParams.get("employerId")).toBe(EMPLOYER);
+
+    await getAdminAssignments("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: ASSIGNMENT_PAGING.defaultSort },
+      workerId: null,
+    });
+    expect(seen.url?.searchParams.has("workerId")).toBe(false);
+    expect(seen.url?.searchParams.has("employerId")).toBe(false);
+  });
+
+  it("reads the application, work sessions, cancellation and reviews, and nulls them for a #265 server", async () => {
+    const id = "9a1c0f10-0001-4c00-8000-0000000000aa";
+    const base = adminAssignmentFixture({ id });
+    let body: unknown = {
+      ...base,
+      employerType: "INDIVIDUAL",
+      application: { id: "ap-1", status: "ACCEPTED", applicationDateTime: "2026-08-29T12:00:00Z" },
+      workSessions: [
+        {
+          id: "ws-1",
+          checkInAt: "2026-09-01T08:00:00Z",
+          checkOutPlausibilityFlags: ["NON_MONOTONIC"],
+          minutes: 480,
+        },
+      ],
+      cancellation: { id: "ca-1", cancelledByParty: "ADMIN", feeAmount: "10.00" },
+      reviews: [{ id: "rv-1", authorId: "w-1", subjectId: "e-1", rating: 4 }],
+      createdAt: "2026-08-30T09:00:00Z",
+    };
+    server.use(
+      http.get(apiUrl(escrowSummaryPath(id)), () =>
+        HttpResponse.json({
+          success: true,
+          message: "Getirildi.",
+          httpStatus: "200 OK",
+          path: escrowSummaryPath(id),
+          requestId: "rid-detail",
+          timeStamp: "2026-09-14T08:00:00Z",
+          data: body,
+        }),
+      ),
+    );
+
+    const detail = await getAssignmentDetail("ACCESS-TOKEN", id);
+    expect(detail.employerType).toBe("INDIVIDUAL");
+    expect(detail.application?.status).toBe("ACCEPTED");
+    expect(detail.application?.rejectionReason).toBeNull();
+    expect(detail.workSessions?.[0]?.checkInPlausibilityFlags).toEqual([]);
+    expect(detail.workSessions?.[0]?.checkOutPlausibilityFlags).toEqual(["NON_MONOTONIC"]);
+    expect(detail.cancellation?.cancelledByParty).toBe("ADMIN");
+    expect(detail.cancellation?.cancelledBy).toBeNull();
+    expect(detail.reviews?.[0]?.anonymous).toBe(false);
+    expect(detail.createdAt).toBe("2026-08-30T09:00:00Z");
+
+    body = base;
+    const legacy = await getAssignmentDetail("ACCESS-TOKEN", id);
+    expect(legacy.application).toBeNull();
+    expect(legacy.workSessions).toBeNull();
+    expect(legacy.cancellation).toBeNull();
+    expect(legacy.reviews).toBeNull();
+    expect(legacy.employerType).toBeNull();
+    expect(legacy.payments).toEqual([]);
   });
 });

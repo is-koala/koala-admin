@@ -30,7 +30,18 @@ import {
   reportHref,
   userHrefOrNull,
 } from "@/lib/panel-href";
-import type { AssignmentDetail as AssignmentRecord, LinkedRecord } from "@/server/api/escrow";
+import {
+  applicationStatusLabel,
+  assignmentEmployerTypeLabel,
+  cancellationPartyLabel,
+  timesheetFlagLabel,
+  type AdminApplication,
+  type AdminCancellation,
+  type AdminReview,
+  type AssignmentDetail as AssignmentRecord,
+  type LinkedRecord,
+  type WorkSession,
+} from "@/server/api/escrow";
 import {
   PAYMENT_ATTEMPT_STATUS_LABELS,
   paymentCurrency,
@@ -134,6 +145,26 @@ export function AssignmentDetail({ assignment, payments, permissions }: DetailPr
               }
             />
             <Row label="Çalışma süresi" value={`${formatInteger(assignment.workHours)} sa`} />
+            <Row
+              label="İşveren türü"
+              value={
+                assignment.employerType === null
+                  ? EMPTY_VALUE
+                  : assignmentEmployerTypeLabel(assignment.employerType)
+              }
+            />
+            <Row
+              label="Beklenen tamamlanma"
+              value={formatDateTime(assignment.expectedCompletionDateTime)}
+            />
+            <Row label="Oluşturulma" value={formatDateTime(assignment.createdAt)} />
+            <Row label="Güncelleme" value={formatDateTime(assignment.updatedAt)} />
+            {assignment.notes === null ? null : (
+              <Row
+                label="Not"
+                value={<span className="whitespace-pre-wrap">{assignment.notes}</span>}
+              />
+            )}
           </dl>
         </div>
 
@@ -162,6 +193,24 @@ export function AssignmentDetail({ assignment, payments, permissions }: DetailPr
 
       <Timeline assignment={assignment} payments={payments.ok ? payments.payments : []} />
 
+      {assignment.application === null && assignment.cancellation === null ? null : (
+        <section className="grid gap-4 md:grid-cols-2">
+          {assignment.application === null ? null : (
+            <ApplicationCard application={assignment.application} />
+          )}
+          {assignment.cancellation === null ? null : (
+            <CancellationCard
+              cancellation={assignment.cancellation}
+              currency={assignment.pricing.currency}
+            />
+          )}
+        </section>
+      )}
+
+      {assignment.workSessions === null ? null : (
+        <WorkSessions sessions={assignment.workSessions} />
+      )}
+
       <PaymentsTable payments={payments} />
 
       <section className="grid gap-4 md:grid-cols-2">
@@ -173,6 +222,10 @@ export function AssignmentDetail({ assignment, payments, permissions }: DetailPr
           canOpenReports={held.has("content.moderate")}
         />
       </section>
+
+      {assignment.reviews === null ? null : (
+        <Reviews reviews={assignment.reviews} assignment={assignment} />
+      )}
 
       <EscrowActions assignment={assignment} permissions={held} />
     </div>
@@ -205,10 +258,12 @@ interface TimelineEntry {
 }
 
 /**
- * Zaman çizelgesi, elde olan anlardan. Atama DTO'sunda `createdAt` yok;
- * çizelge atama ve tamamlanma anlarıyla bağlı kayıtların oluşma anlarından
- * kurulur. Tarihi çözülemeyen kayıt düşer — sıralanamayan bir satır
- * çizelgede yanlış yere oturur, hiç oturmamasından kötü.
+ * Zaman çizelgesi, elde olan anlardan: başvuru → kabul → atama → ödeme →
+ * mesai (giriş/çıkış) → iptal ya da tamamlanma → değerlendirme → hakediş
+ * (koala-admin#100). Eski sunucu başvuru, mesai, iptal ve değerlendirmeyi
+ * göndermez; o satırlar yalnız yoklukla eksilir. Tarihi çözülemeyen kayıt
+ * düşer — sıralanamayan bir satır çizelgede yanlış yere oturur, hiç
+ * oturmamasından kötü.
  */
 function timelineEntries(
   assignment: AssignmentRecord,
@@ -220,8 +275,39 @@ function timelineEntries(
     entries.push({ at, label, detail });
   };
 
+  if (assignment.application !== null) {
+    push(assignment.application.applicationDateTime, "Başvuru yapıldı");
+    push(
+      assignment.application.answeredDateTime,
+      "Başvuru yanıtlandı",
+      assignment.application.status === null
+        ? null
+        : applicationStatusLabel(assignment.application.status),
+    );
+  }
+  push(assignment.createdAt, "Atama oluşturuldu");
   push(assignment.assignmentDateTime, "Atama zamanı");
+  for (const session of assignment.workSessions ?? []) {
+    push(session.checkInAt, "Mesai girişi", flagSummary(session.checkInPlausibilityFlags));
+    push(session.checkOutAt, "Mesai çıkışı", flagSummary(session.checkOutPlausibilityFlags));
+  }
+  if (assignment.cancellation !== null) {
+    push(
+      assignment.cancellation.cancelledAt,
+      "Atama iptal edildi",
+      assignment.cancellation.cancelledByParty === null
+        ? null
+        : cancellationPartyLabel(assignment.cancellation.cancelledByParty),
+    );
+  }
   push(assignment.actualCompletionDateTime, "İş tamamlandı");
+  for (const review of assignment.reviews ?? []) {
+    push(
+      review.createdAt,
+      "Değerlendirme yazıldı",
+      review.rating === null ? null : `${formatInteger(review.rating)}/5`,
+    );
+  }
   for (const payment of payments) {
     push(
       payment.createdAt,
@@ -241,6 +327,11 @@ function timelineEntries(
   }
 
   return entries.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
+
+function flagSummary(flags: readonly string[]): string | null {
+  if (flags.length === 0) return null;
+  return flags.map(timesheetFlagLabel).join(", ");
 }
 
 function Timeline({
@@ -360,6 +451,289 @@ function PaymentsTable({ payments }: { payments: PaymentsResult }) {
             })}
           </TableBody>
         </Table>
+      )}
+    </section>
+  );
+}
+
+function ApplicationCard({ application }: { application: AdminApplication }) {
+  return (
+    <section
+      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4"
+      aria-labelledby="assignment-application-heading"
+      data-testid="assignment-application"
+    >
+      <h2 id="assignment-application-heading" className="text-sm font-semibold">
+        Başvuru
+      </h2>
+      <dl className="flex flex-col gap-2 text-sm">
+        <Row
+          label="Başvuru"
+          value={<span className="font-mono text-xs break-all">{application.id}</span>}
+        />
+        <Row
+          label="Durum"
+          value={
+            application.status === null ? EMPTY_VALUE : applicationStatusLabel(application.status)
+          }
+        />
+        <Row label="Başvuru zamanı" value={formatDateTime(application.applicationDateTime)} />
+        <Row label="Yanıt zamanı" value={formatDateTime(application.answeredDateTime)} />
+        {application.rejectionReason === null ? null : (
+          <Row
+            label="Ret gerekçesi"
+            value={<span className="whitespace-pre-wrap">{application.rejectionReason}</span>}
+          />
+        )}
+      </dl>
+    </section>
+  );
+}
+
+/**
+ * İptal kartı. `refundId` iade kaydının kimliğidir, ödeme denemesinin değil;
+ * iade satırı ödeme sayfasındaki tabloda durur, bu yüzden bağlantı yok,
+ * kimlik mono. Ücret ve iade tutarları backend metni, para birimi atamanın
+ * fiyat dökümünden.
+ */
+function CancellationCard({
+  cancellation,
+  currency,
+}: {
+  cancellation: AdminCancellation;
+  currency: string;
+}) {
+  const who = cancellation.cancelledBy;
+  const whoHref = userHrefOrNull(who?.id);
+  return (
+    <section
+      className="flex flex-col gap-2 rounded-lg border border-danger/30 bg-surface p-4"
+      aria-labelledby="assignment-cancellation-heading"
+      data-testid="assignment-cancellation"
+    >
+      <h2 id="assignment-cancellation-heading" className="text-sm font-semibold">
+        İptal
+      </h2>
+      <dl className="flex flex-col gap-2 text-sm">
+        <Row
+          label="İptal eden taraf"
+          value={
+            cancellation.cancelledByParty === null
+              ? EMPTY_VALUE
+              : cancellationPartyLabel(cancellation.cancelledByParty)
+          }
+        />
+        <Row
+          label="İptal eden"
+          value={
+            who === null ? (
+              EMPTY_VALUE
+            ) : whoHref === null ? (
+              safeUserName(who)
+            ) : (
+              <Link href={whoHref} className="text-brand hover:underline">
+                {safeUserName(who)}
+              </Link>
+            )
+          }
+        />
+        <Row label="İptal zamanı" value={formatDateTime(cancellation.cancelledAt)} />
+        <Row
+          label="Bildirim süresi"
+          value={
+            cancellation.noticeMinutes === null
+              ? EMPTY_VALUE
+              : `${formatInteger(cancellation.noticeMinutes)} dk`
+          }
+        />
+        <Row
+          label="Ceza"
+          value={
+            cancellation.feeAmount === null && cancellation.feeRate === null
+              ? EMPTY_VALUE
+              : `${cancellation.feeAmount === null ? EMPTY_VALUE : formatCurrency(cancellation.feeAmount, currency)}${
+                  cancellation.feeRate === null
+                    ? ""
+                    : ` (${formatPercent(Number(cancellation.feeRate))})`
+                }`
+          }
+        />
+        <Row
+          label="İade tutarı"
+          value={
+            cancellation.refundAmount === null
+              ? EMPTY_VALUE
+              : formatCurrency(cancellation.refundAmount, currency)
+          }
+        />
+        <Row
+          label="İade kaydı"
+          value={
+            cancellation.refundId === null ? (
+              EMPTY_VALUE
+            ) : (
+              <span className="font-mono text-xs break-all">{cancellation.refundId}</span>
+            )
+          }
+        />
+        {cancellation.reason === null ? null : (
+          <Row
+            label="Gerekçe"
+            value={<span className="whitespace-pre-wrap">{cancellation.reason}</span>}
+          />
+        )}
+      </dl>
+    </section>
+  );
+}
+
+/**
+ * Mesai oturumları. Plausibility bayrakları backend'in kararıdır
+ * (`TimesheetPlausibilityFlag`); panel bayrak üretmez, yalnız yazar.
+ * Konum yalnız sayı olarak, harita yok.
+ */
+function WorkSessions({ sessions }: { sessions: readonly WorkSession[] }) {
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="assignment-sessions-heading">
+      <div className="flex flex-col gap-1">
+        <h2 id="assignment-sessions-heading" className="text-lg font-semibold">
+          Mesai
+        </h2>
+        <p className="max-w-prose text-xs text-ink-muted">
+          Giriş ve çıkış anları ile backend&apos;in plausibility bayrakları. Bayrak, kaydın yanlış
+          olduğunu değil, incelenmeye değer olduğunu söyler.
+        </p>
+      </div>
+      {sessions.length === 0 ? (
+        <EmptyState
+          title="Bu atama için mesai kaydı yok."
+          description="İşçi henüz giriş yapmamış olabilir; çizelge yalnız kaydedilen anları gösterir."
+        />
+      ) : (
+        <Table caption="Mesai oturumları">
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell>Giriş</TableHeaderCell>
+              <TableHeaderCell>Giriş bayrakları</TableHeaderCell>
+              <TableHeaderCell>Çıkış</TableHeaderCell>
+              <TableHeaderCell>Çıkış bayrakları</TableHeaderCell>
+              <TableHeaderCell>Süre</TableHeaderCell>
+              <TableHeaderCell>Konum</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {sessions.map((session) => (
+              <TableRow key={session.id}>
+                <TableCell>{formatDateTime(session.checkInAt)}</TableCell>
+                <TableCell>
+                  <Flags flags={session.checkInPlausibilityFlags} />
+                </TableCell>
+                <TableCell>{formatDateTime(session.checkOutAt)}</TableCell>
+                <TableCell>
+                  <Flags flags={session.checkOutPlausibilityFlags} />
+                </TableCell>
+                <TableCell>
+                  {session.minutes === null ? EMPTY_VALUE : `${formatInteger(session.minutes)} dk`}
+                </TableCell>
+                <TableCell>
+                  <span className="font-mono text-xs">
+                    {coordinates(session.checkInLatitude, session.checkInLongitude)}
+                    {" → "}
+                    {coordinates(session.checkOutLatitude, session.checkOutLongitude)}
+                  </span>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </section>
+  );
+}
+
+function Flags({ flags }: { flags: readonly string[] }) {
+  if (flags.length === 0) return <span className="text-ink-muted">{EMPTY_VALUE}</span>;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {flags.map((flag) => (
+        <Badge key={flag} tone="warning">
+          {timesheetFlagLabel(flag)}
+        </Badge>
+      ))}
+    </span>
+  );
+}
+
+function coordinates(latitude: number | string | null, longitude: number | string | null): string {
+  if (latitude === null || longitude === null) return EMPTY_VALUE;
+  return `${latitude}, ${longitude}`;
+}
+
+/**
+ * Değerlendirmeler. DTO yalnız yazar ve konu kimliklerini taşır; ad, atamanın
+ * iki tarafından eşlenir. Anonim yorumun yazarı da personel görünümünde
+ * açıktır — anonimlik pazaryerine karşıdır, denetime karşı değil.
+ */
+function Reviews({
+  reviews,
+  assignment,
+}: {
+  reviews: readonly AdminReview[];
+  assignment: AssignmentRecord;
+}) {
+  const party = (id: string | null): ReactNode => {
+    if (id === null) return EMPTY_VALUE;
+    const user =
+      id === assignment.worker.id
+        ? assignment.worker
+        : id === assignment.employer.id
+          ? assignment.employer
+          : null;
+    const href = userHrefOrNull(id);
+    const label = user === null ? id : safeUserName(user);
+    if (href === null)
+      return <span className={user === null ? "font-mono text-xs" : ""}>{label}</span>;
+    return (
+      <Link
+        href={href}
+        className={`text-brand hover:underline ${user === null ? "font-mono text-xs" : ""}`}
+      >
+        {label}
+      </Link>
+    );
+  };
+
+  return (
+    <section
+      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4"
+      aria-labelledby="assignment-reviews-heading"
+      data-testid="assignment-reviews"
+    >
+      <h2 id="assignment-reviews-heading" className="text-sm font-semibold">
+        Değerlendirmeler
+      </h2>
+      {reviews.length === 0 ? (
+        <p className="text-sm text-ink-muted">Bu atama için değerlendirme yazılmamış.</p>
+      ) : (
+        <ul className="flex flex-col gap-3 text-sm">
+          {reviews.map((review) => (
+            <li key={review.id} className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                {party(review.authorId)}
+                <span className="text-ink-muted">→</span>
+                {party(review.subjectId)}
+                <span className="font-medium">
+                  {review.rating === null ? EMPTY_VALUE : `${formatInteger(review.rating)}/5`}
+                </span>
+                {review.anonymous ? <Badge>Anonim</Badge> : null}
+                <span className="text-xs text-ink-muted">{formatDateTime(review.createdAt)}</span>
+              </div>
+              {review.comment === null ? null : (
+                <p className="whitespace-pre-wrap text-ink">{review.comment}</p>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

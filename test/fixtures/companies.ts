@@ -15,9 +15,12 @@ export function reviewCompany(overrides: CompanyReviewOverrides = {}): CompanyRe
     taxNumber: "1234567890",
     type: "CORPORATION",
     logoUrl: null,
+    website: null,
+    description: null,
     approvalStatus: "PENDING",
     approvalNote: null,
     approvalDecidedAt: null,
+    approvedByStaffId: null,
     createdAt: "2026-09-01T08:00:00Z",
     createdBy: {
       id: "u1",
@@ -33,6 +36,8 @@ export function reviewCompany(overrides: CompanyReviewOverrides = {}): CompanyRe
       districtName: "Kadıköy",
     },
     galleryImageIds: [COMPANY_GALLERY_IMAGE_ID],
+    companyContacts: null,
+    jobCount: null,
     ...overrides,
   };
 }

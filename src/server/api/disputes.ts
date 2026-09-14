@@ -142,6 +142,24 @@ const nullableString = z
   .transform((value) => value ?? null);
 
 /**
+ * `entities/DisputeSide.java` — açan tarafın atamadaki rolü
+ * (koala-backend#283). Yalnız gösterim: şema serbest dize okur, etiket
+ * bilinmeyen kodu olduğu gibi yazar. Katılık (`z.enum`) bu dosyada yalnız
+ * para kararı taşıyan `status` ve `resolution`'da.
+ */
+export const DISPUTE_SIDES = ["WORKER", "EMPLOYER"] as const;
+export type DisputeSide = (typeof DISPUTE_SIDES)[number];
+
+const DISPUTE_SIDE_LABELS: Readonly<Record<string, string>> = {
+  WORKER: "İşçi",
+  EMPLOYER: "İşveren",
+} satisfies Record<DisputeSide, string>;
+
+export function disputeSideLabel(side: string): string {
+  return DISPUTE_SIDE_LABELS[side] ?? side;
+}
+
+/**
  * `core/dtos/dispute/response/DisputeDto.java`.
  *
  * `status` and `resolution` are `z.enum` rather than `z.string()` deliberately:
@@ -152,6 +170,7 @@ export const disputeSchema = z.object({
   id: z.string(),
   jobAssignmentId: z.string(),
   openedBy: safeUserSchema.nullish().transform((value) => value ?? null),
+  openedBySide: nullableString,
   status: z.enum(DISPUTE_STATUSES),
   reason: z.string(),
   resolution: z
@@ -159,6 +178,8 @@ export const disputeSchema = z.object({
     .nullish()
     .transform((value) => value ?? null),
   resolutionNote: nullableString,
+  /** Çözen personel; yalnız personel görünümünde dolu (koala-backend#283). */
+  resolvedByStaffId: nullableString,
   /** ISO-8601 instant, UTC. */
   resolvedAt: nullableString,
   createdAt: z.string(),
@@ -193,6 +214,8 @@ export interface DisputeQuery {
   status?: DisputeStatus | null;
   /** koala-backend#263: uyuşmazlık id'si, atama id'si ve tarafların ad-soyadı/e-postası. */
   query?: string | null;
+  /** koala-backend#283: işçi, ilan sahibi ya da açan olarak bu kullanıcının uyuşmazlıkları. */
+  userId?: string | null;
 }
 
 /**
@@ -213,6 +236,7 @@ export function getDisputes(
       size: query.size ?? DISPUTE_PAGING.defaultSize ?? 25,
       ...(query.status ? { status: query.status } : {}),
       query: searchQueryParam(query.query),
+      userId: query.userId ?? undefined,
     },
     accessToken,
     cache: "no-store",

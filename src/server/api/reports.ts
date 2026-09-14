@@ -13,7 +13,7 @@ import { safeUserName, safeUserSchema } from "./users";
  * The report queue's contract with `webAPI/ReportsController.java`.
  *
  * ```java
- * GET  /admin/reports?status=&reason=&targetType=&reportedUserId=
+ * GET  /admin/reports?status=&reason=&targetType=&reportedUserId=&reporterId=
  * GET  /admin/reports/{id}
  * POST /admin/reports/{id}/review
  * ```
@@ -104,12 +104,16 @@ export const reportSchema = z.object({
   reportedUser: nullableUser,
   reportedUserId: nullableString,
   jobId: nullableString,
+  /** koala-backend#283: şikayetin bağlı olduğu atama; `payment.read` ile açılır. */
+  jobAssignmentId: nullableString,
   messageId: nullableString,
   imageId: nullableString,
   reason: z.string(),
   description: nullableString,
   status: z.string(),
   reviewedBy: nullableUser,
+  /** koala-backend#283: kararı veren personelin kimliği. */
+  reviewedByStaffId: nullableString,
   reviewNote: nullableString,
   reviewedAt: nullableString,
   createdAt: nullableString,
@@ -178,8 +182,11 @@ export function reportTargets(report: Report): ReportTarget[] {
 }
 
 export interface ReportQueueQuery {
-  readonly status: ReportStatus;
+  /** `null` her durum demektir — backend'e `status` gitmez (`ReportDao.search`: `:status is null`). */
+  readonly status: ReportStatus | null;
   readonly reportedUserId?: string | null;
+  /** koala-backend#283: şikayet eden; `reportedUserId` ile birlikte gönderilebilir. */
+  readonly reporterId?: string | null;
   readonly paging: Paging;
   /** koala-backend#263: şikayet eden/edilenin ad-soyadı ve e-postası, ilan başlığı. */
   readonly query?: string | null;
@@ -198,8 +205,9 @@ export function getReports(accessToken: string, query: ReportQueueQuery): Promis
     path: REPORTS_PATH,
     schema: pageDtoSchema(reportSchema),
     query: {
-      status: query.status,
+      status: query.status ?? undefined,
       reportedUserId: query.reportedUserId?.trim() || undefined,
+      reporterId: query.reporterId?.trim() || undefined,
       query: searchQueryParam(query.query),
       ...pagingQuery(query.paging),
     },

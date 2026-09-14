@@ -80,12 +80,14 @@ interface ReportRow {
   reportedUser: ReportPerson | null;
   reportedUserId: string | null;
   jobId: string | null;
+  jobAssignmentId?: string | null;
   messageId: string | null;
   imageId: string | null;
   reason: string;
   description: string | null;
   status: string;
   reviewedBy: ReportPerson | null;
+  reviewedByStaffId?: string | null;
   reviewNote: string | null;
   reviewedAt: string | null;
   createdAt: string;
@@ -737,5 +739,83 @@ describe("the search box — koala-admin#94", () => {
 
     expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
     expect(html).not.toContain("Şikayet kuyruğu yüklenemedi.");
+  });
+});
+
+/** koala-admin#100 / koala-backend#283: şikayet eden süzgeci, atama bağlantısı, kararı veren personel. */
+describe("the reporter filter, the assignment link and the deciding staff member", () => {
+  const ASSIGNMENT = "9a1c0f10-0001-4c00-8000-0000000000aa";
+
+  it("sends sikayetci as reporterId, alone or together with reportedUserId", async () => {
+    stubMe(MODERATOR);
+    const alone = watchQueue([row()]);
+    const html = await render({ sikayetci: REPORTER.id });
+    expect(alone.url?.searchParams.get("reporterId")).toBe(REPORTER.id);
+    expect(alone.url?.searchParams.has("reportedUserId")).toBe(false);
+    expect(html).toContain("açtığı şikayetleri süzüyor");
+
+    const both = watchQueue([row()]);
+    const bothHtml = await render({ sikayetci: REPORTER.id, kullanici: REPORTED.id });
+    expect(both.url?.searchParams.get("reporterId")).toBe(REPORTER.id);
+    expect(both.url?.searchParams.get("reportedUserId")).toBe(REPORTED.id);
+    // İki süzgeç iki ayrı kişiyi gösterebilir; cümle "bir kullanıcının" demez.
+    expect(bothHtml).toContain("şikayet edilene ve şikayet edene göre");
+    expect(bothHtml).toContain("ikisi ayrı kişiler olabilir");
+    expect(bothHtml).not.toContain("bir kullanıcının hem");
+  });
+
+  it("sends no status for durum=hepsi and offers Tümü in the filter", async () => {
+    stubMe(MODERATOR);
+    const queue = watchQueue([row()]);
+
+    const html = await render({ durum: "hepsi", kullanici: REPORTED.id });
+
+    expect(queue.url?.searchParams.has("status")).toBe(false);
+    expect(queue.url?.searchParams.get("reportedUserId")).toBe(REPORTED.id);
+    expect(html).toContain('<option value="hepsi" selected="">Tümü</option>');
+    expect(html).toContain('data-testid="report-user-filter"');
+  });
+
+  it("drops a reporter id that is not a UUID before it reaches the backend", async () => {
+    stubMe(MODERATOR);
+    const queue = watchQueue([row()]);
+    await render({ sikayetci: "not-a-uuid" });
+    expect(queue.url?.searchParams.has("reporterId")).toBe(false);
+  });
+
+  it("links the assignment only to a payment.read holder and keeps the id visible either way", async () => {
+    stubMe(MODERATOR);
+    watchDetail(row({ jobAssignmentId: ASSIGNMENT }));
+    const alone = await renderDetail();
+    expect(alone).toContain(ASSIGNMENT);
+    expect(alone).not.toContain(`href="/assignments/${ASSIGNMENT}"`);
+
+    stubMe([...MODERATOR, "payment.read"]);
+    watchDetail(row({ jobAssignmentId: ASSIGNMENT }));
+    const both = await renderDetail();
+    expect(both).toContain(`href="/assignments/${ASSIGNMENT}"`);
+  });
+
+  it("draws the deciding staff id next to the reviewer and omits both rows for a #265 server", async () => {
+    stubMe(MODERATOR);
+    watchDetail(
+      row({
+        status: "ACTIONED",
+        reviewedBy: REPORTER,
+        reviewedByStaffId: "5f000000-0000-4000-8000-000000000055",
+        reviewNote: "Mesajlar doğrulandı.",
+        reviewedAt: "2026-09-02T08:00:00Z",
+      }),
+    );
+    const decided = await renderDetail();
+    expect(decided).toMatch(
+      /Kararı veren personel<\/dt><dd[^>]*>5f000000-0000-4000-8000-000000000055</,
+    );
+
+    stubMe(MODERATOR);
+    watchDetail(row());
+    const legacy = await renderDetail();
+    expect(legacy).not.toContain("Kararı veren personel");
+    expect(legacy).not.toMatch(/>Atama</);
   });
 });

@@ -234,3 +234,38 @@ describe("a payout that does not exist", () => {
     expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });
+
+/** koala-admin#100 / koala-backend#283: serbest bırakma kaynağı, ekstre anı, mutabakatı onaylayan. */
+describe("release origin, settlement instant and the reconciling staff member", () => {
+  it("draws the three provenance fields and the bank account id when the DTO carries them", async () => {
+    stubMe(OFFICER);
+    watch(
+      adminPayoutDetailFixture({
+        status: "COMPLETED",
+        releaseOrigin: "DISPUTE",
+        settledAt: "2026-09-03T10:15:00Z",
+        reconciledByStaffId: "5f000000-0000-4000-8000-000000000055",
+        bankAccountId: "3b000000-0000-4000-8000-000000000031",
+      }),
+    );
+
+    const html = await render();
+
+    expect(html).toMatch(/Serbest bırakan<\/dt><dd[^>]*>Uyuşmazlık kararı</);
+    expect(html).toMatch(/Ekstrede gerçekleşme<\/dt><dd[^>]*>03\.09\.2026 13:15</);
+    expect(html).toContain("5f000000-0000-4000-8000-000000000055");
+    expect(html).toContain("3b000000-0000-4000-8000-000000000031");
+  });
+
+  it("writes the empty value for a #265 server and for an un-backfilled origin", async () => {
+    stubMe(OFFICER);
+    watch();
+
+    const html = await render();
+
+    expect(html).toMatch(/Serbest bırakan<\/dt><dd[^>]*>—</);
+    expect(html).toMatch(/Ekstrede gerçekleşme<\/dt><dd[^>]*>—</);
+    expect(html).toMatch(/Mutabakatı onaylayan<\/dt><dd[^>]*>—</);
+    expect(html).toMatch(/Banka hesabı<\/dt><dd[^>]*>—</);
+  });
+});

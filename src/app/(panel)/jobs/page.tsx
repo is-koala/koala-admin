@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  FilterId,
+  FilterNotice,
   ListSearchForm,
   QueueFilters,
   QueueLoadFailure,
@@ -23,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger, formatWallClock } from "@/lib/format";
-import { jobHref, userHrefOrNull } from "@/lib/panel-href";
+import { jobHref, jobsHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   JOB_PAGING,
   JOB_STATUSES,
@@ -36,6 +38,7 @@ import {
   pageWindow,
   readPaging,
   readParam,
+  readUuidParam,
   sortParam,
   type SearchParams,
 } from "@/server/api/paging";
@@ -68,6 +71,10 @@ const SORT_OPTIONS = [
  * `job.read` ister; durum süzgeci ve `?ara=` backend'de çalışır, gelen sayfa
  * panelde yeniden süzülmez. Kapı listeyi sarar: izni olmayan kişide GET
  * hiç çıkmaz. Yazma eylemi yok.
+ *
+ * `?sirket=` bir şirketin ilanlarına süzer (backend `companyId`,
+ * koala-backend#283); şirket sayfasındaki ilan sayısı buraya gelir
+ * (koala-admin#100). UUID olmayan değer düşer.
  */
 export default async function JobsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
@@ -103,6 +110,7 @@ async function JobQueue({ params }: { params: SearchParams }) {
   const paging = readPaging(params, JOB_PAGING);
   const query = readSearchQuery(readParam(params, SEARCH_PARAM));
   const search = activeSearch(query);
+  const companyId = readUuidParam(params, "sirket");
 
   const viewState: Record<string, string> = {
     durum: status ?? ALL_STATUSES,
@@ -110,6 +118,7 @@ async function JobQueue({ params }: { params: SearchParams }) {
     boyut: String(paging.size),
   };
   if (query !== null) viewState[SEARCH_PARAM] = query;
+  if (companyId !== null) viewState.sirket = companyId;
 
   const filters = (
     <QueueFilters
@@ -133,8 +142,26 @@ async function JobQueue({ params }: { params: SearchParams }) {
       carry={{
         boyut: String(paging.size),
         ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
+        ...(companyId !== null ? { sirket: companyId } : {}),
       }}
-      notice="Durum ve sıralama backend'de uygulanır. Gelen sayfa panelde yeniden süzülmez."
+      notice={
+        companyId === null ? (
+          "Durum ve sıralama backend'de uygulanır. Gelen sayfa panelde yeniden süzülmez."
+        ) : (
+          <FilterNotice
+            inline
+            testId="job-company-filter"
+            clearHref={jobsHref({
+              durum: status ?? ALL_STATUSES,
+              sirala: sortParam(paging.sort),
+              boyut: String(paging.size),
+              ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
+            })}
+          >
+            Bu görünüm <FilterId value={companyId} /> şirketinin ilanlarını süzüyor.
+          </FilterNotice>
+        )
+      }
     />
   );
 
@@ -153,7 +180,7 @@ async function JobQueue({ params }: { params: SearchParams }) {
 
   let page;
   try {
-    page = await getAdminJobs(await getKoalaAccessToken(), { status, paging, query });
+    page = await getAdminJobs(await getKoalaAccessToken(), { status, paging, query, companyId });
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return (

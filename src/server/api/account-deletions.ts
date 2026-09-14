@@ -34,7 +34,45 @@ const nullableString = z
   .nullish()
   .transform((value) => value ?? null);
 
-/** `core/dtos/legal/response/AccountDeletionDto.java`. */
+/**
+ * `entities/DeletionBlockerType.java`. Kimlik türe göre başka kayda gider:
+ * `PENDING_PAYMENT` ödeme denemesi, `ESCROW`/`ACTIVE_WORK` atama,
+ * `DISPUTE` uyuşmazlık (`LegalManager.collectBlockers` → `PartyLink.id`).
+ */
+export const DELETION_BLOCKER_TYPES = [
+  "PENDING_PAYMENT",
+  "ESCROW",
+  "ACTIVE_WORK",
+  "DISPUTE",
+] as const;
+
+export type DeletionBlockerType = (typeof DELETION_BLOCKER_TYPES)[number];
+
+export const DELETION_BLOCKER_LABELS: Record<DeletionBlockerType, string> = {
+  PENDING_PAYMENT: "Bekleyen tahsilat",
+  ESCROW: "Emanette para",
+  ACTIVE_WORK: "Devam eden iş",
+  DISPUTE: "Açık uyuşmazlık",
+};
+
+/** `DeletionBlockerDto` — tür serbest metin: yeni bir engel türü sayfayı düşürmesin. */
+export const deletionBlockerSchema = z.object({
+  type: z.string(),
+  id: nullableString,
+});
+
+export type DeletionBlocker = z.infer<typeof deletionBlockerSchema>;
+
+export function deletionBlockerLabel(type: string): string {
+  return (DELETION_BLOCKER_LABELS as Readonly<Record<string, string>>)[type] ?? type;
+}
+
+/**
+ * `core/dtos/legal/response/AccountDeletionDto.java`. koala-backend#283
+ * alanları isteğe bağlı: `rejectionReason` ve `rejectedByStaffId` ret
+ * kararında yazılır, `blockers` yalnız `REQUESTED` talepte canlı hesaplanır;
+ * eski sunucu üçünü de göndermez (`blockers` `null`, bölüm gizli).
+ */
 export const accountDeletionSchema = z.object({
   id: z.string(),
   subjectId: nullableString,
@@ -42,6 +80,12 @@ export const accountDeletionSchema = z.object({
   requestedAt: nullableString,
   processedAt: nullableString,
   blockedReason: nullableString,
+  rejectionReason: nullableString,
+  rejectedByStaffId: nullableString,
+  blockers: z
+    .array(deletionBlockerSchema)
+    .nullish()
+    .transform((value) => value ?? null),
 });
 
 export type AccountDeletion = z.infer<typeof accountDeletionSchema>;

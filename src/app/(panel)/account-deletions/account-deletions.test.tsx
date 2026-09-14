@@ -55,6 +55,9 @@ interface DeletionRow {
   requestedAt: string | null;
   processedAt: string | null;
   blockedReason: string | null;
+  rejectionReason?: string | null;
+  rejectedByStaffId?: string | null;
+  blockers?: Array<{ type: string; id: string | null }> | null;
 }
 
 function row(overrides: Partial<DeletionRow> = {}): DeletionRow {
@@ -360,5 +363,84 @@ describe("the search box — koala-admin#94", () => {
 
     expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
     expect(html).not.toContain("Hesap silme kuyruğu yüklenemedi.");
+  });
+});
+
+/** koala-admin#100 / koala-backend#283: ret gerekçesi, reddeden personel ve canlı engelleyiciler. */
+describe("rejection provenance and the live blockers", () => {
+  const PAYMENT = "7b000000-0000-4000-8000-000000000071";
+  const ASSIGNMENT = "9a1c0f10-0001-4c00-8000-0000000000aa";
+  const DISPUTE = "6d000000-0000-4000-8000-000000000061";
+
+  const blocked = () =>
+    row({
+      blockers: [
+        { type: "PENDING_PAYMENT", id: PAYMENT },
+        { type: "ESCROW", id: ASSIGNMENT },
+        { type: "DISPUTE", id: DISPUTE },
+        { type: "FUTURE_BLOCKER", id: null },
+      ],
+    });
+
+  it("draws the rejection reason and the rejecting staff id on a rejected request", async () => {
+    stubMe(READER);
+    watchDetail(
+      row({
+        status: "REJECTED",
+        processedAt: "2026-09-11T09:00:00Z",
+        rejectionReason: "Açık hakediş var.",
+        rejectedByStaffId: "5f000000-0000-4000-8000-000000000055",
+      }),
+    );
+
+    const html = await renderDetail();
+
+    expect(html).toContain('data-testid="deletion-rejection-reason"');
+    expect(html).toContain("Açık hakediş var.");
+    expect(html).toMatch(/Reddeden personel<\/dt><dd[^>]*>5f000000-0000-4000-8000-000000000055</);
+  });
+
+  it("writes the empty value for a rejected request from a #265 server and omits the rows while pending", async () => {
+    stubMe(READER);
+    watchDetail(row({ status: "REJECTED", processedAt: "2026-09-11T09:00:00Z" }));
+    const legacy = await renderDetail();
+    expect(legacy).toMatch(/Ret gerekçesi<\/dt><dd[^>]*>—</);
+    expect(legacy).toMatch(/Reddeden personel<\/dt><dd[^>]*>—</);
+    expect(legacy).not.toContain('data-testid="deletion-blockers"');
+
+    stubMe(READER);
+    watchDetail(row());
+    const pending = await renderDetail();
+    expect(pending).not.toContain('data-testid="deletion-rejection-reason"');
+    expect(pending).not.toContain('data-testid="deletion-blockers"');
+  });
+
+  it("names each blocker and links it only when the target page's permission is held", async () => {
+    stubMe(READER);
+    watchDetail(blocked());
+    const alone = await renderDetail();
+    expect(alone).toContain('data-testid="deletion-blockers"');
+    expect(alone).toContain("Bekleyen tahsilat");
+    expect(alone).toContain("Emanette para");
+    expect(alone).toContain("Açık uyuşmazlık");
+    expect(alone).toContain("FUTURE_BLOCKER");
+    expect(alone).toContain(PAYMENT);
+    expect(alone).not.toContain(`href="/payments/${PAYMENT}"`);
+    expect(alone).not.toContain(`href="/assignments/${ASSIGNMENT}"`);
+    expect(alone).not.toContain(`href="/disputes/${DISPUTE}"`);
+
+    stubMe([...READER, "payment.read", "dispute.resolve"]);
+    watchDetail(blocked());
+    const linked = await renderDetail();
+    expect(linked).toContain(`href="/payments/${PAYMENT}"`);
+    expect(linked).toContain(`href="/assignments/${ASSIGNMENT}"`);
+    expect(linked).toContain(`href="/disputes/${DISPUTE}"`);
+  });
+
+  it("says when the server computed no blocker", async () => {
+    stubMe(READER);
+    watchDetail(row({ blockers: [] }));
+    const html = await renderDetail();
+    expect(html).toContain("Engelleyici yok");
   });
 });

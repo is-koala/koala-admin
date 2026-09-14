@@ -188,3 +188,42 @@ describe("the search box — koala-admin#94", () => {
     expect(html).not.toContain("Bekleyen hakedişler yüklenemedi.");
   });
 });
+
+/** koala-admin#100: `?isci=` backend'in `workerId` süzgecine gider (koala-backend#283). */
+describe("the worker filter — koala-admin#100", () => {
+  const WORKER_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+
+  it("sends isci as workerId, still without status, and offers to drop the filter", async () => {
+    stubMe(OFFICER);
+    const queue = watchQueue([]);
+
+    const html = await render({ isci: WORKER_ID, boyut: "10" });
+
+    expect(queue.url?.searchParams.get("workerId")).toBe(WORKER_ID);
+    expect(queue.url?.searchParams.get("status")).toBeNull();
+    expect(html).toContain('data-testid="payout-worker-filter"');
+    expect(html).toContain(WORKER_ID);
+    expect(html).toContain('href="/payout-reconciliation?boyut=10"');
+  });
+
+  it("sends all four statuses for durum=hepsi so the count on the user page matches the list", async () => {
+    stubMe(OFFICER);
+    const queue = watchQueue([]);
+
+    const html = await render({ isci: WORKER_ID, durum: "hepsi" });
+
+    expect(queue.url?.searchParams.get("status")).toBe("PENDING,PROCESSING,COMPLETED,FAILED");
+    expect(queue.url?.searchParams.get("workerId")).toBe(WORKER_ID);
+    expect(html).toContain("tüm durumlardaki hakedişleri");
+  });
+
+  it("drops a worker id that is not a UUID before it reaches the backend", async () => {
+    stubMe(OFFICER);
+    const queue = watchQueue([]);
+
+    const html = await render({ isci: "not-a-uuid" });
+
+    expect(queue.url?.searchParams.has("workerId")).toBe(false);
+    expect(html).not.toContain('data-testid="payout-worker-filter"');
+  });
+});

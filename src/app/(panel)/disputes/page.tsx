@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { RecentOperationsList } from "@/components/escrow/recent-operations-list";
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  FilterId,
+  FilterNotice,
   ListSearchForm,
   QueuePager,
   SEARCH_PARAM,
@@ -23,12 +25,13 @@ import {
   TableRow,
 } from "@/components/ui";
 import { formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
-import { assignmentHref, disputeHref, userHrefOrNull } from "@/lib/panel-href";
+import { assignmentHref, disputeHref, disputesHref, userHrefOrNull } from "@/lib/panel-href";
 import { DISPUTE_PAGING, getDisputes, type Dispute } from "@/server/api/disputes";
 import {
   pageWindow,
   readPaging,
   readParam,
+  readUuidParam,
   type PageWindow,
   type SearchParams,
 } from "@/server/api/paging";
@@ -92,6 +95,7 @@ export default async function DisputesPage({ searchParams }: PageProps) {
           filter={readFilter(params.durum)}
           paging={paging}
           query={readSearchQuery(readParam(params, SEARCH_PARAM))}
+          userId={readUuidParam(params, "kullanici")}
         />
       </RequirePermission>
     </div>
@@ -115,6 +119,7 @@ async function loadQueue(
   paging: { page: number; size: number },
   filter: StatusFilter,
   query: string | null,
+  userId: string | null,
 ): Promise<QueueResult> {
   try {
     const page = await getDisputes(accessToken, {
@@ -122,6 +127,7 @@ async function loadQueue(
       size: paging.size,
       status: filter === "ALL" ? null : filter,
       query,
+      userId,
     });
     return {
       ok: true,
@@ -209,19 +215,37 @@ interface WorkspaceProps {
   filter: StatusFilter;
   paging: { page: number; size: number };
   query: string | null;
+  /** `?kullanici=`: işçi, ilan sahibi ya da açan olarak bu kullanıcı (backend `userId`, koala-backend#283). */
+  userId: string | null;
 }
 
-async function DisputeWorkspace({ filter, paging, query }: WorkspaceProps) {
+async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProps) {
   const context = await getStaffContext();
   const accessToken = await getKoalaAccessToken();
-  const queue = await loadQueue(accessToken, paging, filter, query);
+  const queue = await loadQueue(accessToken, paging, filter, query, userId);
   const search = activeSearch(query);
 
   const viewState = {
     ...(filter !== "ALL" ? { durum: filter } : {}),
     boyut: String(paging.size),
     ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+    ...(userId === null ? {} : { kullanici: userId }),
   };
+
+  const userNotice =
+    userId === null ? null : (
+      <FilterNotice
+        testId="dispute-user-filter"
+        clearHref={disputesHref({
+          ...(filter !== "ALL" ? { durum: filter } : {}),
+          boyut: String(paging.size),
+          ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+        })}
+      >
+        Bu görünüm <FilterId value={userId} /> kullanıcısının işçi, ilan sahibi ya da açan taraf
+        olduğu uyuşmazlıkları süzüyor.
+      </FilterNotice>
+    );
 
   const searchForm = (error: string | null = null) => (
     <ListSearchForm
@@ -297,6 +321,7 @@ async function DisputeWorkspace({ filter, paging, query }: WorkspaceProps) {
           </p>
         </div>
 
+        {userNotice}
         {searchForm()}
 
         <nav className="flex flex-wrap gap-2" aria-label="Duruma göre süzgeç">
@@ -305,7 +330,7 @@ async function DisputeWorkspace({ filter, paging, query }: WorkspaceProps) {
               key={candidate}
               href={{
                 pathname: "/disputes",
-                query: filterQuery(candidate, queue.window.page, query),
+                query: filterQuery(candidate, queue.window.page, query, userId),
               }}
               aria-current={candidate === filter ? "page" : undefined}
               className={
@@ -440,15 +465,17 @@ function readFilter(value: string | string[] | undefined): StatusFilter {
   return STATUS_FILTERS.find((entry) => entry === candidate) ?? "ALL";
 }
 
-/** Durum sekmesi aramayı taşır: aynı metin başka durumda da anlamlıdır. */
+/** Durum sekmesi aramayı ve kullanıcı süzgecini taşır: ikisi de başka durumda anlamlıdır. */
 function filterQuery(
   filter: StatusFilter,
   page = 0,
   search: string | null = null,
+  userId: string | null = null,
 ): Record<string, string> {
   const query: Record<string, string> = {};
   if (filter !== "ALL") query.durum = filter;
   if (page > 0) query.sayfa = String(page);
   if (search !== null) query[SEARCH_PARAM] = search;
+  if (userId !== null) query.kullanici = userId;
   return query;
 }

@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  FilterId,
+  FilterNotice,
   ListSearchForm,
   QueueLoadFailure,
   QueuePager,
@@ -24,9 +26,26 @@ import {
   TableRow,
 } from "@/components/ui";
 import { formatCurrency, formatDateTime } from "@/lib/format";
-import { assignmentHref, isUuid, payoutHref } from "@/lib/panel-href";
-import { getPayouts, PAYOUT_PAGING, type Payout } from "@/server/api/payout-reconciliation";
-import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
+import {
+  ALL_STATUSES_PARAM,
+  assignmentHref,
+  isUuid,
+  payoutHref,
+  payoutsHref,
+} from "@/lib/panel-href";
+import {
+  PAYOUT_PAGING,
+  PAYOUT_STATUSES,
+  getPayouts,
+  type Payout,
+} from "@/server/api/payout-reconciliation";
+import {
+  pageWindow,
+  readPaging,
+  readParam,
+  readUuidParam,
+  type SearchParams,
+} from "@/server/api/paging";
 import {
   SEARCH_QUERY_TOO_LONG_MESSAGE,
   isSearchQueryTooLong,
@@ -46,6 +65,10 @@ export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
  * Onay mevcut reconcile formundan; satır `?hakedis=` ile formu doldurur.
  * Satırın tarihi hakediş nesne sayfasına gider (`/payout-reconciliation/{id}`,
  * koala-admin#95): #80'in kanıt alanları ve settlement geçmişi orada.
+ * `?isci=` kuyruğu bir işçiye süzer — backend `workerId` (koala-backend#283);
+ * kullanıcı sayfasındaki hakediş sayacı buraya gelir (koala-admin#100).
+ * Sayaç her durumu saydığı için o bağlantı `?durum=hepsi` taşır: dört durum
+ * birden gönderilir, backend'in PROCESSING varsayılanı devre dışı kalır.
  */
 export default async function PayoutReconciliationPage({
   searchParams,
@@ -79,12 +102,30 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
   const selectedId = selected !== null && isUuid(selected) ? selected : null;
   const query = readSearchQuery(readParam(params, SEARCH_PARAM));
   const search = activeSearch(query);
+  const workerId = readUuidParam(params, "isci");
+  const allStatuses = readParam(params, "durum") === ALL_STATUSES_PARAM;
 
   const viewState = {
     boyut: String(paging.size),
     ...(selectedId === null ? {} : { hakedis: selectedId }),
     ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+    ...(workerId === null ? {} : { isci: workerId }),
+    ...(allStatuses ? { durum: ALL_STATUSES_PARAM } : {}),
   };
+
+  const workerNotice =
+    workerId === null ? null : (
+      <FilterNotice
+        testId="payout-worker-filter"
+        clearHref={payoutsHref({
+          boyut: String(paging.size),
+          ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+        })}
+      >
+        Bu görünüm işçisi <FilterId value={workerId} /> olan{" "}
+        {allStatuses ? "tüm durumlardaki" : "bekleyen"} hakedişleri süzüyor.
+      </FilterNotice>
+    );
 
   const searchForm = (error: string | null = null) => (
     <ListSearchForm
@@ -103,7 +144,12 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
 
   let page;
   try {
-    page = await getPayouts(accessToken, { paging, query });
+    page = await getPayouts(accessToken, {
+      paging,
+      query,
+      workerId,
+      status: allStatuses ? PAYOUT_STATUSES : null,
+    });
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return (
@@ -141,6 +187,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
           </p>
         </div>
 
+        {workerNotice}
         {searchForm()}
         <SearchResultSummary search={search} total={page.totalElements} unit="hakediş" />
 
