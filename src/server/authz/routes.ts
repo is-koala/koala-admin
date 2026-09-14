@@ -442,6 +442,19 @@ export const ROUTE_HANDLERS = [
       "Yük dengeleyici çerezsiz çağırır ve yalnız 'ayaktayım' der; hiçbir iş verisi taşımaz.",
   },
   {
+    /**
+     * koala-admin#104. Tek bir izin isteyemez: aramanın yedi hedefi yedi
+     * ayrı izne bağlı ve `globalSearch` hangi hedefin sorulacağını o
+     * listeden seçer — izni olmayan uç hiç istenmez. Kapı yine backend'de;
+     * burası oturumu ister, sonra her hedefi kendi izniyle süzer.
+     */
+    path: "/api/search",
+    title: "Global arama",
+    access: "session",
+    ungatedReason:
+      "Yedi nesne ucunu ve dört liste ucunu tek kutudan sorar; her biri ayrı bir izne bağlı olduğu için tek bir izinle kapılanamaz. Oturum zorunlu, hedefler personelin /admin/me'den çözülen izinleriyle süzülür; izni olmayan uç istenmez, cevaba girmez.",
+  },
+  {
     path: "/api/disputes/[disputeId]/evidence/[evidenceId]/download",
     title: "Uyuşmazlık kanıtı indir",
     access: "permission",
@@ -468,6 +481,24 @@ export type GatedRoute = Extract<PanelRoute, { access: "permission" }>;
 
 export function gatedRoutes(): readonly GatedRoute[] {
   return ROUTES.filter((route): route is GatedRoute => route.access === "permission");
+}
+
+/** Only the gated paths, so a caller cannot ask for `/giris`'s permission. */
+export type GatedRoutePath = GatedRoute["path"];
+
+/**
+ * The permission a gated page requires, read from the registry rather than
+ * written a second time. Global search (koala-admin#104) decides which backend
+ * endpoint it may probe by asking which panel page the hit would open — so the
+ * palette can never quietly gate a target differently from the page itself.
+ */
+export function routePermission(path: GatedRoutePath): Permission {
+  const route = gatedRoutes().find((entry) => entry.path === path);
+  /* v8 ignore next 3 -- unreachable: the parameter type is the gated path union. */
+  if (route === undefined) {
+    throw new Error(`Kayıt defterinde izinli rota yok: ${path}`);
+  }
+  return route.permission;
 }
 
 /** A gated route that also appears in the menu — the only kind that can. */

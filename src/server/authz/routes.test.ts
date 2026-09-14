@@ -45,6 +45,7 @@ const EXPECTED_UNGATED: Record<string, "public" | "session"> = {
   "/": "session",
   "/verification/job-categories": "session",
   "/api/health": "public",
+  "/api/search": "session",
 };
 
 /**

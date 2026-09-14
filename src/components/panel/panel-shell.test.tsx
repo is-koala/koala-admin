@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { navigationFor } from "@/server/authz/routes";
@@ -9,6 +9,8 @@ const pathname = vi.hoisted(() => ({ current: "/identity-reviews" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname.current,
+  // Üst çubuktaki komut paleti (#104) yönlendirici ister; burada gezinilmez.
+  useRouter: () => ({ push: () => undefined }),
 }));
 
 /**
@@ -37,6 +39,9 @@ describe("PanelShell", () => {
     expect(screen.getByRole("banner")).toHaveTextContent("Yusuf Açmacı");
     expect(screen.getByRole("button", { name: "Koyu temaya geç" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Çıkış yap" })).toBeInTheDocument();
+    // Global arama tetikleyicisi (#104) üst çubukta, her sayfada.
+    const search = within(screen.getByRole("banner")).getByRole("button", { name: /Panelde ara/ });
+    expect(search).toHaveAttribute("aria-haspopup", "dialog");
   });
 
   it("keeps identity reviews in the sidebar and marks the current screen", () => {
