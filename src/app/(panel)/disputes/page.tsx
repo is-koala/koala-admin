@@ -173,6 +173,8 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
     ...(query === null ? {} : { [SEARCH_PARAM]: query }),
     ...(userId === null ? {} : { kullanici: userId }),
   };
+  // Nesne adresi görünümü taşır; uyuşmazlık sayfasının kırıntısı buraya döner.
+  const objectQuery = { ...viewState, sayfa: String(paging.page) };
 
   const userNotice =
     userId === null ? null : (
@@ -316,6 +318,7 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
               disputes={visible}
               summaries={summaries}
               caption={filter === "RESOLVED" ? "Çözülmüş uyuşmazlıklar" : "Etkin uyuşmazlıklar"}
+              objectQuery={objectQuery}
             />
           </>
         )}

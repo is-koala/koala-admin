@@ -1,32 +1,22 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
-import { QueueLoadFailure, SEARCH_PARAM } from "@/components/panel/queue";
-import { accountDeletionsHref, isUuid } from "@/lib/panel-href";
+import { QueueLoadFailure } from "@/components/panel/queue";
+import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
+import { isUuid } from "@/lib/panel-href";
 import { getAccountDeletion } from "@/server/api/account-deletions";
-import { readParam, type SearchParams } from "@/server/api/paging";
+import type { SearchParams } from "@/server/api/paging";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
+import { resolveStaffRefs } from "@/server/staff/staff-refs";
 
 import { DeletionReviewBody, DeletionStatusBadge } from "../deletion-detail";
 
 export const metadata: Metadata = { title: "Hesap silme talebi" };
-
-const QUEUE_KEYS = ["durum", "sirala", "boyut", "sayfa", SEARCH_PARAM] as const;
-
-function queueReturnTo(params: SearchParams): Route {
-  const state: Record<string, string> = {};
-  for (const key of QUEUE_KEYS) {
-    const value = readParam(params, key);
-    if (value !== null && value.length > 0) state[key] = value;
-  }
-  return accountDeletionsHref(state);
-}
 
 /**
  * Hesap silme nesne sayfası. Ret burada; kuyruk yalnız listeler.
@@ -44,20 +34,13 @@ export default async function AccountDeletionDetailPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const returnTo = queueReturnTo(query);
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Hesap silme talebi"
-        description={
-          <>
-            Anonimleştirme zamanlayıcı işidir — panel onaylamaz, yalnız reddeder.{" "}
-            <Link href={returnTo} className="text-brand hover:underline">
-              Kuyruğa dön
-            </Link>
-          </>
-        }
+        breadcrumb={objectBreadcrumb("/account-deletions", id, readQueueState(query))}
+        description="Anonimleştirme zamanlayıcı işidir — panel onaylamaz, yalnız reddeder."
       />
 
       <RequirePermission permission="user.read_pii">
@@ -74,10 +57,11 @@ async function DeletionObject({ id }: { id: string }) {
 
   const context = await getStaffContext();
   const canReject = context.has("user.deletion.manage");
+  const accessToken = await getKoalaAccessToken();
 
   let row;
   try {
-    row = await getAccountDeletion(await getKoalaAccessToken(), id);
+    row = await getAccountDeletion(accessToken, id);
   } catch (error) {
     notFoundIfMissing(error);
     return (
@@ -99,6 +83,7 @@ async function DeletionObject({ id }: { id: string }) {
         row={row}
         canReject={canReject}
         permissions={context.staff?.permissions ?? []}
+        staffRefs={await resolveStaffRefs([row.rejectedByStaffId], { accessToken, context })}
       />
       <ObjectAuditPointer resourceId={row.id} linkLabel="Bu talebin denetim kayıtlarını aç">
         Ret backend tarafından bu talep kimliğiyle denetim kaydına yazılır; personelin bu kaydı

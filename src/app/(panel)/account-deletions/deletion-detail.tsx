@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
+import { StaffRefLink } from "@/components/panel/staff-ref-link";
 import { Badge, type BadgeTone } from "@/components/ui";
 import type { Route } from "next";
 
@@ -15,6 +16,7 @@ import {
   type DeletionBlocker,
 } from "@/server/api/account-deletions";
 import type { Permission } from "@/server/authz/permissions";
+import { NO_STAFF_REFS, type StaffRefs } from "@/server/staff/staff-refs";
 
 import { submitDeletionRejection } from "./actions";
 
@@ -109,11 +111,14 @@ export function DeletionReviewBody({
   row,
   canReject,
   permissions = [],
+  staffRefs = NO_STAFF_REFS,
 }: {
   row: AccountDeletion;
   canReject: boolean;
   /** Engelleyici bağlantıları: ödeme/atama `payment.read`, uyuşmazlık `dispute.resolve`. */
   permissions?: readonly Permission[];
+  /** `rejectedByStaffId` için çözülmüş adlar (koala-admin#112). */
+  staffRefs?: StaffRefs;
 }) {
   const open = row.status === "REQUESTED";
   const held = new Set(permissions);
@@ -140,7 +145,9 @@ export function DeletionReviewBody({
               {row.rejectionReason ?? EMPTY_VALUE}
             </dd>
             <dt className="text-sm text-ink-muted">Reddeden personel</dt>
-            <dd className="font-mono text-xs break-all">{row.rejectedByStaffId ?? EMPTY_VALUE}</dd>
+            <dd className="text-sm break-all">
+              <StaffRefLink staffId={row.rejectedByStaffId} refs={staffRefs} />
+            </dd>
           </>
         ) : null}
         {row.blockers === null ? null : (

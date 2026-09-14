@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
@@ -6,6 +5,7 @@ import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointe
 import { ObjectTimeline } from "@/components/panel/object-timeline";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
+import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
 import { TimelineBuilder, type TimelineEvent } from "@/lib/object-timeline";
 import { companiesHref, isUuid } from "@/lib/panel-href";
 import {
@@ -20,24 +20,19 @@ import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { SignedDownloadAllowlistNotice } from "@/server/evidence/signed-download-notice";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
+import { resolveStaffRefs } from "@/server/staff/staff-refs";
 
 import { CompanyReviewBody, DecisionDeliveryNotice } from "../company-review";
 
 export const metadata: Metadata = { title: "Şirket" };
 
-const QUEUE_KEYS = ["durum", "ara", "sirala", "boyut", "sayfa"] as const;
-
 /**
  * Kuyruk süzgecini nesne URL'sinden geri taşımak için. Karar sonrası dönüş
- * her zaman `/companies` — nesne sayfasında kalmaz.
+ * her zaman `/companies` — nesne sayfasında kalmaz. Kırıntı da aynı adresi
+ * kullanır (koala-admin#112).
  */
 function queueReturnTo(params: SearchParams): Route {
-  const state: Record<string, string> = {};
-  for (const key of QUEUE_KEYS) {
-    const value = readParam(params, key);
-    if (value !== null && value.length > 0) state[key] = value;
-  }
-  return companiesHref(state);
+  return companiesHref(readQueueState(params));
 }
 
 /**
@@ -64,14 +59,8 @@ export default async function CompanyDetailPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Şirket başvurusu"
-        description={
-          <>
-            Onay geri alınamaz.{" "}
-            <Link href={returnTo} className="text-brand hover:underline">
-              Kuyruğa dön
-            </Link>
-          </>
-        }
+        breadcrumb={objectBreadcrumb("/companies", id, readQueueState(query))}
+        description="Onay geri alınamaz."
       />
 
       <RequirePermission permission="company.approve">
@@ -94,11 +83,13 @@ async function CompanyObject({
   // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
   if (!isUuid(id)) notFound();
 
-  const canOpenJobs = (await getStaffContext()).has("job.read");
+  const context = await getStaffContext();
+  const canOpenJobs = context.has("job.read");
+  const accessToken = await getKoalaAccessToken();
 
   let company;
   try {
-    company = await getCompany(await getKoalaAccessToken(), id);
+    company = await getCompany(accessToken, id);
   } catch (error) {
     notFoundIfMissing(error);
     return (
@@ -110,6 +101,8 @@ async function CompanyObject({
     );
   }
 
+  const staffRefs = await resolveStaffRefs([company.approvedByStaffId], { accessToken, context });
+
   return (
     <section className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface px-4 py-4">
       <SignedDownloadAllowlistNotice subject="Galeri fotoğrafları" />
@@ -119,11 +112,17 @@ async function CompanyObject({
         </p>
       )}
       <DecisionDeliveryNotice />
-      <CompanyReviewBody company={company} returnTo={returnTo} canOpenJobs={canOpenJobs} />
+      <CompanyReviewBody
+        company={company}
+        returnTo={returnTo}
+        canOpenJobs={canOpenJobs}
+        staffRefs={staffRefs}
+      />
       <ObjectTimeline
         resourceId={company.id}
         subject="Bu şirket"
         events={companyTimelineEvents(company)}
+        staffRefs={staffRefs}
       >
         Başvuru ve kayıtlı karar DTO&apos;dan; onay, ret ve bu şirket kimliğiyle kayıtlı diğer
         personel işlemleri denetim izinden. Galeri görseli kaldırma görsel kimliğiyle yazılır ve
@@ -139,8 +138,8 @@ async function CompanyObject({
 
 /**
  * Şirketin DTO'dan türeyen anları (koala-admin#107): başvuru ve kayıtlı
- * karar. Kararı veren personel DTO'da yalnız kimlik; ad çözümü
- * koala-admin#112 ile gelecek, o güne kadar kısa kimlik.
+ * karar. Kararı veren personel DTO'da yalnız kimlik; adı çizelge
+ * `staffRefs` ile çözer (koala-admin#112).
  */
 function companyTimelineEvents(company: CompanyReview): readonly TimelineEvent[] {
   const timeline = new TimelineBuilder();

@@ -119,6 +119,8 @@ async function ReportQueue({ params }: { params: SearchParams }) {
   if (reporterId !== null) viewState.sikayetci = reporterId;
   if (query !== null) viewState[SEARCH_PARAM] = query;
   const userFiltered = reportedUserId !== null || reporterId !== null;
+  // Nesne adresi görünümü taşır; şikayet sayfasının kırıntısı buraya döner.
+  const objectQuery = { ...viewState, sayfa: String(paging.page) };
 
   const filters = (
     <QueueFilters
@@ -239,7 +241,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
         />
       ) : (
         <>
-          <ReportTable reports={page.content} />
+          <ReportTable reports={page.content} objectQuery={objectQuery} />
 
           <QueuePager window={pageWindow(page)} state={viewState} unit="şikayet" />
         </>

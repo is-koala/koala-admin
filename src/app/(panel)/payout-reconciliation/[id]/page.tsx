@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
+import { StaffRefLink } from "@/components/panel/staff-ref-link";
 import { PayoutReconciliationForm } from "@/components/payout-reconciliation/payout-reconciliation-form";
 import {
   Badge,
@@ -19,6 +20,7 @@ import {
   type BadgeTone,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
+import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
 import { assignmentHref, isUuid, jobHref, paymentHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   PAYOUT_STATUS_LABELS,
@@ -29,11 +31,13 @@ import {
   type PayoutDetail,
   type SettlementTaskStatus,
 } from "@/server/api/payout-reconciliation";
+import type { SearchParams } from "@/server/api/paging";
 import { staffPartyName, type StaffParty } from "@/server/api/shared/staff-party";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
+import { resolveStaffRefs } from "@/server/staff/staff-refs";
 
 import { submitPayoutReconciliation } from "../actions";
 import { PAYOUT_STATUS_TONES } from "../labels";
@@ -57,21 +61,22 @@ const TASK_TONES: Record<SettlementTaskStatus, BadgeTone> = {
  * mutabakatı onaylayan personel ve banka hesabı kimliği (koala-admin#100).
  * Eski sunucuda "—"; `releaseOrigin` geçmiş satırlarda backfill edilmedi.
  */
-export default async function PayoutDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PayoutDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<SearchParams>;
+}) {
   const { id } = await params;
+  const query = searchParams === undefined ? {} : await searchParams;
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Hakediş"
-        description={
-          <>
-            Hakediş, banka mutabakatı kanıtları ve sağlayıcı settlement geçmişi.{" "}
-            <Link href={"/payout-reconciliation" as Route} className="text-brand hover:underline">
-              Kuyruğa dön
-            </Link>
-          </>
-        }
+        breadcrumb={objectBreadcrumb("/payout-reconciliation", id, readQueueState(query))}
+        description="Hakediş, banka mutabakatı kanıtları ve sağlayıcı settlement geçmişi."
       />
 
       <RequirePermission permission="payout.reconcile">
@@ -106,6 +111,7 @@ async function PayoutObject({ id }: { id: string }) {
   const currency = payout.currency ?? "TRY";
   const canOpenAssignment = context.has("payment.read");
   const canOpenJob = context.has("job.read");
+  const staffRefs = await resolveStaffRefs([payout.reconciledByStaffId], { accessToken, context });
 
   return (
     <div className="flex flex-col gap-6">
@@ -217,7 +223,7 @@ async function PayoutObject({ id }: { id: string }) {
               <Row label="Ekstrede gerçekleşme" value={formatDateTime(payout.settledAt)} />
               <Row
                 label="Mutabakatı onaylayan"
-                value={<Mono value={payout.reconciledByStaffId} />}
+                value={<StaffRefLink staffId={payout.reconciledByStaffId} refs={staffRefs} />}
               />
               <Row label="Güncelleme" value={formatDateTime(payout.updatedAt)} />
             </dl>

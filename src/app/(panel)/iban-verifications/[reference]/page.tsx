@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { IbanVerificationForm } from "@/components/iban-verification/iban-verification-form";
@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
 import { EMPTY_VALUE, formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
+import { listCrumb, type BreadcrumbItem } from "@/lib/breadcrumb";
 import { userHrefOrNull } from "@/lib/panel-href";
 import {
   findPendingIbanVerification,
@@ -48,20 +49,19 @@ export default async function IbanVerificationDetailPage({
   params: Promise<{ reference: string }>;
 }) {
   const { reference } = await params;
+  // Referans UUID değil serbest metin (`KOALA-9F3A`): kısaltılmaz, olduğu gibi
+  // kırıntıdır; kuyruk süzgeçsizdir (yalnız PENDING), taşınacak durum yok.
+  const breadcrumb: readonly BreadcrumbItem[] = [
+    listCrumb("/iban-verifications"),
+    { label: safeDecode(reference) ?? reference, mono: true },
+  ];
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="IBAN doğrulaması"
-        description={
-          <>
-            Bekleyen küçük havale: hesap sahibi, maskeli IBAN, referans ve süre. Onay ekstre
-            satırıyla yapılır; reddetme ucu yok.{" "}
-            <Link href={"/iban-verifications" as Route} className="text-brand hover:underline">
-              Kuyruğa dön
-            </Link>
-          </>
-        }
+        breadcrumb={breadcrumb}
+        description="Bekleyen küçük havale: hesap sahibi, maskeli IBAN, referans ve süre. Onay ekstre satırıyla yapılır; reddetme ucu yok."
       />
 
       <RequirePermission permission="bank.account.verify">

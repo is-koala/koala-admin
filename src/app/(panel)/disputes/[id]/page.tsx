@@ -1,12 +1,12 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { ObjectTimeline } from "@/components/panel/object-timeline";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { ErrorState } from "@/components/ui";
+import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
 import { TimelineBuilder, type TimelineEvent } from "@/lib/object-timeline";
 import {
   disputeResolutionSpec,
@@ -18,12 +18,14 @@ import {
 } from "@/server/api/disputes";
 import { getEscrowSummary } from "@/server/api/escrow";
 import { isKoalaApiError } from "@/server/api/errors";
+import type { SearchParams } from "@/server/api/paging";
 import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { SignedDownloadAllowlistNotice } from "@/server/evidence/signed-download-notice";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
+import { resolveStaffRefs } from "@/server/staff/staff-refs";
 
 import { DisputeDetail, type EvidenceResult, type SummaryEntry } from "../dispute-detail";
 
@@ -35,21 +37,22 @@ const OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
  * Uyuşmazlık nesne sayfası. Kanıt ve emanet burada; kuyruk yalnız listeler.
  * Kapı `dispute.resolve`: izni olmayan kişide GET /admin/disputes/{id} çıkmaz.
  */
-export default async function DisputeDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DisputeDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<SearchParams>;
+}) {
   const { id } = await params;
+  const query = searchParams === undefined ? {} : await searchParams;
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Uyuşmazlık"
-        description={
-          <>
-            Emanetteki parayı işçiye çıkarır veya işverene iade eder; kısmi iade yoktur.{" "}
-            <Link href={"/disputes" as Route} className="text-brand hover:underline">
-              Kuyruğa dön
-            </Link>
-          </>
-        }
+        breadcrumb={objectBreadcrumb("/disputes", id, readQueueState(query))}
+        description="Emanetteki parayı işçiye çıkarır veya işverene iade eder; kısmi iade yoktur."
       />
 
       <RequirePermission permission="dispute.resolve">
@@ -82,11 +85,12 @@ async function DisputeObject({ id }: { id: string }) {
   }
 
   const canReadSummaries = context.has("payment.read");
-  const [entry, evidence] = await Promise.all([
+  const [entry, evidence, staffRefs] = await Promise.all([
     canReadSummaries
       ? loadSummary(accessToken, dispute.jobAssignmentId)
       : Promise.resolve(undefined),
     loadEvidence(accessToken, dispute.id),
+    resolveStaffRefs([dispute.resolvedByStaffId], { accessToken, context }),
   ]);
 
   const summaryFailed = entry !== undefined && !entry.ok;
@@ -116,11 +120,13 @@ async function DisputeObject({ id }: { id: string }) {
         entry={entry}
         evidence={evidence}
         permissions={context.staff?.permissions ?? []}
+        staffRefs={staffRefs}
       />
       <ObjectTimeline
         resourceId={dispute.id}
         subject="Bu uyuşmazlık"
         events={disputeTimelineEvents(dispute, evidence.ok ? evidence.evidence : [])}
+        staffRefs={staffRefs}
       >
         Açılış, kanıtlar ve kayıtlı karar DTO&apos;dan; karar ve emanet hareketleri gibi personel
         işlemleri denetim izinden, bu uyuşmazlık kimliğiyle.

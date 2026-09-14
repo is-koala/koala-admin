@@ -95,6 +95,8 @@ async function UserDirectory({ params }: { params: SearchParams }) {
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
   };
+  // Nesne adresi görünümü taşır; kullanıcı sayfasının kırıntısı buraya döner.
+  const objectQuery = { ...viewState, sayfa: String(paging.page) };
 
   const filters = (
     <QueueFilters
@@ -175,7 +177,10 @@ async function UserDirectory({ params }: { params: SearchParams }) {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
-                    <Link href={userHref(user.id)} className="text-brand hover:underline">
+                    <Link
+                      href={userHref(user.id, objectQuery)}
+                      className="text-brand hover:underline"
+                    >
                       {safeUserName(user)}
                     </Link>
                   </TableCell>

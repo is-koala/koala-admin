@@ -26,10 +26,13 @@ export function DisputeTable({
   disputes,
   summaries,
   caption,
+  objectQuery = {},
 }: {
   disputes: readonly Dispute[];
   summaries: ReadonlyMap<string, SummaryEntry>;
   caption: string;
+  /** Satır bağlantısına eklenen liste görünümü; nesne sayfasının kırıntısı geri okur. */
+  objectQuery?: Readonly<Record<string, string>>;
 }) {
   return (
     <Table caption={caption}>
@@ -82,7 +85,7 @@ export function DisputeTable({
               <TableCell>{formatDateTime(dispute.createdAt)}</TableCell>
               <TableCell>
                 <Link
-                  href={disputeHref(dispute.id)}
+                  href={disputeHref(dispute.id, objectQuery)}
                   className="text-sm font-medium text-brand hover:underline"
                 >
                   İncele

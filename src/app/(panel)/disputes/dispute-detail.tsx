@@ -5,6 +5,7 @@ import {
   EscrowOperationForm,
   type ResolutionChoice,
 } from "@/components/escrow/escrow-operation-form";
+import { StaffRefLink } from "@/components/panel/staff-ref-link";
 import { Badge, ErrorState, type BadgeTone } from "@/components/ui";
 import {
   formatCurrency,
@@ -26,6 +27,7 @@ import { safeUserName } from "@/server/api/users";
 import type { Permission } from "@/server/authz/permissions";
 import { submitEscrowOperation } from "@/server/escrow/actions";
 import { escrowMovement, refundAvailability, releaseAvailability } from "@/server/escrow/figures";
+import { NO_STAFF_REFS, type StaffRefs } from "@/server/staff/staff-refs";
 
 export const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
   OPEN: "Açık",
@@ -73,9 +75,17 @@ interface DetailProps {
   entry: SummaryEntry | undefined;
   evidence: EvidenceResult | null;
   permissions: readonly Permission[];
+  /** `resolvedByStaffId` için çözülmüş adlar (koala-admin#112). */
+  staffRefs?: StaffRefs;
 }
 
-export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailProps) {
+export function DisputeDetail({
+  dispute,
+  entry,
+  evidence,
+  permissions,
+  staffRefs = NO_STAFF_REFS,
+}: DetailProps) {
   const summary = entry !== undefined && entry.ok ? entry.summary : null;
   const failure = entry !== undefined && !entry.ok ? entry.failure : null;
   const heldPermissions = new Set(permissions);
@@ -186,11 +196,7 @@ export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailP
               <Row label="Çözüm zamanı" value={formatDateTime(dispute.resolvedAt)} />
               <Row
                 label="Çözen personel"
-                value={
-                  <span className="font-mono text-xs break-all">
-                    {dispute.resolvedByStaffId ?? "—"}
-                  </span>
-                }
+                value={<StaffRefLink staffId={dispute.resolvedByStaffId} refs={staffRefs} />}
               />
             </>
           ) : null}

@@ -9,6 +9,7 @@ import {
   envelope,
 } from "../../../../test/fixtures/admin-detail";
 import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
+import { STAFF_HREF, STAFF_ID, STAFF_NAME, stubStaffMember } from "../../../../test/fixtures/staff";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -253,8 +254,42 @@ describe("release origin, settlement instant and the reconciling staff member", 
 
     expect(html).toMatch(/Serbest bırakan<\/dt><dd[^>]*>Uyuşmazlık kararı</);
     expect(html).toMatch(/Ekstrede gerçekleşme<\/dt><dd[^>]*>03\.09\.2026 13:15</);
-    expect(html).toContain("5f000000-0000-4000-8000-000000000055");
+    // staff.read yok: kısa kimlik, tam kimlik title'da (koala-admin#112).
+    expect(html).toContain('title="5f000000-0000-4000-8000-000000000055">5f000000<');
+    expect(html).not.toContain("#personel-");
     expect(html).toContain("3b000000-0000-4000-8000-000000000031");
+  });
+
+  it("resolves reconciledByStaffId to a linked name for a staff.read holder (koala-admin#112)", async () => {
+    stubMe([...OFFICER, "staff.read"]);
+    const staff = stubStaffMember();
+    watch(adminPayoutDetailFixture({ status: "COMPLETED", reconciledByStaffId: STAFF_ID }));
+
+    const html = await render();
+
+    expect(staff.ids).toEqual([STAFF_ID]);
+    expect(html).toContain(`href="${STAFF_HREF.replaceAll("&", "&amp;")}"`);
+    expect(html).toContain(`title="${STAFF_ID}">${STAFF_NAME}<`);
+  });
+
+  it("writes Hakediş mutabakatı › short id and carries the queue view back", async () => {
+    stubMe(OFFICER);
+    watch();
+
+    const html = (
+      await renderServerComponent(
+        <PayoutDetailPage
+          params={Promise.resolve({ id: PAYOUT_ID })}
+          searchParams={Promise.resolve({ durum: "hepsi", isci: ASSIGNMENT_ID })}
+        />,
+      )
+    ).replaceAll("<!-- -->", "");
+
+    expect(html).toContain('<nav aria-label="Konum">');
+    expect(html).toContain(
+      `href="/payout-reconciliation?durum=hepsi&amp;isci=${ASSIGNMENT_ID}"><span class="">Hakediş mutabakatı</span></a>`,
+    );
+    expect(html).toContain(`title="${PAYOUT_ID}">${PAYOUT_ID.slice(0, 8)}<`);
   });
 
   it("writes the empty value for a #265 server and for an un-backfilled origin", async () => {

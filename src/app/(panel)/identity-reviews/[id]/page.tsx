@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
-import { QueueLoadFailure, SEARCH_PARAM } from "@/components/panel/queue";
+import { QueueLoadFailure } from "@/components/panel/queue";
+import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
 import { identityReviewsHref, isUuid } from "@/lib/panel-href";
 import { getIdentityReview } from "@/server/api/identity-reviews";
 import { readParam, type SearchParams } from "@/server/api/paging";
@@ -17,19 +17,13 @@ import { IdentityReviewBody, IdentityStatusBadge, identityDisplayName } from "..
 
 export const metadata: Metadata = { title: "Kimlik incelemesi" };
 
-const QUEUE_KEYS = ["durum", "sirala", "boyut", "sayfa", SEARCH_PARAM] as const;
-
 /**
  * Kuyruk süzgecini nesne URL'sinden geri taşımak için. Karar sonrası dönüş
- * her zaman `/identity-reviews` — nesne sayfasında kalmaz.
+ * her zaman `/identity-reviews` — nesne sayfasında kalmaz. Kırıntı da aynı
+ * adresi kullanır (koala-admin#112).
  */
 function queueReturnTo(params: SearchParams): Route {
-  const state: Record<string, string> = {};
-  for (const key of QUEUE_KEYS) {
-    const value = readParam(params, key);
-    if (value !== null && value.length > 0) state[key] = value;
-  }
-  return identityReviewsHref(state);
+  return identityReviewsHref(readQueueState(params));
 }
 
 /**
@@ -55,14 +49,8 @@ export default async function IdentityReviewDetailPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Kimlik incelemesi"
-        description={
-          <>
-            Onay kimlik damgasını çip olmadan koyar ve geri alınamaz.{" "}
-            <Link href={returnTo} className="text-brand hover:underline">
-              Kuyruğa dön
-            </Link>
-          </>
-        }
+        breadcrumb={objectBreadcrumb("/identity-reviews", id, readQueueState(query))}
+        description="Onay kimlik damgasını çip olmadan koyar ve geri alınamaz."
       />
 
       <RequirePermission permission="identity.review">

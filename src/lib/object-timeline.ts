@@ -20,8 +20,8 @@ export type TimelineSource = "record" | "audit";
  * Bir olayın faili. Personel için `staffId` (ve varsa görünen ad); pazaryeri
  * kullanıcısı için `userId` ve ad. Denetim satırında ad her zaman var
  * (`actorDisplayName`); DTO alanlarında (`resolvedByStaffId`,
- * `approvedByStaffId`) yalnız kimlik gelir — ad çözümü koala-admin#112'nin
- * yardımcısıyla gelecek, o güne kadar kısa kimlik yazılır.
+ * `approvedByStaffId`) yalnız kimlik gelir — adı `ObjectTimeline` `staffRefs`
+ * (koala-admin#112, `resolveStaffRefs`) ile tamamlar, çözülemeyen kısa kimlik kalır.
  */
 export type TimelineActor =
   | { readonly kind: "staff"; readonly staffId: string | null; readonly name: string | null }
@@ -112,7 +112,5 @@ export function mergeTimeline(
     .map(({ event }) => event);
 }
 
-/** UUID'nin ilk sekiz karakteri; ad çözülemeyen personel için. */
-export function shortId(id: string): string {
-  return id.length > 8 ? id.slice(0, 8) : id;
-}
+/** Kırıntıyla aynı kısaltma (koala-admin#112); çizelge kendi kopyasını taşımaz. */
+export { shortId } from "@/lib/breadcrumb";

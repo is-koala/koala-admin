@@ -30,9 +30,12 @@ import { REPORT_STATUS_TONES } from "./report-decision";
 export function ReportTable({
   reports,
   caption = "Şikayet kuyruğu",
+  objectQuery = {},
 }: {
   reports: readonly Report[];
   caption?: string;
+  /** Satır bağlantısına eklenen liste görünümü; nesne sayfasının kırıntısı geri okur. */
+  objectQuery?: Readonly<Record<string, string>>;
 }) {
   return (
     <Table caption={caption}>
@@ -99,7 +102,10 @@ export function ReportTable({
                 </span>
               </TableCell>
               <TableCell>
-                <Link href={reportHref(report.id)} className="text-brand hover:underline">
+                <Link
+                  href={reportHref(report.id, objectQuery)}
+                  className="text-brand hover:underline"
+                >
                   İncele
                 </Link>
               </TableCell>

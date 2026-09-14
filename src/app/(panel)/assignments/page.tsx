@@ -118,6 +118,8 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
     ...(query === null ? {} : { [SEARCH_PARAM]: query }),
     ...partyFilter,
   };
+  // Nesne adresi görünümü taşır; atama sayfasının kırıntısı buraya döner.
+  const objectQuery = { ...viewState, sayfa: String(paging.page) };
 
   const form = (
     <LookupForm
@@ -244,7 +246,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
             }
           />
         ) : (
-          <AssignmentTable rows={list.content} />
+          <AssignmentTable rows={list.content} objectQuery={objectQuery} />
         )}
 
         {list.totalElements > 0 ? (

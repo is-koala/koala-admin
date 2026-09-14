@@ -306,7 +306,7 @@ describe("TCKK photos on the object page", () => {
     container.innerHTML = html;
 
     expect(container.querySelector<HTMLInputElement>('input[name="returnTo"]')?.value).toBe(
-      "/identity-reviews?durum=PENDING&sirala=createdAt%2Casc&boyut=40&sayfa=2&ara=yusuf",
+      "/identity-reviews?durum=PENDING&ara=yusuf&sirala=createdAt%2Casc&boyut=40&sayfa=2",
     );
   });
 
@@ -524,5 +524,22 @@ describe("the deciding staff member's name", () => {
     expect(html).toMatch(
       /Kararı veren personel<\/dt><dd[^>]*><span[^>]*><span>Zeynep Kaya<\/span><span[^>]*>5f000000-0000-4000-8000-000000000055</,
     );
+  });
+});
+
+/** koala-admin#112: kırıntı menüdeki adla, kuyruk görünümü geri taşınır. */
+describe("the identity review's breadcrumb", () => {
+  it("writes Kimlik incelemeleri › short id and links the queue with the carried view", async () => {
+    stubMe(REVIEWER);
+    watchDetail();
+
+    const html = await renderDetail(REVIEW_ID, { durum: "APPROVED", boyut: "50" });
+
+    expect(html).toContain('<nav aria-label="Konum">');
+    expect(html).toContain(
+      'href="/identity-reviews?durum=APPROVED&amp;boyut=50"><span class="">Kimlik incelemeleri</span></a>',
+    );
+    expect(html).toContain(`title="${REVIEW_ID}">${REVIEW_ID.slice(0, 8)}<`);
+    expect(html).not.toContain("Kuyruğa dön");
   });
 });

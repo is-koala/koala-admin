@@ -1,13 +1,14 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
+import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
 import { isUuid } from "@/lib/panel-href";
 import { isKoalaApiError } from "@/server/api/errors";
 import { getAssignmentDetail } from "@/server/api/escrow";
+import type { SearchParams } from "@/server/api/paging";
 import { getAssignmentPayments } from "@/server/api/payments";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
@@ -27,23 +28,20 @@ export const metadata: Metadata = { title: "Atama" };
  */
 export default async function AssignmentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<SearchParams>;
 }) {
   const { id } = await params;
+  const query = searchParams === undefined ? {} : await searchParams;
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Atama"
-        description={
-          <>
-            Atama, ilan, taraflar, ödeme denemeleri ve hakediş tek ekranda.{" "}
-            <Link href={"/assignments" as Route} className="text-brand hover:underline">
-              Kuyruğa dön
-            </Link>
-          </>
-        }
+        breadcrumb={objectBreadcrumb("/assignments", id, readQueueState(query))}
+        description="Atama, ilan, taraflar, ödeme denemeleri ve hakediş tek ekranda."
       />
 
       <RequirePermission permission="payment.read">

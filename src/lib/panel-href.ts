@@ -30,8 +30,17 @@ export function listHref(pathname: string, state: Readonly<Record<string, string
   return withQuery(pathname, state);
 }
 
-export function reportHref(reportId: string): Route {
-  return asRoute(`/reports/${reportId}`);
+/**
+ * Nesne adresleri isteğe bağlı `queueState` alır (koala-admin#112): liste
+ * sayfası o anki görünümünü (`durum`, `sirala`, `sayfa`, …) satır bağlantısına
+ * ekler, nesne sayfasının kırıntısı `readQueueState` ile geri okur ve liste
+ * bağlantısını aynı süzgeçle kurar. Vermeyen çağıran çıplak adresi alır.
+ */
+export function reportHref(
+  reportId: string,
+  queueState: Readonly<Record<string, string>> = {},
+): Route {
+  return withQuery(`/reports/${reportId}`, queueState);
 }
 
 export function companiesHref(state: Readonly<Record<string, string>> = {}): Route {
@@ -67,12 +76,19 @@ export function accountDeletionHref(
   return withQuery(`/account-deletions/${requestId}`, queueState);
 }
 
-export function disputeHref(disputeId: string): Route {
-  return asRoute(`/disputes/${disputeId}`);
+export function disputeHref(
+  disputeId: string,
+  queueState: Readonly<Record<string, string>> = {},
+): Route {
+  return withQuery(`/disputes/${disputeId}`, queueState);
 }
 
-export function userHref(userId: string): Route {
-  return asRoute(`/users/${userId}`);
+export function usersHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/users", state);
+}
+
+export function userHref(userId: string, queueState: Readonly<Record<string, string>> = {}): Route {
+  return withQuery(`/users/${userId}`, queueState);
 }
 
 export function userHrefOrNull(userId: string | null | undefined): Route | null {
@@ -85,20 +101,35 @@ export function userTabHref(userId: string, tab: UserTab): Route {
 }
 
 /** Atama nesne sayfası (koala-admin#95); `?atama=` bakışı liste sayfasında kaldı. */
-export function assignmentHref(assignmentId: string): Route {
-  return asRoute(`/assignments/${assignmentId}`);
+export function assignmentHref(
+  assignmentId: string,
+  queueState: Readonly<Record<string, string>> = {},
+): Route {
+  return withQuery(`/assignments/${assignmentId}`, queueState);
 }
 
-export function paymentHref(paymentId: string): Route {
-  return asRoute(`/payments/${paymentId}`);
+/**
+ * Ödemenin liste sayfası yok; atama detayından açılır. `?atama=` ile atama
+ * kimliği taşınırsa kırıntı "Atamalar › atama › ödeme" olur.
+ */
+export const PAYMENT_ASSIGNMENT_PARAM = "atama";
+
+export function paymentHref(paymentId: string, assignmentId: string | null = null): Route {
+  return withQuery(
+    `/payments/${paymentId}`,
+    assignmentId === null ? {} : { [PAYMENT_ASSIGNMENT_PARAM]: assignmentId },
+  );
 }
 
-export function payoutHref(payoutId: string): Route {
-  return asRoute(`/payout-reconciliation/${payoutId}`);
+export function payoutHref(
+  payoutId: string,
+  queueState: Readonly<Record<string, string>> = {},
+): Route {
+  return withQuery(`/payout-reconciliation/${payoutId}`, queueState);
 }
 
-export function jobHref(jobId: string): Route {
-  return asRoute(`/jobs/${jobId}`);
+export function jobHref(jobId: string, queueState: Readonly<Record<string, string>> = {}): Route {
+  return withQuery(`/jobs/${jobId}`, queueState);
 }
 
 export function jobsHref(state: Readonly<Record<string, string>> = {}): Route {
@@ -199,6 +230,11 @@ export function staffMemberAnchor(staffId: string): string {
   return `personel-${staffId}`;
 }
 
-export function staffMemberHref(staffId: string): Route {
-  return asRoute(`/staff#${staffMemberAnchor(staffId)}`);
+/**
+ * E-posta biliniyorsa `?ara=` ile o sayfaya süzülür ki çapa, personel listesi
+ * sayfalıyken ilk sayfada olmayan bir üyede de tutsun (koala-admin#112).
+ */
+export function staffMemberHref(staffId: string, email: string | null = null): Route {
+  const search = email === null ? "" : `?ara=${encodeURIComponent(email)}`;
+  return asRoute(`/staff${search}#${staffMemberAnchor(staffId)}`);
 }

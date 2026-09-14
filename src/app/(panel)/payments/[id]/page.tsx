@@ -24,7 +24,15 @@ import {
   formatInteger,
   formatPercent,
 } from "@/lib/format";
-import { assignmentHref, disputeHref, isUuid, jobHref, payoutHref } from "@/lib/panel-href";
+import { listCrumb, objectCrumb, readQueueState, type BreadcrumbItem } from "@/lib/breadcrumb";
+import {
+  PAYMENT_ASSIGNMENT_PARAM,
+  assignmentHref,
+  disputeHref,
+  isUuid,
+  jobHref,
+  payoutHref,
+} from "@/lib/panel-href";
 import {
   PAYMENT_ATTEMPT_STATUS_LABELS,
   REFUND_STATUS_LABELS,
@@ -35,6 +43,7 @@ import {
   type AdminRefund,
   type RefundStatus,
 } from "@/server/api/payments";
+import { readUuidParam, type SearchParams } from "@/server/api/paging";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
@@ -62,13 +71,21 @@ const REFUND_TONES: Record<RefundStatus, "neutral" | "warning" | "success" | "da
  * (`dispute.resolve`) ya da iptal kaydının kimliğine — bağlanır
  * (koala-admin#100). Eski sunucuda alanlar yok, hücreler "—".
  */
-export default async function PaymentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PaymentDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<SearchParams>;
+}) {
   const { id } = await params;
+  const query = searchParams === undefined ? {} : await searchParams;
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Ödeme denemesi"
+        breadcrumb={paymentBreadcrumb(id, query)}
         description={
           <>
             Tek bir tahsilat denemesi: durum, tutar dökümü, sağlayıcı referansları ve iade
@@ -82,6 +99,22 @@ export default async function PaymentDetailPage({ params }: { params: Promise<{ 
       </RequirePermission>
     </div>
   );
+}
+
+/**
+ * Ödemenin listesi yok; atama detayından açılır ve adres `?atama=` ile atama
+ * kimliğini taşır: "Atamalar › atama › ödeme". Taşımayan bir adres (yer imi,
+ * ⌘K) iki kırıntıyla kalır.
+ */
+function paymentBreadcrumb(paymentId: string, query: SearchParams): readonly BreadcrumbItem[] {
+  const assignmentId = readUuidParam(query, PAYMENT_ASSIGNMENT_PARAM);
+  const list = listCrumb("/assignments", readQueueState(query));
+  if (assignmentId === null) return [list, objectCrumb(paymentId)];
+  return [
+    list,
+    { ...objectCrumb(assignmentId), href: assignmentHref(assignmentId) },
+    objectCrumb(paymentId),
+  ];
 }
 
 async function PaymentObject({ id }: { id: string }) {

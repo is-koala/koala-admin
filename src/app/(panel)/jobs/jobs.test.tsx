@@ -122,8 +122,46 @@ describe("who can see the job list", () => {
     expect(html).toContain("Koala Kafe");
     expect(html).toContain("Kadıköy / İstanbul");
     expect(html).toContain("20.09.2026 09:00");
-    expect(html).toContain(`href="/jobs/${JOB_ID}"`);
+    // Satır bağlantısı liste görünümünü taşır; ilan sayfasının kırıntısı geri okur (#112).
+    expect(html).toContain(
+      `href="/jobs/${JOB_ID}?durum=ALL&amp;sirala=createdAt%2Cdesc&amp;boyut=20&amp;sayfa=0"`,
+    );
     expect(html).toContain("Açık");
+  });
+});
+
+/** koala-admin#112: kırıntı menüdeki adla, süzgeç geri taşınır. */
+const COMPANY_ID = "c1000000-0000-4000-8000-000000000001";
+
+describe("the job page's breadcrumb", () => {
+  it("writes İlanlar › short id and links the list with the carried view", async () => {
+    stubMe(AGENT);
+    watchDetail();
+
+    const html = (
+      await renderServerComponent(
+        <JobDetailPage
+          params={Promise.resolve({ id: JOB_ID })}
+          searchParams={Promise.resolve({ durum: "OPEN", sirket: COMPANY_ID, sayfa: "3" })}
+        />,
+      )
+    ).replaceAll("<!-- -->", "");
+
+    expect(html).toContain('<nav aria-label="Konum">');
+    expect(html).toContain(`href="/jobs?durum=OPEN&amp;sayfa=3&amp;sirket=${COMPANY_ID}"`);
+    expect(html).toMatch(new RegExp(`<a[^>]*href="/jobs\\?[^"]*"><span[^>]*>İlanlar</span></a>`));
+    expect(html).toMatch(
+      new RegExp(`aria-current="page"[^>]*><span[^>]*title="${JOB_ID}">${JOB_ID.slice(0, 8)}<`),
+    );
+  });
+
+  it("links the bare list when the object URL carries no view", async () => {
+    stubMe(AGENT);
+    watchDetail();
+
+    const html = await renderDetail();
+
+    expect(html).toContain('href="/jobs"><span');
   });
 });
 

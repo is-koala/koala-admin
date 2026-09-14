@@ -94,6 +94,8 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
     ...(workerId === null ? {} : { isci: workerId }),
     ...(allStatuses ? { durum: ALL_STATUSES_PARAM } : {}),
   };
+  // Nesne adresi görünümü taşır; hakediş sayfasının kırıntısı buraya döner.
+  const objectQuery = { ...viewState, sayfa: String(paging.page) };
 
   const workerNotice =
     workerId === null ? null : (
@@ -183,6 +185,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
             rows={rows}
             caption="Bekleyen hakedişler"
             action={{ selectedId, page: paging.page, query }}
+            objectQuery={objectQuery}
           />
         )}
 

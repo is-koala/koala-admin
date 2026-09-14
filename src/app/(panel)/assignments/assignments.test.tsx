@@ -271,7 +271,10 @@ describe("the search box — koala-admin#94", () => {
 
     const html = await render({ ara: "garson" });
 
-    expect(html).toContain(`href="/assignments/${ASSIGNMENT_ID}"`);
+    // Satır bağlantısı liste görünümünü taşır (koala-admin#112); `atama` süzgeç değil, taşınmaz.
+    expect(html).toContain(
+      `href="/assignments/${ASSIGNMENT_ID}?boyut=20&amp;ara=garson&amp;sayfa=0"`,
+    );
     expect(html).not.toContain(`/assignments?atama=${ASSIGNMENT_ID}`);
   });
 
