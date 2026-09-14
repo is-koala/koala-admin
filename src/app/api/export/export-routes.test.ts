@@ -26,8 +26,8 @@ const { GET: exportDisputes } = await import("./disputes/route");
 
 /**
  * CSV rotaları (koala-admin#110): oturum + sayfa izni, mevcut süzgeçle ilk
- * 1000 satır, UTF-8 BOM, ad sütunları yalnız `user.read_pii` ile, denetim
- * günlüğü satırı. Backend'e giden adres sayfanınkiyle aynı olmalı — o
+ * 1000 satır, UTF-8 BOM, ad sütunları `user.read` ile (`SafeUserDto`
+ * PII'siz), denetim günlüğü satırı. Backend'e giden adres sayfanınkiyle aynı olmalı — o
  * iddia ancak isteğin kendisi okunarak sınanır.
  */
 
@@ -170,20 +170,21 @@ describe("GET /api/export/assignments", () => {
     expect(text).not.toContain("ACCESS-TOKEN");
   });
 
-  it("leaves the name columns out without user.read_pii and writes them with it", async () => {
+  it("leaves the name columns out without user.read and writes them with it", async () => {
     stubMe(["payment.read"]);
     watch(ASSIGNMENTS, () => page([adminAssignmentFixture()]));
-    const withoutPii = await (await exportAssignments(request("/api/export/assignments"))).text();
+    const idsOnly = await (await exportAssignments(request("/api/export/assignments"))).text();
 
-    expect(withoutPii).not.toContain("İşçi adı");
-    expect(withoutPii).not.toContain("Ayşe Yılmaz");
-    expect(withoutPii).toContain('"w-1"');
+    expect(idsOnly).not.toContain("İşçi adı");
+    expect(idsOnly).not.toContain("Ayşe Yılmaz");
+    expect(idsOnly).toContain('"w-1"');
 
-    stubMe(["payment.read", "user.read_pii"]);
-    const withPii = await (await exportAssignments(request("/api/export/assignments"))).text();
+    // Ad `SafeUserDto`'dan gelir, PII değil: `user.read` yeter, `user.read_pii` gerekmez.
+    stubMe(["payment.read", "user.read"]);
+    const withNames = await (await exportAssignments(request("/api/export/assignments"))).text();
 
-    expect(withPii).toContain('"İşçi kimliği","İşçi adı","İşveren kimliği","İşveren adı"');
-    expect(withPii).toContain('"w-1","Ayşe Yılmaz","e-1","Mehmet Demir"');
+    expect(withNames).toContain('"İşçi kimliği","İşçi adı","İşveren kimliği","İşveren adı"');
+    expect(withNames).toContain('"w-1","Ayşe Yılmaz","e-1","Mehmet Demir"');
   });
 
   it("forwards the page's own filters — status list, date range, party, search, sort", async () => {
@@ -347,6 +348,7 @@ describe("the other three lists", () => {
     expect(text).toContain('"Hakediş kimliği","Atama kimliği","Alıcı kimliği","Tutar"');
     expect(text).toContain(`"${WORKER_ID}","1240.50","TRY","PROCESSING"`);
     expect(text).not.toContain("Ayşe");
+    expect(text).not.toContain("Alıcı adı");
   });
 
   it("payouts: without durum the status parameter stays off so the backend keeps its PROCESSING default", async () => {
@@ -400,7 +402,7 @@ describe("the other three lists", () => {
   });
 
   it("disputes: dispute.resolve, pending queue by default, RESOLVED forwarded with dates", async () => {
-    stubMe(["dispute.resolve", "user.read_pii"]);
+    stubMe(["dispute.resolve", "user.read"]);
     const seen = watch(DISPUTES, () =>
       page([
         {

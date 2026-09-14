@@ -1,7 +1,12 @@
 import { getPayouts, type Payout } from "@/server/api/payout-reconciliation";
 import { safeUserName } from "@/server/api/users";
 import { exportCsv, type ExportSpec } from "@/server/export/csv-export";
-import { payoutListQuery, payoutViewState, readPayoutView } from "@/server/lists/payouts";
+import {
+  payoutListQuery,
+  payoutViewState,
+  readPayoutView,
+  type PayoutView,
+} from "@/server/lists/payouts";
 
 /**
  * Hakediş listesinin CSV'si (koala-admin#110). Kapı `payout.reconcile`;
@@ -9,22 +14,14 @@ import { payoutListQuery, payoutViewState, readPayoutView } from "@/server/lists
  * 50: bu uçta `PageableSanitizer` yok, daha büyüğü backend'de kırpılır ve
  * `last` yanlış okunurdu.
  */
-const SPEC: ExportSpec<Payout> = {
+const SPEC: ExportSpec<Payout, PayoutView> = {
   list: "payouts",
   permission: "payout.reconcile",
   fileStem: "hakedisler",
   pageSize: 50,
-  readView: (params) => {
-    const view = readPayoutView(params);
-    return { paging: view.paging, state: payoutViewState(view) };
-  },
-  fetchPage: (accessToken, params, page) => {
-    const view = readPayoutView(params);
-    return getPayouts(
-      accessToken,
-      payoutListQuery(view, { ...view.paging, page: page.page, size: page.size }),
-    );
-  },
+  readView: readPayoutView,
+  viewState: payoutViewState,
+  fetchPage: (accessToken, view, paging) => getPayouts(accessToken, payoutListQuery(view, paging)),
   columns: [
     { header: "Hakediş kimliği", cell: (row) => row.id },
     { header: "Atama kimliği", cell: (row) => row.jobAssignmentId },
@@ -32,7 +29,7 @@ const SPEC: ExportSpec<Payout> = {
     {
       header: "Alıcı adı",
       cell: (row) => (row.recipient === null ? null : safeUserName(row.recipient)),
-      pii: true,
+      requires: "user.read",
     },
     { header: "Tutar", cell: (row) => row.amount },
     { header: "Para birimi", cell: (row) => row.currency },

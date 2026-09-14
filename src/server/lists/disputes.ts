@@ -1,6 +1,7 @@
 import { dateRangeQuery, dateRangeState, readDateRange, type DateRange } from "@/lib/date-range";
 import { DISPUTE_PAGING, type DisputeQuery } from "@/server/api/disputes";
 import {
+  readEnumParam,
   readPaging,
   readParam,
   readUuidParam,
@@ -27,10 +28,9 @@ export interface DisputeView {
 }
 
 export function readDisputeView(params: SearchParams): DisputeView {
-  const candidate = readParam(params, "durum");
   return {
     paging: readPaging(params, DISPUTE_PAGING),
-    filter: DISPUTE_STATUS_FILTERS.find((entry) => entry === candidate) ?? "ALL",
+    filter: readEnumParam(params, "durum", DISPUTE_STATUS_FILTERS, "ALL"),
     query: readSearchQuery(readParam(params, SEARCH_PARAM)),
     userId: readUuidParam(params, "kullanici"),
     range: readDateRange(params),

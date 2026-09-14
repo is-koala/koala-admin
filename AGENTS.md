@@ -95,8 +95,10 @@ süzgeciyle ilk 1000 satırı CSV verir. Gövde tek yerde,
 sütunları söyler. Kapı sayfayla **aynı izin**, `getStaffContext().has(...)`
 ile rotanın kendisinde — `<RequirePermission>` bir rotayı koruyamaz. Adres
 okuma `src/server/lists/*` ile sayfayla ortak: CSV, ekrandaki listeyi verir,
-başka bir listeyi değil. Ad-soyad sütunları yalnız `user.read_pii` ile;
-kimlikler herkese. Backend'de "export" eylemi yok; rota
+başka bir listeyi değil. Ad-soyad sütunları `user.read` ile (`SafeUserDto`
+PII'siz), kimlikler herkese; `pii: true` sütunu (e-posta/telefon gibi)
+`user.read_pii` ister — bugün liste DTO'larında yok. Backend'de "export"
+denetim eylemi henüz yok (koala-backend#311); o gelene kadar rota
 `[koala-admin] audit action=export …` günlük satırı yazar (kim, liste,
 süzgeç, satır sayısı, PII). Yeni bir liste eklerken `routes.ts`'e
 `ROUTE_HANDLERS` girdisi şart — `routes.test.ts` dosya sistemini tarar.

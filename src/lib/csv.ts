@@ -40,7 +40,7 @@ export function csvDocument(
   return `${BOM}${lines.join("\r\n")}\r\n`;
 }
 
-/** `atamalar-2026-09-14.csv` — ad ASCII kalsın diye Türkçe karakter kullanılmaz. */
-export function csvFileName(stem: string, at: Date = new Date()): string {
-  return `${stem}-${at.toISOString().slice(0, 10)}.csv`;
+/** `atamalar-2026-09-14.csv` — gün çağıranın (Istanbul günü), ad ASCII kalsın diye Türkçe karakter yok. */
+export function csvFileName(stem: string, day: string): string {
+  return `${stem}-${day}.csv`;
 }

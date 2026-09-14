@@ -453,7 +453,7 @@ describe("status, date range and CSV — koala-admin#110", () => {
     expect(list.url?.searchParams.get("from")).toBe("2026-08-31T21:00:00.000Z");
     expect(list.url?.searchParams.get("to")).toBe("2026-09-14T20:59:59.999Z");
     expect(html).toContain('data-testid="atama-tarih-summary"');
-    expect(html).toContain("01.09.2026 – 14.09.2026");
+    expect(html).toContain("1 Eyl 2026 – 14 Eyl 2026 arası");
     expect(html).toContain("Bu süzgeçlere uyan atama yok.");
     expect(html).toContain('data-testid="atama-tarih-clear"');
     expect(html).toContain(
@@ -470,6 +470,22 @@ describe("status, date range and CSV — koala-admin#110", () => {
     expect(list.url?.searchParams.has("from")).toBe(false);
     expect(list.url?.searchParams.has("to")).toBe(false);
     expect(html).not.toContain('data-testid="atama-tarih-summary"');
+  });
+
+  it("carries the open UUID lookup through the status and date forms, like payouts carries hakedis", async () => {
+    stubMe(ANALYST);
+    watchList();
+
+    const html = await render({ atama: ASSIGNMENT_ID });
+
+    const dateForm = html.slice(html.indexOf('data-testid="atama-tarih-form"'));
+    expect(dateForm.slice(0, dateForm.indexOf("</form>"))).toContain(
+      `name="atama" value="${ASSIGNMENT_ID}"`,
+    );
+    const statusForm = html.slice(html.indexOf('data-testid="assignment-status-filter"'));
+    expect(statusForm.slice(0, statusForm.indexOf("</form>"))).toContain(
+      `name="atama" value="${ASSIGNMENT_ID}"`,
+    );
   });
 
   it("carries the other filters through the export link and leaves paging out", async () => {

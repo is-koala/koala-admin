@@ -292,7 +292,7 @@ describe("the date range and the CSV link — koala-admin#110", () => {
     expect(queue.url?.searchParams.get("to")).toBe("2026-09-14T20:59:59.999Z");
     expect(queue.url?.searchParams.has("status")).toBe(false);
     expect(html).toContain('data-testid="hakedis-tarih-summary"');
-    expect(html).toContain("01.09.2026 – 14.09.2026");
+    expect(html).toContain("1 Eyl 2026 – 14 Eyl 2026 arası");
     expect(html).toContain("Bu tarih aralığında hakediş yok.");
     expect(html).toContain('data-testid="payouts-export"');
     expect(html).toContain('href="/api/export/payouts?baslangic=2026-09-01&amp;bitis=2026-09-14"');

@@ -5,27 +5,21 @@ import {
   assignmentListQuery,
   assignmentViewState,
   readAssignmentView,
+  type AssignmentView,
 } from "@/server/lists/assignments";
 
 /**
  * Atama listesinin CSV'si (koala-admin#110). Kapı sayfayla aynı: `payment.read`.
  * Süzgeçler `readAssignmentView` — sayfa hangi adresi okuyorsa rota da onu okur.
  */
-const SPEC: ExportSpec<EscrowSummary> = {
+const SPEC: ExportSpec<EscrowSummary, AssignmentView> = {
   list: "assignments",
   permission: "payment.read",
   fileStem: "atamalar",
-  readView: (params) => {
-    const view = readAssignmentView(params);
-    return { paging: view.paging, state: assignmentViewState(view) };
-  },
-  fetchPage: (accessToken, params, page) => {
-    const view = readAssignmentView(params);
-    return getAdminAssignments(
-      accessToken,
-      assignmentListQuery(view, { ...view.paging, page: page.page, size: page.size }),
-    );
-  },
+  readView: readAssignmentView,
+  viewState: assignmentViewState,
+  fetchPage: (accessToken, view, paging) =>
+    getAdminAssignments(accessToken, assignmentListQuery(view, paging)),
   columns: [
     { header: "Atama kimliği", cell: (row) => row.id },
     { header: "İlan kimliği", cell: (row) => row.jobId },
@@ -33,9 +27,9 @@ const SPEC: ExportSpec<EscrowSummary> = {
     { header: "Şirket kimliği", cell: (row) => row.companyId },
     { header: "Şirket adı", cell: (row) => row.companyName },
     { header: "İşçi kimliği", cell: (row) => row.worker.id },
-    { header: "İşçi adı", cell: (row) => safeUserName(row.worker), pii: true },
+    { header: "İşçi adı", cell: (row) => safeUserName(row.worker), requires: "user.read" },
     { header: "İşveren kimliği", cell: (row) => row.employer.id },
-    { header: "İşveren adı", cell: (row) => safeUserName(row.employer), pii: true },
+    { header: "İşveren adı", cell: (row) => safeUserName(row.employer), requires: "user.read" },
     { header: "Atama durumu", cell: (row) => row.status },
     { header: "Ödeme durumu", cell: (row) => row.paymentStatus },
     { header: "Atama zamanı", cell: (row) => row.assignmentDateTime },

@@ -29,8 +29,7 @@ export function CsvExportLink({
         CSV indir
       </a>
       <span className="text-xs text-ink-muted">
-        Bu görünümün ilk {formatInteger(EXPORT_ROW_LIMIT)} {unit} satırı; indirme denetim kaydına
-        yazılır.
+        Bu görünümün ilk {formatInteger(EXPORT_ROW_LIMIT)} {unit} satırı; indirme günlüğe yazılır.
       </span>
     </p>
   );

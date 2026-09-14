@@ -1,6 +1,7 @@
 import "server-only";
 
 import { csvDocument, csvFileName, type CsvCell } from "@/lib/csv";
+import { istanbulDay } from "@/lib/date-range";
 import { EXPORT_ROW_LIMIT, type ExportList } from "@/lib/export";
 import { isKoalaApiError } from "@/server/api/errors";
 import { MAX_PAGE_SIZE, type Paging, type SearchParams } from "@/server/api/paging";
@@ -29,27 +30,35 @@ import { getStaffContext, type StaffContextFailureKind } from "@/server/authz/st
  * sonuncu sayfayı kırpar. "İlk 1000" sıralama backend'inkidir — adresteki
  * `sirala` sayfayla aynı şekilde okunur, panelde yeniden sıralanmaz.
  *
- * PII: ad-soyad ve kullanıcı adı sütunları yalnız `user.read_pii` taşıyan
- * personele yazılır; kimlik sütunları herkese. Ekranda ad görünüyor, ama
- * ekran yirmi satırdır; bin satırlık bir dosya toplu kişisel veri
- * aktarımıdır ve panelin PII kapısı odur.
+ * Sütun izinleri: ad-soyad sütunları `user.read` ister — `SafeUserDto`
+ * depo tanımıyla PII'sizdir ve diğer listeler adı aynı izinle gösterir;
+ * kimlik sütunları herkese. `pii: true` gerçek PII (e-posta, telefon) için
+ * `user.read_pii` kapısıdır; bugünkü liste DTO'larında böyle alan yok,
+ * altyapı bir gün gelirse diye durur.
  *
- * Denetim: backend'de "export" diye bir eylem yok — liste GET'inin izin
- * kontrolü backend denetim kaydına kendi satırını yazar, ama o satır sayfa
- * mı dışa aktarma mı ayırmaz. Rota bu yüzden tek satırlık yapılandırılmış
- * bir günlük yazar (`[koala-admin] audit action=export …`): kim, hangi
- * liste, hangi süzgeç, kaç satır, PII açık mı. Backend'e yazılabilen bir
- * denetim ucu geldiğinde bu satır oraya taşınır.
+ * Denetim: backend'de "export" diye bir eylem henüz yok (koala-backend#311
+ * açık) — liste GET'inin izin kontrolü backend denetim kaydına kendi
+ * satırını yazar, ama o satır sayfa mı dışa aktarma mı ayırmaz. Rota bu
+ * yüzden tek satırlık yapılandırılmış bir günlük yazar
+ * (`[koala-admin] audit action=export …`): kim, hangi liste, hangi süzgeç,
+ * kaç satır, PII açık mı. #311 gelince bu satır backend'e taşınır.
  */
 
 export interface ExportColumn<Row> {
   readonly header: string;
   readonly cell: (row: Row) => CsvCell;
-  /** Yalnız `user.read_pii` varken yazılır. */
+  /** Sütun yalnız bu izin varken yazılır (ad-soyad: `user.read`). */
+  readonly requires?: Permission;
+  /** Gerçek PII: yalnız `user.read_pii` varken yazılır. */
   readonly pii?: boolean;
 }
 
-export interface ExportSpec<Row> {
+/** Bir listenin görünümü: en az sayfalama; kalanı listeye özgü. */
+export interface ExportView {
+  readonly paging: Paging;
+}
+
+export interface ExportSpec<Row, View extends ExportView> {
   readonly list: ExportList;
   readonly permission: Permission;
   /** Dosya adının ASCII gövdesi: `atamalar-2026-09-14.csv`. */
@@ -57,16 +66,12 @@ export interface ExportSpec<Row> {
   /** Backend'in bu uç için sayfa tavanı; hakediş ucu 50 (PageableSanitizer yok). */
   readonly pageSize?: number;
   readonly columns: readonly ExportColumn<Row>[];
-  /** Adresi görünüme çevirir; günlük satırı için süzgeç özeti de buradan. */
-  readonly readView: (params: SearchParams) => {
-    paging: Paging;
-    state: Readonly<Record<string, string>>;
-  };
-  readonly fetchPage: (
-    accessToken: string,
-    params: SearchParams,
-    page: { page: number; size: number },
-  ) => Promise<PageDto<Row>>;
+  /** Adres bir kez okunur; sayfayla aynı okuyucu (`src/server/lists/*`). */
+  readonly readView: (params: SearchParams) => View;
+  /** Görünümün adres anahtarları; günlük satırındaki süzgeç özeti. */
+  readonly viewState: (view: View) => Readonly<Record<string, string>>;
+  /** Bir sayfa; `paging` görünümün sıralamasıyla rotanın seçtiği sayfa/boyuttur. */
+  readonly fetchPage: (accessToken: string, view: View, paging: Paging) => Promise<PageDto<Row>>;
 }
 
 const HEADERS = {
@@ -82,7 +87,10 @@ const FAILURE_STATUS: Record<StaffContextFailureKind, number> = {
   UNEXPECTED: 502,
 };
 
-export async function exportCsv<Row>(request: Request, spec: ExportSpec<Row>): Promise<Response> {
+export async function exportCsv<Row, View extends ExportView>(
+  request: Request,
+  spec: ExportSpec<Row, View>,
+): Promise<Response> {
   const context = await getStaffContext();
   if (context.failure !== null) {
     return refuse(FAILURE_STATUS[context.failure.kind], "Dışa aktarma için oturum doğrulanamadı.");
@@ -91,16 +99,21 @@ export async function exportCsv<Row>(request: Request, spec: ExportSpec<Row>): P
     return refuse(403, "Bu dışa aktarma için yetkiniz yok.");
   }
 
-  const params = searchParamsOf(new URL(request.url));
   const showPii = context.has("user.read_pii");
-  const columns = spec.columns.filter((column) => column.pii !== true || showPii);
+  const columns = spec.columns.filter(
+    (column) =>
+      (column.requires === undefined || context.has(column.requires)) &&
+      (column.pii !== true || showPii),
+  );
   const size = Math.min(MAX_PAGE_SIZE, spec.pageSize ?? MAX_PAGE_SIZE);
-  const view = spec.readView(params);
+  const view = spec.readView(searchParamsOf(new URL(request.url)));
 
   let rows: Row[];
   try {
     const accessToken = await getKoalaAccessToken();
-    rows = await collectRows(size, (page) => spec.fetchPage(accessToken, params, { page, size }));
+    rows = await collectRows(size, (page) =>
+      spec.fetchPage(accessToken, view, { ...view.paging, page, size }),
+    );
   } catch (error) {
     if (isStaffAuthError(error)) return refuse(401, "Dışa aktarma için oturum doğrulanamadı.");
     if (isSearchQueryTooLong(error)) return refuse(400, "Arama metni backend'in sınırını aşıyor.");
@@ -120,7 +133,7 @@ export async function exportCsv<Row>(request: Request, spec: ExportSpec<Row>): P
     staffId: context.staff?.staffId ?? null,
     rows: rows.length,
     pii: showPii,
-    filters: view.state,
+    filters: spec.viewState(view),
     sort: view.paging.sort,
   });
 
@@ -129,7 +142,7 @@ export async function exportCsv<Row>(request: Request, spec: ExportSpec<Row>): P
     headers: {
       ...HEADERS,
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${csvFileName(spec.fileStem)}"`,
+      "Content-Disposition": `attachment; filename="${csvFileName(spec.fileStem, istanbulDay())}"`,
     },
   });
 }
@@ -153,7 +166,7 @@ async function collectRows<Row>(
 }
 
 /** Next'in `searchParams` biçimi: tekrar eden anahtar dizi olur. */
-export function searchParamsOf(url: URL): SearchParams {
+function searchParamsOf(url: URL): SearchParams {
   const out: Record<string, string | string[]> = {};
   for (const [key, value] of url.searchParams) {
     const previous = out[key];

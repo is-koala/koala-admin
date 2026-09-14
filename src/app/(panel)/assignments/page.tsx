@@ -31,6 +31,7 @@ import {
   ASSIGNMENT_STATUSES,
   getAdminAssignments,
   getEscrowSummary,
+  type AssignmentStatus,
   type EscrowSummary,
 } from "@/server/api/escrow";
 import { pageWindow, readParam, type SearchParams } from "@/server/api/paging";
@@ -181,12 +182,13 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
         selected={statuses}
         carry={{
           boyut: String(paging.size),
+          ...(candidate === null ? {} : { atama: candidate }),
           ...(query === null ? {} : { [SEARCH_PARAM]: query }),
           ...partyFilter,
           ...dateRangeState(range),
         }}
       />
-      <DateRangeFilter id="atama-tarih" pathname="/assignments" range={range} state={listState} />
+      <DateRangeFilter id="atama-tarih" pathname="/assignments" range={range} state={viewState} />
     </div>
   );
 
@@ -311,7 +313,7 @@ function StatusFilter({
   selected,
   carry,
 }: {
-  selected: readonly (typeof ASSIGNMENT_STATUSES)[number][];
+  selected: readonly AssignmentStatus[];
   carry: Readonly<Record<string, string>>;
 }) {
   const chosen = new Set<string>(selected);

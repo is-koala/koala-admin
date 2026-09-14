@@ -6,6 +6,7 @@ import {
   describeDateRange,
   hasDateRange,
   isCalendarDay,
+  istanbulDay,
   readDateRange,
 } from "./date-range";
 
@@ -69,13 +70,19 @@ describe("view state and wording", () => {
     expect(hasDateRange({ fromDay: null, toDay: "2026-09-01" })).toBe(true);
   });
 
-  it("describes the range in Turkish day order", () => {
+  it("describes the range without a case suffix that would have to follow vowel harmony", () => {
     expect(describeDateRange({ fromDay: "2026-09-01", toDay: "2026-09-14" })).toBe(
-      "01.09.2026 – 14.09.2026",
+      "1 Eyl 2026 – 14 Eyl 2026 arası",
     );
-    expect(describeDateRange({ fromDay: "2026-09-01", toDay: null })).toBe(
-      "01.09.2026'dan itibaren",
-    );
-    expect(describeDateRange({ fromDay: null, toDay: "2026-09-14" })).toBe("14.09.2026'ya kadar");
+    expect(describeDateRange({ fromDay: "2023-12-01", toDay: null })).toBe("1 Ara 2023 ve sonrası");
+    expect(describeDateRange({ fromDay: null, toDay: "2026-09-14" })).toBe("14 Eyl 2026 ve öncesi");
+  });
+});
+
+describe("istanbulDay", () => {
+  it("names the Istanbul calendar day, which is already tomorrow at 21:00 UTC", () => {
+    expect(istanbulDay(new Date("2026-09-14T21:30:00Z"))).toBe("2026-09-15");
+    expect(istanbulDay(new Date("2026-09-14T20:30:00Z"))).toBe("2026-09-14");
+    expect(istanbulDay(new Date("2026-01-31T21:30:00Z"))).toBe("2026-02-01");
   });
 });

@@ -1,7 +1,12 @@
 import { getDisputes, type Dispute } from "@/server/api/disputes";
 import { safeUserName } from "@/server/api/users";
 import { exportCsv, type ExportSpec } from "@/server/export/csv-export";
-import { disputeListQuery, disputeViewState, readDisputeView } from "@/server/lists/disputes";
+import {
+  disputeListQuery,
+  disputeViewState,
+  readDisputeView,
+  type DisputeView,
+} from "@/server/lists/disputes";
 
 /**
  * Uyuşmazlık listesinin CSV'si (koala-admin#110). Kapı `dispute.resolve`;
@@ -9,16 +14,14 @@ import { disputeListQuery, disputeViewState, readDisputeView } from "@/server/li
  * Tutar yok: `DisputeDto` tutar taşımaz, atama özetini bin kez okumak
  * bir dışa aktarma için değil.
  */
-const SPEC: ExportSpec<Dispute> = {
+const SPEC: ExportSpec<Dispute, DisputeView> = {
   list: "disputes",
   permission: "dispute.resolve",
   fileStem: "uyusmazliklar",
-  readView: (params) => {
-    const view = readDisputeView(params);
-    return { paging: view.paging, state: disputeViewState(view) };
-  },
-  fetchPage: (accessToken, params, page) =>
-    getDisputes(accessToken, disputeListQuery(readDisputeView(params), page)),
+  readView: readDisputeView,
+  viewState: disputeViewState,
+  fetchPage: (accessToken, view, paging) =>
+    getDisputes(accessToken, disputeListQuery(view, paging)),
   columns: [
     { header: "Uyuşmazlık kimliği", cell: (row) => row.id },
     { header: "Atama kimliği", cell: (row) => row.jobAssignmentId },
@@ -26,7 +29,7 @@ const SPEC: ExportSpec<Dispute> = {
     {
       header: "Açan adı",
       cell: (row) => (row.openedBy === null ? null : safeUserName(row.openedBy)),
-      pii: true,
+      requires: "user.read",
     },
     { header: "Açan taraf", cell: (row) => row.openedBySide },
     { header: "Durum", cell: (row) => row.status },

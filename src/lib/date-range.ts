@@ -76,17 +76,40 @@ export function dateRangeState(range: DateRange): Readonly<Record<string, string
   };
 }
 
-/** `01.09.2026 – 14.09.2026`, tek taraflıysa `01.09.2026'dan itibaren` / `14.09.2026'ya kadar`. */
+/**
+ * `1 Eyl 2026 – 14 Eyl 2026 arası`; tek taraflıysa `1 Eyl 2026 ve sonrası` /
+ * `14 Eyl 2026 ve öncesi`. Ek almayan kalıp bilerek: `'dan` / `'ya` ekleri
+ * yılın son hecesine göre değişir (2026'dan, 2023'ten, 2030'dan…) ve burada
+ * ünlü/ünsüz uyumu kurmak bir tarih özeti için fazla.
+ */
 export function describeDateRange(range: DateRange): string {
   const from = range.fromDay === null ? null : formatDay(range.fromDay);
   const to = range.toDay === null ? null : formatDay(range.toDay);
-  if (from !== null && to !== null) return `${from} – ${to}`;
-  if (from !== null) return `${from}'dan itibaren`;
-  if (to !== null) return `${to}'ya kadar`;
+  if (from !== null && to !== null) return `${from} – ${to} arası`;
+  if (from !== null) return `${from} ve sonrası`;
+  if (to !== null) return `${to} ve öncesi`;
   return "";
 }
 
+const MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+
 function formatDay(day: string): string {
   const [year, month, date] = day.split("-");
-  return `${date}.${month}.${year}`;
+  return `${Number(date)} ${MONTHS[Number(month) - 1]} ${year}`;
+}
+
+/**
+ * Bu anın Europe/Istanbul'daki günü, `YYYY-MM-DD`. CSV dosya adı bunu taşır:
+ * UTC'de koşan bir konteynerde gece 01:00'de indirilen dosya "dünün" adını
+ * almamalı.
+ */
+export function istanbulDay(at: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(at);
+  const read = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${read("year")}-${read("month")}-${read("day")}`;
 }

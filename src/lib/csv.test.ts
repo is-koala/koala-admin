@@ -42,9 +42,7 @@ describe("csvDocument", () => {
 });
 
 describe("csvFileName", () => {
-  it("dates the file by the UTC day and keeps the stem ASCII", () => {
-    expect(csvFileName("atamalar", new Date("2026-09-14T10:00:00Z"))).toBe(
-      "atamalar-2026-09-14.csv",
-    );
+  it("dates the file by the day it is given and keeps the stem ASCII", () => {
+    expect(csvFileName("atamalar", "2026-09-14")).toBe("atamalar-2026-09-14.csv");
   });
 });
