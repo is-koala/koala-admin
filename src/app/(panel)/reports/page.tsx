@@ -2,6 +2,8 @@ import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  CsvExportLink,
+  DateRangeFilter,
   FilterNotice,
   ListSearchForm,
   QueueFilters,
@@ -14,30 +16,14 @@ import {
 } from "@/components/panel/queue";
 import { EmptyState } from "@/components/ui";
 import { objectQueryFor } from "@/lib/breadcrumb";
+import { dateRangeState, hasDateRange } from "@/lib/date-range";
 import { ALL_STATUSES_PARAM } from "@/lib/panel-href";
-import {
-  pageWindow,
-  readEnumParam,
-  readPaging,
-  readParam,
-  readUuidParam,
-  sortParam,
-  type SearchParams,
-} from "@/server/api/paging";
-import {
-  REPORT_PAGING,
-  REPORT_STATUSES,
-  getReports,
-  reportStatusLabel,
-  type ReportStatus,
-} from "@/server/api/reports";
-import {
-  SEARCH_QUERY_TOO_LONG_MESSAGE,
-  isSearchQueryTooLong,
-  readSearchQuery,
-} from "@/server/api/search-query";
+import { pageWindow, sortParam, type SearchParams } from "@/server/api/paging";
+import { REPORT_STATUSES, getReports, reportStatusLabel } from "@/server/api/reports";
+import { SEARCH_QUERY_TOO_LONG_MESSAGE, isSearchQueryTooLong } from "@/server/api/search-query";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
+import { readReportView, reportListQuery, reportViewState } from "@/server/lists/reports";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { ReportTable } from "./report-table";
@@ -55,6 +41,8 @@ export const metadata: Metadata = { title: "Şikayetler" };
  * edene (`reporterId`, koala-backend#283) süzer; ikisi birlikte de gider ve
  * aynı kişiyi göstermek zorunda değildir. `?durum=hepsi` backend'e `status`
  * göndermez (her durum); kullanıcı sayfasındaki sayaçlar buraya gelir.
+ * `?baslangic=&bitis=` `createdAt` aralığı (koala-admin#110, koala-backend#301);
+ * adres okuma `src/server/lists/reports.ts`'te, CSV rotası aynı okuyucu.
  */
 export default async function ReportsPage({
   searchParams,
@@ -101,24 +89,11 @@ function reportsHref(
 }
 
 async function ReportQueue({ params }: { params: SearchParams }) {
-  const status: ReportStatus | null =
-    readParam(params, "durum") === ALL_STATUSES_PARAM
-      ? null
-      : readEnumParam<ReportStatus>(params, "durum", REPORT_STATUSES, "OPEN");
-  const paging = readPaging(params, REPORT_PAGING);
-  const reportedUserId = readUuidParam(params, "kullanici");
-  const reporterId = readUuidParam(params, "sikayetci");
-  const query = readSearchQuery(readParam(params, SEARCH_PARAM));
+  const view = readReportView(params);
+  const { paging, status, query, reportedUserId, reporterId, range } = view;
   const search = activeSearch(query);
 
-  const viewState: Record<string, string> = {
-    durum: status ?? ALL_STATUSES_PARAM,
-    sirala: sortParam(paging.sort),
-    boyut: String(paging.size),
-  };
-  if (reportedUserId !== null) viewState.kullanici = reportedUserId;
-  if (reporterId !== null) viewState.sikayetci = reporterId;
-  if (query !== null) viewState[SEARCH_PARAM] = query;
+  const viewState = reportViewState(view);
   const userFiltered = reportedUserId !== null || reporterId !== null;
   const objectQuery = objectQueryFor(viewState, paging.page);
 
@@ -146,6 +121,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
         ...(reportedUserId !== null ? { kullanici: reportedUserId } : {}),
         ...(reporterId !== null ? { sikayetci: reporterId } : {}),
         ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
+        ...dateRangeState(range),
       }}
       notice={
         userFiltered ? (
@@ -157,6 +133,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
               sirala: sortParam(paging.sort),
               boyut: String(paging.size),
               ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
+              ...dateRangeState(range),
             })}
           >
             {reportedUserId !== null && reporterId !== null
@@ -185,21 +162,20 @@ async function ReportQueue({ params }: { params: SearchParams }) {
     />
   );
 
+  const dateFilter = (
+    <DateRangeFilter id="sikayet-tarih" pathname="/reports" range={range} state={viewState} />
+  );
+
   let page;
   try {
-    page = await getReports(await getKoalaAccessToken(), {
-      status,
-      reportedUserId,
-      reporterId,
-      paging,
-      query,
-    });
+    page = await getReports(await getKoalaAccessToken(), reportListQuery(view));
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return (
         <div className="flex flex-col gap-4">
           {filters}
           {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
+          {dateFilter}
         </div>
       );
     }
@@ -207,6 +183,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
       <div className="flex flex-col gap-4">
         {filters}
         {searchForm()}
+        {dateFilter}
         <QueueLoadFailure
           subject="Şikayet kuyruğu"
           permission="content.moderate"
@@ -220,16 +197,20 @@ async function ReportQueue({ params }: { params: SearchParams }) {
     <div className="flex flex-col gap-6">
       {filters}
       {searchForm()}
+      {dateFilter}
       <SearchResultSummary search={search} total={page.totalElements} unit="şikayet" />
+      <CsvExportLink list="reports" state={viewState} unit="şikayet" />
 
       {page.content.length === 0 ? (
         <EmptyState
           title={
             search !== null
               ? searchEmptyTitle(search)
-              : status === null
-                ? "Şikayet yok."
-                : `"${reportStatusLabel(status)}" durumunda şikayet yok.`
+              : hasDateRange(range)
+                ? "Bu tarih aralığında şikayet yok."
+                : status === null
+                  ? "Şikayet yok."
+                  : `"${reportStatusLabel(status)}" durumunda şikayet yok.`
           }
           description={
             search === null

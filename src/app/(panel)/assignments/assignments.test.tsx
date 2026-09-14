@@ -120,7 +120,7 @@ function watchLookup(data: unknown = adminAssignmentFixture()) {
   return seen;
 }
 
-const render = async (params: Record<string, string> = {}) =>
+const render = async (params: Record<string, string | string[]> = {}) =>
   (
     await renderServerComponent(<AssignmentsPage searchParams={Promise.resolve(params)} />)
   ).replaceAll("<!-- -->", "");
@@ -351,5 +351,151 @@ describe("the party filters — koala-admin#100", () => {
 
     expect(list.url?.searchParams.has("workerId")).toBe(false);
     expect(html).not.toContain('data-testid="assignment-party-filter"');
+  });
+});
+
+/** koala-admin#105: satırdaki her ad tıklanır; ilan ve şirket bağlantısı izne bakar. */
+describe("every name in the row is a link — koala-admin#105", () => {
+  const WORKER = "aaaaaaaa-0000-4000-8000-000000000001";
+  const EMPLOYER = "bbbbbbbb-0000-4000-8000-000000000002";
+  const COMPANY = "c0000000-0000-4000-8000-0000000000c1";
+  const JOB = "9a1c0f10-0001-4c00-8000-0000000000bb";
+  const withUuidParties = () =>
+    adminAssignmentFixture({
+      worker: {
+        id: WORKER,
+        firstName: "Ayşe",
+        lastName: "Yılmaz",
+        username: "ayse",
+        profilePictureUrl: null,
+      },
+      employer: {
+        id: EMPLOYER,
+        firstName: "Mehmet",
+        lastName: "Demir",
+        username: "mehmet",
+        profilePictureUrl: null,
+      },
+    });
+
+  it("links worker and employer to their user pages, job and company only with their permissions", async () => {
+    stubMe(["payment.read", "job.read", "company.approve"]);
+    watchList([withUuidParties()]);
+
+    const html = await render();
+
+    expect(html).toContain(`href="/users/${WORKER}"`);
+    expect(html).toContain(`href="/users/${EMPLOYER}"`);
+    expect(html).toContain(`href="/jobs/${JOB}"`);
+    expect(html).toContain(`href="/companies/${COMPANY}"`);
+    expect(html).toContain("Koala Kafe");
+  });
+
+  it("keeps job and company as plain text without job.read / company.approve", async () => {
+    stubMe(ANALYST);
+    watchList([withUuidParties()]);
+
+    const html = await render();
+
+    expect(html).toContain(`href="/users/${WORKER}"`);
+    expect(html).not.toContain(`href="/jobs/${JOB}"`);
+    expect(html).not.toContain(`href="/companies/${COMPANY}"`);
+    expect(html).toContain("Garsonluk");
+    expect(html).toContain("Koala Kafe");
+  });
+
+  it("writes the company name as text when an older backend sends no companyId", async () => {
+    stubMe(["payment.read", "company.approve"]);
+    const { companyId: _dropped, ...legacy } = adminAssignmentFixture();
+    watchList([legacy]);
+
+    const html = await render();
+
+    expect(html).toContain("Koala Kafe");
+    expect(html).not.toContain("/companies/");
+  });
+});
+
+/** koala-admin#110: durum (çoklu) ve tarih aralığı backend'e gider; CSV bağlantısı görünümü taşır. */
+describe("status, date range and CSV — koala-admin#110", () => {
+  it("sends the checked statuses as one comma list and keeps them in the pager and export link", async () => {
+    stubMe(ANALYST);
+    const list = watchList();
+
+    const html = await render({ durum: ["IN_PROGRESS", "CONFIRMED"], boyut: "10" });
+
+    expect(list.url?.searchParams.get("status")).toBe("CONFIRMED,IN_PROGRESS");
+    expect(html).toContain('data-testid="assignment-status-filter"');
+    expect(html).toContain('name="durum" checked="" value="CONFIRMED"');
+    expect(html).toContain('name="durum" checked="" value="IN_PROGRESS"');
+    expect(html).not.toContain('checked="" value="COMPLETED"');
+    expect(html).toContain('name="durum" value="CONFIRMED,IN_PROGRESS"');
+    expect(html).toContain('href="/api/export/assignments?durum=CONFIRMED%2CIN_PROGRESS"');
+    expect(html).toContain('data-testid="assignment-status-clear"');
+  });
+
+  it("sends nothing as status when no box is checked and drops an unknown value", async () => {
+    stubMe(ANALYST);
+    const list = watchList();
+
+    const html = await render({ durum: "banana" });
+
+    expect(list.url?.searchParams.has("status")).toBe(false);
+    expect(html).not.toContain('data-testid="assignment-status-clear"');
+  });
+
+  it("turns baslangic/bitis into Istanbul day boundaries and names the range", async () => {
+    stubMe(ANALYST);
+    const list = watchList([]);
+
+    const html = await render({ baslangic: "2026-09-01", bitis: "2026-09-14" });
+
+    expect(list.url?.searchParams.get("from")).toBe("2026-08-31T21:00:00.000Z");
+    expect(list.url?.searchParams.get("to")).toBe("2026-09-14T20:59:59.999Z");
+    expect(html).toContain('data-testid="atama-tarih-summary"');
+    expect(html).toContain("1 Eyl 2026 – 14 Eyl 2026 arası");
+    expect(html).toContain("Bu süzgeçlere uyan atama yok.");
+    expect(html).toContain('data-testid="atama-tarih-clear"');
+    expect(html).toContain(
+      'href="/api/export/assignments?baslangic=2026-09-01&amp;bitis=2026-09-14"',
+    );
+  });
+
+  it("drops a day that is not a calendar day before it reaches the backend", async () => {
+    stubMe(ANALYST);
+    const list = watchList();
+
+    const html = await render({ baslangic: "2026-02-30", bitis: "dün" });
+
+    expect(list.url?.searchParams.has("from")).toBe(false);
+    expect(list.url?.searchParams.has("to")).toBe(false);
+    expect(html).not.toContain('data-testid="atama-tarih-summary"');
+  });
+
+  it("carries the open UUID lookup through the status and date forms, like payouts carries hakedis", async () => {
+    stubMe(ANALYST);
+    watchList();
+
+    const html = await render({ atama: ASSIGNMENT_ID });
+
+    const dateForm = html.slice(html.indexOf('data-testid="atama-tarih-form"'));
+    expect(dateForm.slice(0, dateForm.indexOf("</form>"))).toContain(
+      `name="atama" value="${ASSIGNMENT_ID}"`,
+    );
+    const statusForm = html.slice(html.indexOf('data-testid="assignment-status-filter"'));
+    expect(statusForm.slice(0, statusForm.indexOf("</form>"))).toContain(
+      `name="atama" value="${ASSIGNMENT_ID}"`,
+    );
+  });
+
+  it("carries the other filters through the export link and leaves paging out", async () => {
+    stubMe(ANALYST);
+    watchList();
+    const WORKER = "aaaaaaaa-0000-4000-8000-000000000001";
+
+    const html = await render({ isci: WORKER, ara: "garson", sayfa: "3", boyut: "10" });
+
+    expect(html).toContain('data-testid="assignments-export"');
+    expect(html).toContain(`href="/api/export/assignments?ara=garson&amp;isci=${WORKER}"`);
   });
 });

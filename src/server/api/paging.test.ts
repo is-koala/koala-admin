@@ -8,6 +8,7 @@ import {
   pagingQuery,
   parseSort,
   readBooleanParam,
+  readEnumListParam,
   readEnumParam,
   readPaging,
   readParam,
@@ -160,5 +161,21 @@ describe("readUuidParam", () => {
     expect(readUuidParam({ isci: ["aaaaaaaa-0000-4000-8000-000000000001", "x"] }, "isci")).toBe(
       "aaaaaaaa-0000-4000-8000-000000000001",
     );
+  });
+});
+
+describe("readEnumListParam — koala-admin#110", () => {
+  it("accepts a repeated key and a comma list alike, in the catalogue's order", () => {
+    const allowed = ["A", "B", "C"] as const;
+    expect(readEnumListParam({ durum: ["C", "A"] }, "durum", allowed)).toEqual(["A", "C"]);
+    expect(readEnumListParam({ durum: "C,A" }, "durum", allowed)).toEqual(["A", "C"]);
+    expect(readEnumListParam({ durum: ["B", "B,A"] }, "durum", allowed)).toEqual(["A", "B"]);
+  });
+
+  it("drops unknown values silently and returns an empty list when nothing is set", () => {
+    const allowed = ["A", "B"] as const;
+    expect(readEnumListParam({ durum: "banana,B" }, "durum", allowed)).toEqual(["B"]);
+    expect(readEnumListParam({}, "durum", allowed)).toEqual([]);
+    expect(readEnumListParam({ durum: "" }, "durum", allowed)).toEqual([]);
   });
 });

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
+import { CompanyLink } from "@/components/panel/company-link";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { StaffRefLink } from "@/components/panel/staff-ref-link";
@@ -111,6 +112,7 @@ async function PayoutObject({ id }: { id: string }) {
   const currency = payout.currency ?? "TRY";
   const canOpenAssignment = context.has("payment.read");
   const canOpenJob = context.has("job.read");
+  const canOpenCompany = context.has("company.approve");
   const staffRefs = await resolveStaffRefs([payout.reconciledByStaffId], { accessToken, context });
 
   return (
@@ -143,7 +145,12 @@ async function PayoutObject({ id }: { id: string }) {
                   <Party party={payout.employer} />
                 ) : (
                   <span>
-                    <Party party={payout.employer} /> · {payout.companyName}
+                    <Party party={payout.employer} /> ·{" "}
+                    <CompanyLink
+                      companyId={payout.companyId}
+                      companyName={payout.companyName}
+                      canOpen={canOpenCompany}
+                    />
                   </span>
                 )
               }

@@ -91,6 +91,24 @@ export function readEnumParam<T extends string>(
 }
 
 /**
+ * Çoklu seçim süzgeci (`?durum=A&durum=B` ya da `?durum=A,B`): kapalı kümede
+ * olanlar, kümenin kendi sırasıyla ve tekrarsız. Onay kutuları anahtarı
+ * tekrarlar, gizli alanlar ve dışa aktarma bağlantısı virgülle tek değer
+ * taşır; ikisi de aynı okumaya düşer. Tanınmayan değer sessizce düşer —
+ * Spring `List<Enum>` bağlamasında bir yabancı değer bütün isteği 400 yapar.
+ */
+export function readEnumListParam<T extends string>(
+  params: SearchParams,
+  key: string,
+  allowed: readonly T[],
+): readonly T[] {
+  const value = params[key];
+  const raw = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  const requested = new Set(raw.flatMap((entry) => entry.split(",")).map((entry) => entry.trim()));
+  return allowed.filter((candidate) => requested.has(candidate));
+}
+
+/**
  * Bir kimlik süzgeci (`?isci=`, `?sirket=`, `?kullanici=`): UUID değilse
  * `null`. Yanlış biçim backend'e gitmez — Spring `UUID` bağlayamayınca 400
  * dönerdi ve bir yer imi hata sayfasına dönüşürdü; kuyruk süzgeçsiz açılır.

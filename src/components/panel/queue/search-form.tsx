@@ -3,6 +3,7 @@ import Link from "next/link";
 import { formatInteger } from "@/lib/format";
 import { listHref } from "@/lib/panel-href";
 import {
+  SEARCH_PARAM,
   SEARCH_QUERY_MAX_LENGTH,
   SEARCH_QUERY_MIN_LENGTH,
   searchQueryParam,
@@ -31,9 +32,9 @@ import {
  * Panelin tek arama parametresi. Kullanıcılar, Şirketler ve Personel
  * sayfaları zaten `?ara=` kullanıyor; yedi yeni kutu aynı adı taşır ki bir
  * operatör adres çubuğunda iki farklı sözcük öğrenmek zorunda kalmasın.
- * Nesne sayfalarının `QUEUE_KEYS` listesi de bu sabiti okur.
+ * Sabitin evi `search-query.ts` (JSX'siz okuyucular için); buradan da çıkar.
  */
-export const SEARCH_PARAM = "ara";
+export { SEARCH_PARAM };
 
 export interface ListSearchFormProps {
   /** Metin alanının `id`'si; sayfa başına benzersiz olmalı. */

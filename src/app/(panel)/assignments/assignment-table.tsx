@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { CompanyLink } from "@/components/panel/company-link";
+import { SafeUserLink } from "@/components/panel/safe-user-link";
 import {
   Badge,
   Table,
@@ -10,9 +12,8 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatCurrency, formatDateTime } from "@/lib/format";
-import { assignmentHref } from "@/lib/panel-href";
+import { assignmentHref, jobHref } from "@/lib/panel-href";
 import type { EscrowSummary } from "@/server/api/escrow";
-import { safeUserName } from "@/server/api/users";
 
 import { ASSIGNMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONES } from "./labels";
 
@@ -20,16 +21,28 @@ import { ASSIGNMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONES }
  * Atama kuyruğunun tablosu; kuyruk sayfası ve kullanıcı sayfasının "Atamalar"
  * sekmesi (koala-admin#103) aynı satırı çizer. Süzme ve sayfalama burada
  * değil: gelen sayfa olduğu gibi çizilir.
+ *
+ * Her ad tıklanır (koala-admin#105): işçi ve işveren `SafeUserLink` ile
+ * kullanıcı sayfasına; ilan `job.read`, şirket `company.approve` varken
+ * kendi sayfasına. İzin bayrakları çağırandan gelir ve varsayılanı kapalı —
+ * bayrağı vermeyen bir çağıran (kullanıcı sekmesi) düz metin alır, izni
+ * olmayan birini 403 ekranına gönderen bir bağlantı çizmez.
  */
 export function AssignmentTable({
   rows,
   caption = "Atamalar",
   objectQuery = {},
+  canOpenJob = false,
+  canOpenCompany = false,
 }: {
   rows: readonly EscrowSummary[];
   caption?: string;
   /** Satır bağlantısına eklenen liste görünümü; nesne sayfasının kırıntısı geri okur. */
   objectQuery?: Readonly<Record<string, string>>;
+  /** `job.read` — ilan başlığı `/jobs/{id}`'ye bağlanır. */
+  canOpenJob?: boolean;
+  /** `company.approve` — şirket adı `/companies/{id}`'ye bağlanır (kimlik geldiyse). */
+  canOpenCompany?: boolean;
 }) {
   return (
     <Table caption={caption}>
@@ -49,12 +62,32 @@ export function AssignmentTable({
         {rows.map((row) => (
           <TableRow key={row.id}>
             <TableCell>{formatDateTime(row.assignmentDateTime)}</TableCell>
-            <TableCell>{row.jobTitle ?? EMPTY_VALUE}</TableCell>
-            <TableCell>{safeUserName(row.worker)}</TableCell>
             <TableCell>
-              {row.companyName === null
-                ? safeUserName(row.employer)
-                : `${safeUserName(row.employer)} · ${row.companyName}`}
+              {row.jobTitle === null ? (
+                EMPTY_VALUE
+              ) : canOpenJob ? (
+                <Link href={jobHref(row.jobId)} className="text-brand hover:underline">
+                  {row.jobTitle}
+                </Link>
+              ) : (
+                row.jobTitle
+              )}
+            </TableCell>
+            <TableCell>
+              <SafeUserLink user={row.worker} />
+            </TableCell>
+            <TableCell>
+              <SafeUserLink user={row.employer} />
+              {row.companyName === null ? null : (
+                <>
+                  {" · "}
+                  <CompanyLink
+                    companyId={row.companyId}
+                    companyName={row.companyName}
+                    canOpen={canOpenCompany}
+                  />
+                </>
+              )}
             </TableCell>
             <TableCell>
               <Badge>{ASSIGNMENT_STATUS_LABELS[row.status]}</Badge>

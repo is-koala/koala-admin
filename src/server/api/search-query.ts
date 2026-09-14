@@ -26,6 +26,14 @@ import { isKoalaApiError } from "./errors";
 export const SEARCH_QUERY_MIN_LENGTH = 2;
 export const SEARCH_QUERY_MAX_LENGTH = 100;
 
+/**
+ * Panelin tek arama parametresi (`?ara=`). Sabit burada, bileşende değil,
+ * çünkü liste görünümünü okuyan sunucu modülleri (`src/server/lists/*`) ve
+ * CSV rotaları JSX'siz bir dosyadan okumalı; `ListSearchForm` aynı adı
+ * yeniden dışa verir.
+ */
+export const SEARCH_PARAM = "ara";
+
 /** `AdminMessages.SEARCH_QUERY_TOO_LONG` → `KoalaException.deriveErrorCode`. */
 export const SEARCH_QUERY_TOO_LONG_CODE = "ADMIN_SEARCH_QUERY_TOO_LONG";
 

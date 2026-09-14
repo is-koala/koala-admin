@@ -115,6 +115,8 @@ export const adminPaymentSchema = z.object({
   jobAssignmentId: z.string(),
   jobId: nullableString,
   jobTitle: nullableString,
+  /** koala-backend#301; eski sunucuda yok → `null`, ad düz metin kalır (koala-admin#105). */
+  companyId: nullableString,
   companyName: nullableString,
   worker: safeUserSchema.nullish().transform((value) => value ?? null),
   employer: safeUserSchema.nullish().transform((value) => value ?? null),

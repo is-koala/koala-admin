@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { RecentOperationsList } from "@/components/escrow/recent-operations-list";
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  CsvExportLink,
+  DateRangeFilter,
   FilterId,
   FilterNotice,
   ListSearchForm,
@@ -15,27 +17,25 @@ import {
 } from "@/components/panel/queue";
 import { EmptyState, ErrorState } from "@/components/ui";
 import { objectQueryFor } from "@/lib/breadcrumb";
+import { dateRangeState, hasDateRange, type DateRange } from "@/lib/date-range";
 import { formatInteger } from "@/lib/format";
 import { disputesHref } from "@/lib/panel-href";
-import { DISPUTE_PAGING, getDisputes, type Dispute } from "@/server/api/disputes";
-import {
-  pageWindow,
-  readPaging,
-  readParam,
-  readUuidParam,
-  type PageWindow,
-  type SearchParams,
-} from "@/server/api/paging";
+import { getDisputes, type Dispute } from "@/server/api/disputes";
+import { pageWindow, type PageWindow, type SearchParams } from "@/server/api/paging";
 import { isKoalaApiError } from "@/server/api/errors";
-import {
-  SEARCH_QUERY_TOO_LONG_MESSAGE,
-  isSearchQueryTooLong,
-  readSearchQuery,
-} from "@/server/api/search-query";
+import { SEARCH_QUERY_TOO_LONG_MESSAGE, isSearchQueryTooLong } from "@/server/api/search-query";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { recentOperations } from "@/server/escrow/recent-operations";
+import {
+  DISPUTE_STATUS_FILTERS,
+  disputeListQuery,
+  disputeViewState,
+  readDisputeView,
+  type DisputeStatusFilter,
+  type DisputeView,
+} from "@/server/lists/disputes";
 
 import type { SummaryEntry } from "./dispute-detail";
 import { DisputeTable } from "./dispute-table";
@@ -48,11 +48,14 @@ export const metadata: Metadata = { title: "Uyuşmazlıklar" };
  *
  * Detay `/disputes/[id]` üzerinde `GET /admin/disputes/{id}`. Emanet tutarları
  * hâlâ atama özetinden (`payment.read`) gelir; DisputeDto tutar taşımaz.
+ *
+ * `?baslangic=&bitis=` `createdAt` aralığı (koala-admin#110, koala-backend#301);
+ * adres okuma `src/server/lists/disputes.ts`'te, CSV rotası aynı okuyucu.
  */
 
-const STATUS_FILTERS = ["ALL", "OPEN", "UNDER_REVIEW", "RESOLVED"] as const;
+const STATUS_FILTERS = DISPUTE_STATUS_FILTERS;
 
-type StatusFilter = (typeof STATUS_FILTERS)[number];
+type StatusFilter = DisputeStatusFilter;
 
 const FILTER_LABELS: Record<StatusFilter, string> = {
   ALL: "Bekleyenler",
@@ -67,7 +70,7 @@ interface PageProps {
 
 export default async function DisputesPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const paging = readPaging(params, DISPUTE_PAGING);
+  const view = readDisputeView(params);
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,12 +85,7 @@ export default async function DisputesPage({ searchParams }: PageProps) {
       />
 
       <RequirePermission permission="dispute.resolve">
-        <DisputeWorkspace
-          filter={readFilter(params.durum)}
-          paging={paging}
-          query={readSearchQuery(readParam(params, SEARCH_PARAM))}
-          userId={readUuidParam(params, "kullanici")}
-        />
+        <DisputeWorkspace view={view} />
       </RequirePermission>
     </div>
   );
@@ -105,21 +103,9 @@ type QueueResult =
       requestId: string | null;
     };
 
-async function loadQueue(
-  accessToken: string,
-  paging: { page: number; size: number },
-  filter: StatusFilter,
-  query: string | null,
-  userId: string | null,
-): Promise<QueueResult> {
+async function loadQueue(accessToken: string, view: DisputeView): Promise<QueueResult> {
   try {
-    const page = await getDisputes(accessToken, {
-      page: paging.page,
-      size: paging.size,
-      status: filter === "ALL" ? null : filter,
-      query,
-      userId,
-    });
+    const page = await getDisputes(accessToken, disputeListQuery(view));
     return {
       ok: true,
       disputes: page.content,
@@ -154,26 +140,15 @@ async function loadQueue(
   }
 }
 
-interface WorkspaceProps {
-  filter: StatusFilter;
-  paging: { page: number; size: number };
-  query: string | null;
-  /** `?kullanici=`: işçi, ilan sahibi ya da açan olarak bu kullanıcı (backend `userId`, koala-backend#283). */
-  userId: string | null;
-}
-
-async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProps) {
+/** `view.userId`: işçi, ilan sahibi ya da açan olarak bu kullanıcı (backend `userId`, koala-backend#283). */
+async function DisputeWorkspace({ view }: { view: DisputeView }) {
+  const { filter, paging, query, userId, range } = view;
   const context = await getStaffContext();
   const accessToken = await getKoalaAccessToken();
-  const queue = await loadQueue(accessToken, paging, filter, query, userId);
+  const queue = await loadQueue(accessToken, view);
   const search = activeSearch(query);
 
-  const viewState = {
-    ...(filter !== "ALL" ? { durum: filter } : {}),
-    boyut: String(paging.size),
-    ...(query === null ? {} : { [SEARCH_PARAM]: query }),
-    ...(userId === null ? {} : { kullanici: userId }),
-  };
+  const viewState = disputeViewState(view);
   const objectQuery = objectQueryFor(viewState, paging.page);
 
   const userNotice =
@@ -184,6 +159,7 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
           ...(filter !== "ALL" ? { durum: filter } : {}),
           boyut: String(paging.size),
           ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+          ...dateRangeState(range),
         })}
       >
         Bu görünüm <FilterId value={userId} /> kullanıcısının işçi, ilan sahibi ya da açan taraf
@@ -204,14 +180,24 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
     />
   );
 
+  const dateFilter = (
+    <DateRangeFilter id="uyusmazlik-tarih" pathname="/disputes" range={range} state={viewState} />
+  );
+
   if (!queue.ok && queue.searchTooLong === true) {
-    return <div className="flex flex-col gap-8">{searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}</div>;
+    return (
+      <div className="flex flex-col gap-8">
+        {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
+        {dateFilter}
+      </div>
+    );
   }
 
   if (!queue.ok) {
     return (
       <div className="flex flex-col gap-8">
         {searchForm()}
+        {dateFilter}
         <ErrorState
           title={queue.title}
           description={queue.description}
@@ -267,6 +253,7 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
 
         {userNotice}
         {searchForm()}
+        {dateFilter}
 
         <nav className="flex flex-wrap gap-2" aria-label="Duruma göre süzgeç">
           {STATUS_FILTERS.map((candidate) => (
@@ -274,7 +261,7 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
               key={candidate}
               href={{
                 pathname: "/disputes",
-                query: filterQuery(candidate, queue.window.page, query, userId),
+                query: filterQuery(candidate, queue.window.page, query, userId, range),
               }}
               aria-current={candidate === filter ? "page" : undefined}
               className={
@@ -289,15 +276,18 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
         </nav>
 
         <SearchResultSummary search={search} total={queue.window.totalElements} unit="uyuşmazlık" />
+        <CsvExportLink list="disputes" state={viewState} unit="uyuşmazlık" />
 
         {visible.length === 0 ? (
           <EmptyState
             title={
               search !== null
                 ? searchEmptyTitle(search)
-                : filter === "ALL"
-                  ? "Bekleyen uyuşmazlık yok."
-                  : `${FILTER_LABELS[filter]} durumunda uyuşmazlık yok.`
+                : hasDateRange(range)
+                  ? "Bu tarih aralığında uyuşmazlık yok."
+                  : filter === "ALL"
+                    ? "Bekleyen uyuşmazlık yok."
+                    : `${FILTER_LABELS[filter]} durumunda uyuşmazlık yok.`
             }
             description={
               search !== null
@@ -342,27 +332,19 @@ function summaryFailureDetail(summaries: Map<string, SummaryEntry>): string | nu
   return null;
 }
 
-function readSingle(value: string | string[] | undefined): string | null {
-  if (Array.isArray(value)) return value[0] ?? null;
-  return value === undefined || value.length === 0 ? null : value;
-}
-
-function readFilter(value: string | string[] | undefined): StatusFilter {
-  const candidate = readSingle(value);
-  return STATUS_FILTERS.find((entry) => entry === candidate) ?? "ALL";
-}
-
-/** Durum sekmesi aramayı ve kullanıcı süzgecini taşır: ikisi de başka durumda anlamlıdır. */
+/** Durum sekmesi aramayı, kullanıcı süzgecini ve tarih aralığını taşır: üçü de başka durumda anlamlıdır. */
 function filterQuery(
   filter: StatusFilter,
   page = 0,
   search: string | null = null,
   userId: string | null = null,
+  range: DateRange | null = null,
 ): Record<string, string> {
   const query: Record<string, string> = {};
   if (filter !== "ALL") query.durum = filter;
   if (page > 0) query.sayfa = String(page);
   if (search !== null) query[SEARCH_PARAM] = search;
   if (userId !== null) query.kullanici = userId;
+  if (range !== null) Object.assign(query, dateRangeState(range));
   return query;
 }

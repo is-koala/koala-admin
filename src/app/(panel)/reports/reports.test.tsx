@@ -866,3 +866,33 @@ describe("the deciding staff member's name and the report breadcrumb", () => {
     );
   });
 });
+
+/** koala-admin#110: tarih aralığı `createdAt` üzerinde backend'e gider; CSV bağlantısı görünümü taşır. */
+describe("the date range and the CSV link — koala-admin#110", () => {
+  it("turns baslangic/bitis into Istanbul day boundaries alongside the status filter", async () => {
+    stubMe(MODERATOR);
+    const queue = watchQueue([]);
+
+    const html = await render({ durum: "ACTIONED", baslangic: "2026-09-01", bitis: "2026-09-14" });
+
+    expect(queue.url?.searchParams.get("status")).toBe("ACTIONED");
+    expect(queue.url?.searchParams.get("from")).toBe("2026-08-31T21:00:00.000Z");
+    expect(queue.url?.searchParams.get("to")).toBe("2026-09-14T20:59:59.999Z");
+    expect(html).toContain('data-testid="sikayet-tarih-summary"');
+    expect(html).toContain("Bu tarih aralığında şikayet yok.");
+    expect(html).toContain('data-testid="reports-export"');
+    expect(html).toContain(
+      'href="/api/export/reports?durum=ACTIONED&amp;sirala=createdAt%2Cdesc&amp;baslangic=2026-09-01&amp;bitis=2026-09-14"',
+    );
+  });
+
+  it("drops a day that is not a calendar day before it reaches the backend", async () => {
+    stubMe(MODERATOR);
+    const queue = watchQueue([row()]);
+
+    const html = await render({ bitis: "2026-02-30" });
+
+    expect(queue.url?.searchParams.has("to")).toBe(false);
+    expect(html).not.toContain('data-testid="sikayet-tarih-summary"');
+  });
+});

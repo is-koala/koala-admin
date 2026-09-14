@@ -19,9 +19,10 @@ import { navLabel, type NavRoutePath } from "@/server/authz/routes";
 
 /**
  * Nesne adresine taşınan ve kırıntının geri okuduğu liste anahtarları. Panelin
- * Türkçe URL sözlüğü: sayfalama üçlüsü, durum, arama ve kimlik süzgeçleri.
- * `atama`/`hakedis` gibi tekil bakış anahtarları bilerek yok — onlar süzgeç
- * değil, aynı sayfadaki bir form doldurmasıdır.
+ * Türkçe URL sözlüğü: sayfalama üçlüsü, durum, arama, kimlik süzgeçleri ve
+ * tarih aralığı (koala-admin#110). `atama`/`hakedis` gibi tekil bakış
+ * anahtarları bilerek yok — onlar süzgeç değil, aynı sayfadaki bir form
+ * doldurmasıdır.
  */
 export const QUEUE_STATE_KEYS = [
   "durum",
@@ -34,6 +35,8 @@ export const QUEUE_STATE_KEYS = [
   "sirket",
   "kullanici",
   "sikayetci",
+  "baslangic",
+  "bitis",
 ] as const;
 
 export type QueueState = Readonly<Record<string, string>>;

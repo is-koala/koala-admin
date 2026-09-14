@@ -371,6 +371,45 @@ describe("an OWNER on the queue", () => {
     expect(html).toContain("İncelemede durumunda uyuşmazlık yok.");
   });
 
+  /** koala-admin#110: tarih aralığı `createdAt` üzerinde backend'e gider; CSV bağlantısı görünümü taşır. */
+  it("turns baslangic/bitis into Istanbul day boundaries and carries them into the status tabs and export link", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    const disputes = watchDisputes(emptyQueue);
+    watchSummary();
+
+    const html = await renderServerComponent(
+      <DisputesPage
+        searchParams={params({ durum: "RESOLVED", baslangic: "2026-09-01", bitis: "2026-09-14" })}
+      />,
+    );
+
+    expect(disputes.url?.searchParams.get("status")).toBe("RESOLVED");
+    expect(disputes.url?.searchParams.get("from")).toBe("2026-08-31T21:00:00.000Z");
+    expect(disputes.url?.searchParams.get("to")).toBe("2026-09-14T20:59:59.999Z");
+    expect(html).toContain('data-testid="uyusmazlik-tarih-summary"');
+    expect(html).toContain("Bu tarih aralığında uyuşmazlık yok.");
+    expect(html).toContain(
+      'href="/disputes?durum=OPEN&amp;baslangic=2026-09-01&amp;bitis=2026-09-14"',
+    );
+    expect(html).toContain('data-testid="disputes-export"');
+    expect(html).toContain(
+      'href="/api/export/disputes?durum=RESOLVED&amp;baslangic=2026-09-01&amp;bitis=2026-09-14"',
+    );
+  });
+
+  it("drops a day that is not a calendar day before it reaches the backend", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    const disputes = watchDisputes(emptyQueue);
+    watchSummary();
+
+    const html = await renderServerComponent(
+      <DisputesPage searchParams={params({ baslangic: "2026-13-01" })} />,
+    );
+
+    expect(disputes.url?.searchParams.has("from")).toBe(false);
+    expect(html).not.toContain('data-testid="uyusmazlik-tarih-summary"');
+  });
+
   it("pages through GET /admin/disputes instead of truncating the first slice", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     let requestedPage: string | null = null;
