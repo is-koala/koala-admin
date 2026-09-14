@@ -1,5 +1,7 @@
 import type { Route } from "next";
 
+import { USER_TAB_PARAM, type UserTab } from "@/lib/user-tabs";
+
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isUuid(value: string): boolean {
@@ -77,24 +79,7 @@ export function userHrefOrNull(userId: string | null | undefined): Route | null 
   return userId !== null && userId !== undefined && isUuid(userId) ? userHref(userId) : null;
 }
 
-/**
- * Kullanıcı sayfasının sekmeleri (koala-admin#103). Sekme URL'de `?sekme=`
- * ile taşınır ki geri dönüşte ve paylaşılan bağlantıda korunsun; `genel`
- * varsayılan olduğu için adrese yazılmaz.
- */
-export const USER_TABS = [
-  "genel",
-  "atamalar",
-  "hakedisler",
-  "uyusmazliklar",
-  "sikayetler",
-  "denetim",
-] as const;
-
-export type UserTab = (typeof USER_TABS)[number];
-
-export const USER_TAB_PARAM = "sekme";
-
+/** Sekme `?sekme=` ile taşınır; `genel` varsayılan olduğu için adrese yazılmaz. */
 export function userTabHref(userId: string, tab: UserTab): Route {
   return withQuery(`/users/${userId}`, tab === "genel" ? {} : { [USER_TAB_PARAM]: tab });
 }
@@ -186,6 +171,11 @@ export function disputesHref(state: Readonly<Record<string, string>> = {}): Rout
 
 export function disputesForUserHref(userId: string): Route {
   return disputesHref({ kullanici: userId });
+}
+
+/** Uyuşmazlık ucu "hepsi" almaz: bekleyenler `disputesForUserHref`, çözülmüşler burası. */
+export function resolvedDisputesForUserHref(userId: string): Route {
+  return disputesHref({ kullanici: userId, durum: "RESOLVED" });
 }
 
 export function jobsForCompanyHref(companyId: string): Route {

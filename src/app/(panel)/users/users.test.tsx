@@ -300,6 +300,7 @@ describe("a bookmarked marketplace user", () => {
   function stubUser(user: UserRow) {
     let objectCalls = 0;
     let reportCalls = 0;
+    let roleCalls = 0;
     server.use(
       http.get(`${USERS}/${user.id}`, () => {
         objectCalls += 1;
@@ -313,8 +314,9 @@ describe("a bookmarked marketplace user", () => {
           data: user,
         });
       }),
-      http.get(apiUrl("/admin/users/:userId/roles"), () =>
-        HttpResponse.json({
+      http.get(apiUrl("/admin/users/:userId/roles"), () => {
+        roleCalls += 1;
+        return HttpResponse.json({
           success: true,
           message: "Roller listelendi.",
           httpStatus: "200 OK",
@@ -329,8 +331,8 @@ describe("a bookmarked marketplace user", () => {
               grantedByName: "Sistem",
             },
           ],
-        }),
-      ),
+        });
+      }),
       http.get(apiUrl("/admin/reports"), () => {
         reportCalls += 1;
         return HttpResponse.json({
@@ -359,6 +361,9 @@ describe("a bookmarked marketplace user", () => {
       get reportCalls() {
         return reportCalls;
       },
+      get roleCalls() {
+        return roleCalls;
+      },
     };
   }
 
@@ -373,17 +378,19 @@ describe("a bookmarked marketplace user", () => {
 
     expect(seen.objectCalls).toBe(1);
     expect(seen.reportCalls).toBe(0);
+    // Roller "Rol / Denetim" sekmesinde; varsayılan sekme rol isteği çıkarmaz.
+    expect(seen.roleCalls).toBe(0);
     expect(html).toContain("Ada Yılmaz");
     expect(html).not.toContain(`kullanici=${user.id}`);
     expect(html).not.toMatch(/>Askıya al</);
     expect(html).not.toContain("suspend");
   });
 
-  /** koala-admin#103: roller "Rol / Denetim" sekmesinde; varsayılan sekme rol isteği çıkarmaz. */
+  /** koala-admin#103: roller "Rol / Denetim" sekmesinde. */
   it("lists the marketplace roles on the denetim tab", async () => {
     stubMe(READER);
     const user = row();
-    stubUser(user);
+    const seen = stubUser(user);
 
     const html = (
       await renderServerComponent(
@@ -394,6 +401,7 @@ describe("a bookmarked marketplace user", () => {
       )
     ).replaceAll("<!-- -->", "");
 
+    expect(seen.roleCalls).toBe(1);
     expect(html).toContain("ROLE_USER");
     expect(html).toContain("Sistem");
     expect(html).not.toContain("Rol ver");

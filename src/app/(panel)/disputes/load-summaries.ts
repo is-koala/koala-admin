@@ -5,15 +5,15 @@ import { getEscrowSummary } from "@/server/api/escrow";
 import type { SummaryEntry } from "./dispute-detail";
 
 /**
- * One escrow read per dispute on the page, in parallel.
+ * Sayfadaki her uyuşmazlık için bir emanet okuması, paralel.
  *
- * This is an N+1 and it is deliberate rather than overlooked. `DisputeDto`
- * carries no money at all, so the alternatives were: show no amount in the
- * queue, or compute one in the panel (which it forbids). Callers bound the
- * fan-out with their page size (`DISPUTE_PAGING`, or the user page's ten rows).
+ * Bu bir N+1 ve gözden kaçmış değil, bilinçli. `DisputeDto` hiç para taşımaz;
+ * seçenekler kuyrukta tutar göstermemek ya da tutarı panelde hesaplamaktı
+ * (panel bunu yasaklar). Yayılımı çağıran sınırlar: kuyruk sayfası
+ * `DISPUTE_PAGING` ile, kullanıcı sayfası on satırla.
  *
- * `allSettled`, never `all`: one assignment the backend will not talk about
- * must not blank the whole queue.
+ * `allSettled`, asla `all`: backend'in konuşmadığı tek bir atama bütün
+ * kuyruğu karartmamalı.
  */
 export async function loadSummaries(
   accessToken: string,

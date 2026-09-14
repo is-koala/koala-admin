@@ -6,29 +6,30 @@ import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { AuditLogTable } from "@/components/panel/audit-log-table";
 import { QueueLoadFailure, type QueueFailure } from "@/components/panel/queue";
 import { Badge, EmptyState } from "@/components/ui";
-import { NO_AUDIT_FILTERS, type AuditEntry } from "@/lib/audit-log";
+import { NO_AUDIT_FILTERS } from "@/lib/audit-log";
 import { formatInteger } from "@/lib/format";
 import {
   assignmentsForEmployerHref,
   assignmentsForWorkerHref,
   auditLogForResourceHref,
   disputesForUserHref,
-  disputesHref,
   payoutsForWorkerHref,
   reportsAboutUserHref,
   reportsByReporterHref,
+  resolvedDisputesForUserHref,
   userTabHref,
-  type UserTab,
 } from "@/lib/panel-href";
+import { USER_TABS, USER_TAB_SPECS, isTabEnabled, type UserTab } from "@/lib/user-tabs";
 import { getAuditLog } from "@/server/api/audit";
 import { getDisputes, type Dispute } from "@/server/api/disputes";
 import { ASSIGNMENT_PAGING, getAdminAssignments } from "@/server/api/escrow";
 import { getMarketplaceUserRoles } from "@/server/api/marketplace-user-roles";
 import type { AdminUserCounts, MarketplaceUserDetail } from "@/server/api/marketplace-users";
-import { readPaging } from "@/server/api/paging";
+import { firstPage } from "@/server/api/paging";
 import { PAYOUT_PAGING, PAYOUT_STATUSES, getPayouts } from "@/server/api/payout-reconciliation";
 import { REPORT_PAGING, getReports } from "@/server/api/reports";
 import type { PageDto } from "@/server/api/types";
+import { permissionLabelsFor } from "@/server/authz/audit-permission-labels";
 import { isPermission, permissionLabel, type Permission } from "@/server/authz/permissions";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
@@ -41,10 +42,10 @@ import { ReportTable } from "../../reports/report-table";
 import { UserRoleDetail, type UserGrants } from "../user-roles";
 
 /**
- * Kullanıcı sayfasının sekmeleri (koala-admin#103). Sekme `?sekme=` ile
- * URL'de taşınır; yalnız seçili sekmenin listesi istenir, diğerleri için
- * backend'e gidilmez. Her liste ilk on satırı çizer ve süzgeçli liste
- * sayfasına "Tümünü aç" verir — süzgeç, sayfalama ve arama orada.
+ * Kullanıcı sayfasının sekme şeridi ve sekme içerikleri (koala-admin#103).
+ * Sekme tanımları `@/lib/user-tabs` — izin kuralı yalnız orada. Yalnız
+ * seçili sekmenin listesi istenir; her liste ilk on satırı çizer ve süzgeçli
+ * liste sayfasına "Tümünü aç" verir — süzgeç, sayfalama ve arama orada.
  *
  * İzin politikası liste sayfalarınınkiyle aynı: sekme görünür ama izin yoksa
  * bağlantı verilmez, seçilirse gerekçe yazılır ve istek çıkmaz. `denetim`
@@ -54,55 +55,6 @@ import { UserRoleDetail, type UserGrants } from "../user-roles";
 
 /** Sekme başına satır; toplam sayı başlıkta, kalanı "Tümünü aç" ile. */
 export const INLINE_ROWS = 10;
-
-export interface UserTabSpec {
-  readonly key: UserTab;
-  readonly label: string;
-  /** Sekmenin listesini açan izin; `null` ise `user.read` yeter. */
-  readonly permission: Permission | null;
-  /** Backend sayaçlarından sekme rozetine giden toplam. */
-  readonly count: (counts: AdminUserCounts) => number;
-}
-
-export const USER_TAB_SPECS: readonly UserTabSpec[] = [
-  { key: "genel", label: "Genel", permission: null, count: () => 0 },
-  {
-    key: "atamalar",
-    label: "Atamalar",
-    permission: "payment.read",
-    count: (counts) => counts.assignmentsAsWorker + counts.assignmentsAsEmployer,
-  },
-  {
-    key: "hakedisler",
-    label: "Hakedişler",
-    permission: "payout.reconcile",
-    count: (counts) => counts.payouts,
-  },
-  {
-    key: "uyusmazliklar",
-    label: "Uyuşmazlıklar",
-    permission: "dispute.resolve",
-    count: (counts) => counts.disputes,
-  },
-  {
-    key: "sikayetler",
-    label: "Şikayetler",
-    permission: "content.moderate",
-    count: (counts) => counts.reportsReceived + counts.reportsMade,
-  },
-  { key: "denetim", label: "Rol / Denetim", permission: null, count: () => 0 },
-];
-
-export function userTabSpec(tab: UserTab): UserTabSpec {
-  const spec = USER_TAB_SPECS.find((entry) => entry.key === tab);
-  /* v8 ignore next -- `USER_TABS` ve `USER_TAB_SPECS` aynı anahtar kümesini taşır. */
-  if (spec === undefined) throw new Error(`Bilinmeyen kullanıcı sekmesi: ${tab}`);
-  return spec;
-}
-
-export function isTabEnabled(spec: UserTabSpec, held: ReadonlySet<Permission>): boolean {
-  return spec.permission === null || held.has(spec.permission);
-}
 
 export function UserTabNav({
   userId,
@@ -121,36 +73,41 @@ export function UserTabNav({
       aria-label="Kullanıcı sekmeleri"
       data-testid="user-tabs"
     >
-      {USER_TAB_SPECS.map((spec) => {
-        const enabled = isTabEnabled(spec, held);
-        const total = counts === null ? 0 : spec.count(counts);
+      {USER_TABS.map((tab) => {
+        const spec = USER_TAB_SPECS[tab];
+        const total = counts === null || spec.count === null ? 0 : spec.count(counts);
         const badge =
           total > 0 ? (
-            <Badge tone={spec.key === activeTab ? "brand" : "neutral"} className="ml-1.5">
+            <Badge tone={tab === activeTab ? "brand" : "neutral"} className="ml-1.5">
               {formatInteger(total)}
             </Badge>
           ) : null;
-        if (!enabled) {
+        if (!isTabEnabled(tab, held)) {
+          // Gerekçe pilin içinde görünür metin, `title` değil: klavye ve ekran
+          // okuyucu da görsün. `tabIndex` odaklanabilsin diye; bağlantı değil.
           return (
             <span
-              key={spec.key}
+              key={tab}
               aria-disabled="true"
-              data-testid={`user-tab-${spec.key}-disabled`}
-              title={`${spec.permission ?? ""} izni ister`}
-              className="cursor-not-allowed rounded-md border border-dashed border-border-subtle px-3 py-1.5 text-sm font-medium text-ink-muted"
+              tabIndex={0}
+              data-testid={`user-tab-${tab}-disabled`}
+              className="inline-flex cursor-not-allowed items-baseline gap-1.5 rounded-md border border-dashed border-border-subtle px-3 py-1.5 text-sm font-medium text-ink-muted"
             >
               {spec.label}
               {badge}
+              <span className="text-xs font-normal">
+                · <code className="font-mono">{spec.permission}</code> gerekir
+              </span>
             </span>
           );
         }
-        const active = spec.key === activeTab;
+        const active = tab === activeTab;
         return (
           <Link
-            key={spec.key}
-            href={userTabHref(userId, spec.key)}
+            key={tab}
+            href={userTabHref(userId, tab)}
             aria-current={active ? "page" : undefined}
-            data-testid={`user-tab-${spec.key}`}
+            data-testid={`user-tab-${tab}`}
             className={
               active
                 ? "rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white"
@@ -167,7 +124,9 @@ export function UserTabNav({
 }
 
 /** Seçili sekmenin izni yok: gerekçe, istek yok. */
-export function DisabledTabPanel({ spec }: { spec: UserTabSpec }) {
+export function DisabledTabPanel({ tab }: { tab: UserTab }) {
+  const spec = USER_TAB_SPECS[tab];
+  const permission: Permission | null = spec.permission;
   return (
     <section
       className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4"
@@ -175,10 +134,8 @@ export function DisabledTabPanel({ spec }: { spec: UserTabSpec }) {
     >
       <h2 className="text-sm font-semibold">{spec.label}</h2>
       <p className="max-w-prose text-sm text-ink-muted">
-        Bu sekme <code className="font-mono">{spec.permission}</code> ister
-        {spec.permission !== null && isPermission(spec.permission)
-          ? ` (${permissionLabel(spec.permission)})`
-          : ""}
+        Bu sekme <code className="font-mono">{permission}</code> ister
+        {permission !== null && isPermission(permission) ? ` (${permissionLabel(permission)})` : ""}
         ; liste isteği gönderilmedi. Yetki kararını backend verir, panel yalnız gereksiz isteği
         önler.
       </p>
@@ -268,7 +225,7 @@ export async function AssignmentsTab({
   accessToken: string;
   userId: string;
 }) {
-  const paging = readPaging({ boyut: String(INLINE_ROWS) }, ASSIGNMENT_PAGING);
+  const paging = firstPage(ASSIGNMENT_PAGING, INLINE_ROWS);
   const [asWorker, asEmployer] = await Promise.all([
     inline(() => getAdminAssignments(accessToken, { paging, workerId: userId })),
     inline(() => getAdminAssignments(accessToken, { paging, employerId: userId })),
@@ -280,7 +237,7 @@ export async function AssignmentsTab({
         id="assignments-worker"
         title="İşçi olarak atamaları"
         unit="atama"
-        permission="payment.read"
+        permission={USER_TAB_SPECS.atamalar.permission}
         allHref={assignmentsForWorkerHref(userId)}
         result={asWorker}
         emptyTitle="Bu kullanıcının işçi olarak ataması yok."
@@ -291,7 +248,7 @@ export async function AssignmentsTab({
         id="assignments-employer"
         title="İşveren olarak atamaları"
         unit="atama"
-        permission="payment.read"
+        permission={USER_TAB_SPECS.atamalar.permission}
         allHref={assignmentsForEmployerHref(userId)}
         result={asEmployer}
         emptyTitle="Bu kullanıcının işveren olarak ataması yok."
@@ -310,7 +267,7 @@ export async function AssignmentsTab({
  * yoksa backend yalnız PROCESSING dönerdi ve rozetle liste tutmazdı.
  */
 export async function PayoutsTab({ accessToken, userId }: { accessToken: string; userId: string }) {
-  const paging = readPaging({ boyut: String(INLINE_ROWS) }, PAYOUT_PAGING);
+  const paging = firstPage(PAYOUT_PAGING, INLINE_ROWS);
   const result = await inline(() =>
     getPayouts(accessToken, { paging, workerId: userId, status: PAYOUT_STATUSES }),
   );
@@ -320,7 +277,7 @@ export async function PayoutsTab({ accessToken, userId }: { accessToken: string;
       id="payouts"
       title="Hakedişleri"
       unit="hakediş"
-      permission="payout.reconcile"
+      permission={USER_TAB_SPECS.hakedisler.permission}
       allHref={payoutsForWorkerHref(userId)}
       result={result}
       emptyTitle="Bu kullanıcının hakedişi yok."
@@ -367,7 +324,7 @@ export async function DisputesTab({
         id="disputes-pending"
         title="Bekleyen uyuşmazlıkları"
         unit="uyuşmazlık"
-        permission="dispute.resolve"
+        permission={USER_TAB_SPECS.uyusmazliklar.permission}
         allHref={disputesForUserHref(userId)}
         result={pending}
         emptyTitle="Bu kullanıcının bekleyen uyuşmazlığı yok."
@@ -380,8 +337,8 @@ export async function DisputesTab({
         id="disputes-resolved"
         title="Çözülmüş uyuşmazlıkları"
         unit="uyuşmazlık"
-        permission="dispute.resolve"
-        allHref={disputesHref({ kullanici: userId, durum: "RESOLVED" })}
+        permission={USER_TAB_SPECS.uyusmazliklar.permission}
+        allHref={resolvedDisputesForUserHref(userId)}
         result={resolved}
         emptyTitle="Bu kullanıcının çözülmüş uyuşmazlığı yok."
       >
@@ -401,7 +358,7 @@ export async function DisputesTab({
 
 /** Hakkındaki (`reportedUserId`) ve açtığı (`reporterId`) şikayetler, her durumda. */
 export async function ReportsTab({ accessToken, userId }: { accessToken: string; userId: string }) {
-  const paging = readPaging({ boyut: String(INLINE_ROWS) }, REPORT_PAGING);
+  const paging = firstPage(REPORT_PAGING, INLINE_ROWS);
   const [about, made] = await Promise.all([
     inline(() => getReports(accessToken, { status: null, reportedUserId: userId, paging })),
     inline(() => getReports(accessToken, { status: null, reporterId: userId, paging })),
@@ -413,7 +370,7 @@ export async function ReportsTab({ accessToken, userId }: { accessToken: string;
         id="reports-about"
         title="Hakkındaki şikayetler"
         unit="şikayet"
-        permission="content.moderate"
+        permission={USER_TAB_SPECS.sikayetler.permission}
         allHref={reportsAboutUserHref(userId)}
         result={about}
         emptyTitle="Bu kullanıcı hakkında şikayet yok."
@@ -424,7 +381,7 @@ export async function ReportsTab({ accessToken, userId }: { accessToken: string;
         id="reports-made"
         title="Açtığı şikayetler"
         unit="şikayet"
-        permission="content.moderate"
+        permission={USER_TAB_SPECS.sikayetler.permission}
         allHref={reportsByReporterHref(userId)}
         result={made}
         emptyTitle="Bu kullanıcı şikayet açmamış."
@@ -505,21 +462,9 @@ export async function AuditTab({
           result={audit}
           emptyTitle="Bu kullanıcı için kaydedilmiş personel işlemi yok."
         >
-          {(rows) => (
-            <AuditLogTable entries={rows} permissionLabels={auditPermissionLabels(rows)} />
-          )}
+          {(rows) => <AuditLogTable entries={rows} permissionLabels={permissionLabelsFor(rows)} />}
         </InlineSection>
       )}
     </div>
   );
-}
-
-/** Denetim tablosu Client Component; izin etiketleri sunucuda çözülür. */
-function auditPermissionLabels(entries: readonly AuditEntry[]): Record<string, string> {
-  const labels: Record<string, string> = {};
-  for (const entry of entries) {
-    if (isPermission(entry.permission))
-      labels[entry.permission] = permissionLabel(entry.permission);
-  }
-  return labels;
 }

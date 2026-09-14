@@ -225,8 +225,11 @@ describe("the tab strip and the URL parameter", () => {
       ["uyusmazliklar", "dispute.resolve"],
       ["sikayetler", "content.moderate"],
     ]) {
-      expect(html).toContain(
-        `data-testid="user-tab-${tab}-disabled" title="${permission} izni ister"`,
+      // Gerekçe pilin içinde görünür metin; klavye için odaklanabilir, bağlantı değil.
+      expect(html).toMatch(
+        new RegExp(
+          `<span aria-disabled="true" tabindex="0" data-testid="user-tab-${tab}-disabled"[^>]*>[^]*?<code class="font-mono">${permission}</code> gerekir`,
+        ),
       );
       expect(html).not.toContain(`href="/users/${USER_ID}?sekme=${tab}"`);
     }

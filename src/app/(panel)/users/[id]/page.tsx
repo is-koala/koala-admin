@@ -9,16 +9,14 @@ import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
 import { EMPTY_VALUE, formatBoolean, formatDateTime, formatInteger } from "@/lib/format";
 import {
-  USER_TABS,
-  USER_TAB_PARAM,
   accountDeletionHref,
   companyHref,
   isUuid,
   reportHref,
   reportsForUserHref,
   userTabHref,
-  type UserTab,
 } from "@/lib/panel-href";
+import { USER_TABS, USER_TAB_PARAM, isTabEnabled, type UserTab } from "@/lib/user-tabs";
 import { getReports, REPORT_PAGING, reportReasonLabel, type Report } from "@/server/api/reports";
 import {
   badgeFamilyLabel,
@@ -47,8 +45,6 @@ import {
   PayoutsTab,
   ReportsTab,
   UserTabNav,
-  isTabEnabled,
-  userTabSpec,
 } from "./user-tabs";
 
 export const metadata: Metadata = { title: "Kullanıcı" };
@@ -68,7 +64,8 @@ export const metadata: Metadata = { title: "Kullanıcı" };
  *
  * Kimlik kartlarının altı sekmeli (koala-admin#103): `?sekme=` ile
  * `genel | atamalar | hakedisler | uyusmazliklar | sikayetler | denetim`.
- * Yalnız seçili sekmenin listesi istenir; sekme tanımları `user-tabs.tsx`.
+ * Yalnız seçili sekmenin listesi istenir; sekme tanımları `@/lib/user-tabs`,
+ * içerikleri `user-tabs.tsx`.
  */
 export default async function UserDetailPage({
   params,
@@ -129,8 +126,7 @@ async function UserObject({ id, tab }: { id: string; tab: UserTab }) {
   }
 
   const held = new Set<Permission>(context.staff?.permissions ?? []);
-  const spec = userTabSpec(tab);
-  const enabled = isTabEnabled(spec, held);
+  const enabled = isTabEnabled(tab, held);
 
   return (
     <div className="flex flex-col gap-4">
@@ -161,7 +157,7 @@ async function UserObject({ id, tab }: { id: string; tab: UserTab }) {
       <UserTabNav userId={user.id} activeTab={tab} held={held} counts={user.counts} />
 
       {!enabled ? (
-        <DisabledTabPanel spec={spec} />
+        <DisabledTabPanel tab={tab} />
       ) : tab === "genel" ? (
         <GeneralTab user={user} held={held} accessToken={accessToken} canModerate={canModerate} />
       ) : tab === "atamalar" ? (
@@ -317,10 +313,8 @@ function VerificationCard({
 interface CountEntry {
   readonly key: keyof AdminUserCounts;
   readonly label: string;
-  /** Sayacın açıldığı sekme; `null` ise o sayacın listesi yok (başvuru ucu açılmadı). */
+  /** Sayacın açıldığı sekme; `null` ise o sayacın listesi yok (başvuru ucu açılmadı). İzin sekmenin. */
   readonly tab: UserTab | null;
-  /** Sekmenin listesini açan izin; izin yoksa yalnız sayı yazılır. */
-  readonly permission: Permission | null;
 }
 
 /**
@@ -331,34 +325,14 @@ interface CountEntry {
  * yalnız sayı.
  */
 const COUNT_ENTRIES: readonly CountEntry[] = [
-  { key: "applications", label: "Başvurular", tab: null, permission: null },
-  {
-    key: "assignmentsAsWorker",
-    label: "Atamalar (işçi)",
-    tab: "atamalar",
-    permission: "payment.read",
-  },
-  {
-    key: "assignmentsAsEmployer",
-    label: "Atamalar (işveren)",
-    tab: "atamalar",
-    permission: "payment.read",
-  },
-  { key: "payments", label: "Ödemeler", tab: "atamalar", permission: "payment.read" },
-  { key: "payouts", label: "Hakedişler", tab: "hakedisler", permission: "payout.reconcile" },
-  { key: "disputes", label: "Uyuşmazlıklar", tab: "uyusmazliklar", permission: "dispute.resolve" },
-  {
-    key: "reportsReceived",
-    label: "Hakkındaki şikayetler",
-    tab: "sikayetler",
-    permission: "content.moderate",
-  },
-  {
-    key: "reportsMade",
-    label: "Açtığı şikayetler",
-    tab: "sikayetler",
-    permission: "content.moderate",
-  },
+  { key: "applications", label: "Başvurular", tab: null },
+  { key: "assignmentsAsWorker", label: "Atamalar (işçi)", tab: "atamalar" },
+  { key: "assignmentsAsEmployer", label: "Atamalar (işveren)", tab: "atamalar" },
+  { key: "payments", label: "Ödemeler", tab: "atamalar" },
+  { key: "payouts", label: "Hakedişler", tab: "hakedisler" },
+  { key: "disputes", label: "Uyuşmazlıklar", tab: "uyusmazliklar" },
+  { key: "reportsReceived", label: "Hakkındaki şikayetler", tab: "sikayetler" },
+  { key: "reportsMade", label: "Açtığı şikayetler", tab: "sikayetler" },
 ];
 
 function HistoryCounts({
@@ -387,8 +361,7 @@ function HistoryCounts({
       </div>
       <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
         {COUNT_ENTRIES.map((entry) => {
-          const canOpen =
-            entry.tab !== null && entry.permission !== null && held.has(entry.permission);
+          const canOpen = entry.tab !== null && isTabEnabled(entry.tab, held);
           return (
             <div key={entry.key} className="flex flex-col gap-0.5">
               <dt className="text-xs text-ink-muted">{entry.label}</dt>
