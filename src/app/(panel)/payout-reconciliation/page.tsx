@@ -15,9 +15,9 @@ import {
   searchEmptyTitle,
 } from "@/components/panel/queue";
 import { PayoutReconciliationForm } from "@/components/payout-reconciliation/payout-reconciliation-form";
+import { SafeUserLink } from "@/components/panel/safe-user-link";
 import {
   Badge,
-  type BadgeTone,
   EmptyState,
   Table,
   TableBody,
@@ -33,7 +33,6 @@ import {
   isUuid,
   payoutHref,
   payoutsHref,
-  userHrefOrNull,
 } from "@/lib/panel-href";
 import {
   PAYOUT_PAGING,
@@ -41,7 +40,6 @@ import {
   PAYOUT_STATUS_LABELS,
   getPayouts,
   type Payout,
-  type PayoutStatus,
 } from "@/server/api/payout-reconciliation";
 import {
   pageWindow,
@@ -55,22 +53,14 @@ import {
   isSearchQueryTooLong,
   readSearchQuery,
 } from "@/server/api/search-query";
-import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { submitPayoutReconciliation } from "./actions";
+import { PAYOUT_STATUS_TONES } from "./labels";
 
 export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
-
-/** Nesne sayfasıyla aynı renkler (`[id]/page.tsx`); liste rozeti artık satırın durumundan okunur. */
-const PAYOUT_TONES: Record<PayoutStatus, BadgeTone> = {
-  PENDING: "neutral",
-  PROCESSING: "warning",
-  COMPLETED: "success",
-  FAILED: "danger",
-};
 
 /**
  * PROCESSING kuyruğu + UUID yedek. Liste `GET /admin/payouts` (`payout.reconcile`);
@@ -269,11 +259,11 @@ function PayoutRow({
         </Link>
       </TableCell>
       <TableCell>
-        <Recipient user={row.recipient} />
+        <SafeUserLink user={row.recipient} />
       </TableCell>
       <TableCell>{formatCurrency(row.amount, row.currency)}</TableCell>
       <TableCell>
-        <Badge tone={PAYOUT_TONES[row.status]}>{PAYOUT_STATUS_LABELS[row.status]}</Badge>
+        <Badge tone={PAYOUT_STATUS_TONES[row.status]}>{PAYOUT_STATUS_LABELS[row.status]}</Badge>
       </TableCell>
       <TableCell>
         <Link
@@ -305,23 +295,6 @@ function PayoutRow({
         )}
       </TableCell>
     </TableRow>
-  );
-}
-
-/**
- * Alıcı işçi; ad yoksa kullanıcı adı, o da yoksa kimlik (`safeUserName`).
- * Kimlik UUID ise kullanıcı sayfasına gider; eski sunucu `recipient`
- * göndermiyorsa hücre "—" kalır.
- */
-function Recipient({ user }: { user: Payout["recipient"] }) {
-  if (user === null) return <>{EMPTY_VALUE}</>;
-  const href = userHrefOrNull(user.id);
-  const name = safeUserName(user);
-  if (href === null) return <span>{name}</span>;
-  return (
-    <Link href={href} className="text-brand hover:underline">
-      {name}
-    </Link>
   );
 }
 

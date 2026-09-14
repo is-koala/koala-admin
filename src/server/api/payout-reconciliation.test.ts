@@ -97,7 +97,6 @@ describe("the staff payout queue", () => {
       },
     };
     const { recipient: _dropped, ...withoutRecipient } = PAYOUT;
-    void _dropped;
     server.use(
       http.get(apiUrl(PAYOUTS_PATH), () =>
         HttpResponse.json({

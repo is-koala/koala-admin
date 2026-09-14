@@ -262,6 +262,8 @@ describe("the worker filter — koala-admin#100", () => {
     const html = await render();
 
     expect(html).toContain("İşçi");
+    // Tarih hücresinden sonraki İşçi hücresi "—", ardından tutar gelir.
+    expect(html).toMatch(/<\/a><\/td><td[^>]*>—<\/td><td[^>]*>₺1\.000,00/);
     expect(html).toContain("İşleniyor");
     expect(html).toContain("Onayla");
     expect(html).not.toContain('href="/users/');
