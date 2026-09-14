@@ -3,10 +3,17 @@ import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
+import { ObjectTimeline } from "@/components/panel/object-timeline";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
+import { TimelineBuilder, type TimelineEvent } from "@/lib/object-timeline";
 import { companiesHref, isUuid } from "@/lib/panel-href";
-import { getCompany } from "@/server/api/companies";
+import {
+  companyApprovalStatusLabel,
+  getCompany,
+  safeUserDisplayName,
+  type CompanyReview,
+} from "@/server/api/companies";
 import { readParam, type SearchParams } from "@/server/api/paging";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
@@ -113,10 +120,50 @@ async function CompanyObject({
       )}
       <DecisionDeliveryNotice />
       <CompanyReviewBody company={company} returnTo={returnTo} canOpenJobs={canOpenJobs} />
+      <ObjectTimeline
+        resourceId={company.id}
+        subject="Bu şirket"
+        events={companyTimelineEvents(company)}
+      >
+        Başvuru ve kayıtlı karar DTO&apos;dan; onay, ret ve galeri görseli kaldırma gibi personel
+        işlemleri denetim izinden, bu şirket kimliğiyle.
+      </ObjectTimeline>
       <ObjectAuditPointer resourceId={company.id} linkLabel="Bu şirketin denetim kayıtlarını aç">
         Onay, ret ve galeri görseli kaldırma backend tarafından bu şirket kimliğiyle denetim kaydına
         yazılır; personelin bu kaydı açması da kayda düşer.
       </ObjectAuditPointer>
     </section>
   );
+}
+
+/**
+ * Şirketin DTO'dan türeyen anları (koala-admin#107): başvuru ve kayıtlı
+ * karar. Kararı veren personel DTO'da yalnız kimlik; ad çözümü
+ * koala-admin#112 ile gelecek, o güne kadar kısa kimlik.
+ */
+function companyTimelineEvents(company: CompanyReview): readonly TimelineEvent[] {
+  const timeline = new TimelineBuilder();
+  const creatorName = company.createdBy === null ? null : safeUserDisplayName(company.createdBy);
+  timeline.push(company.createdAt, "Başvuru yapıldı", {
+    actor:
+      company.createdBy === null || creatorName === null
+        ? null
+        : { kind: "user", userId: company.createdBy.id, name: creatorName },
+  });
+  timeline.push(
+    company.approvalDecidedAt,
+    company.approvalStatus === "APPROVED"
+      ? "Şirket onaylandı"
+      : company.approvalStatus === "REJECTED"
+        ? "Şirket reddedildi"
+        : `Karar kaydedildi: ${companyApprovalStatusLabel(company.approvalStatus)}`,
+    {
+      detail: company.approvalNote,
+      actor:
+        company.approvedByStaffId === null
+          ? null
+          : { kind: "staff", staffId: company.approvedByStaffId, name: null },
+    },
+  );
+  return timeline.build();
 }

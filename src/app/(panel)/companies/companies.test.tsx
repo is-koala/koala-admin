@@ -7,6 +7,7 @@ import {
   reviewCompany,
   type CompanyReviewOverrides,
 } from "../../../../test/fixtures/companies";
+import { auditPageBody, categoryCreatedEntry } from "../../../../test/fixtures/audit-log";
 import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
@@ -22,6 +23,8 @@ const { default: CompanyDetailPage } = await import("./[id]/page");
 
 const ADMIN_ME = apiUrl("/admin/me");
 const COMPANIES = apiUrl("/admin/companies");
+const AUDIT_LOG = apiUrl("/admin/audit-log");
+const STAFF_ID = "b7f4a2c1-0000-4c00-8000-000000000007";
 
 const APPROVER = ["company.approve"];
 const MODERATOR = ["content.moderate"];
@@ -433,9 +436,109 @@ describe("the audit pointer on the company page", () => {
 
     stubMe([...APPROVER, "audit.read"]);
     watchDetail();
+    watchAudit();
     const html = await renderDetail();
     expect(html).toContain("Her değişiklik denetim kaydında");
     expect(html).toContain(`href="/audit-log?resourceId=${COMPANY_REVIEW_ID}"`);
+  });
+});
+
+/** Zaman çizelgesinin denetim yarısı (koala-admin#107); her çağrının URL'si saklanır. */
+function watchAudit(rows: readonly (typeof categoryCreatedEntry)[] = [], totalElements?: number) {
+  const urls: URL[] = [];
+  server.use(
+    http.get(AUDIT_LOG, ({ request }) => {
+      urls.push(new URL(request.url));
+      return HttpResponse.json(auditPageBody({ content: rows, totalElements, size: 10 }));
+    }),
+  );
+  return { urls };
+}
+
+/**
+ * koala-admin#107: başvuru ve kayıtlı karar DTO'dan, personel işlemleri
+ * denetim izinden; tek çizelge, zamana göre. Kararı veren personel DTO'da
+ * yalnız kimlik: kısa kimlik yazılır, `/staff` bağlantısı `staff.read` ister.
+ */
+describe("the company timeline", () => {
+  const APPROVE_ROW = {
+    ...categoryCreatedEntry,
+    id: "aa000000-0000-4c00-8000-0000000000c1",
+    occurredAt: "2026-09-02T10:00:00.000Z",
+    actorStaffId: STAFF_ID,
+    actorDisplayName: "Şirket İnceleyici",
+    permission: "company.approve",
+    action: "companies.approve",
+    resourceType: "companies",
+    resourceId: COMPANY_REVIEW_ID,
+  };
+  const decided = () =>
+    company({
+      createdAt: "2026-09-01T08:00:00Z",
+      approvalStatus: "APPROVED",
+      approvalDecidedAt: "2026-09-02T10:00:00Z",
+      approvedByStaffId: STAFF_ID,
+      approvalNote: "Vergi levhası doğrulandı.",
+    });
+
+  it("merges the application, the recorded decision and the audit row, oldest first", async () => {
+    stubMe([...APPROVER, "audit.read"]);
+    watchDetail(decided());
+    const audit = watchAudit([APPROVE_ROW], 3);
+
+    const html = await renderDetail();
+
+    expect(audit.urls).toHaveLength(1);
+    expect(audit.urls[0]?.searchParams.get("resourceId")).toBe(COMPANY_REVIEW_ID);
+
+    const timeline = html.slice(html.indexOf('data-testid="object-timeline"'));
+    const positions = ["Başvuru yapıldı", "Şirket onaylandı", "companies.approve"].map((label) =>
+      timeline.indexOf(label),
+    );
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    // Aynı an: önce kaydın kendi geçişi, sonra onu yazan personel kararı.
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(timeline).toContain("Vergi levhası doğrulandı.");
+    expect(timeline).toContain("Şirket İnceleyici");
+    // Ad çözümü yok (koala-admin#112): kısa kimlik, tam kimlik `title`'da.
+    expect(timeline).toContain(`title="${STAFF_ID}"`);
+    expect(timeline).toContain(">b7f4a2c1<");
+    expect(timeline).not.toContain("/staff#personel-");
+  });
+
+  it("links staff actors to the staff page for a staff.read holder", async () => {
+    stubMe([...APPROVER, "audit.read", "staff.read"]);
+    watchDetail(decided());
+    watchAudit([APPROVE_ROW]);
+
+    const html = await renderDetail();
+
+    expect(html.match(new RegExp(`href="/staff#personel-${STAFF_ID}"`, "g"))).toHaveLength(2);
+  });
+
+  it("keeps the record's events and explains the missing half without audit.read, sending no request", async () => {
+    stubMe(APPROVER);
+    watchDetail(decided());
+    const audit = watchAudit([APPROVE_ROW]);
+
+    const html = await renderDetail();
+
+    expect(audit.urls).toHaveLength(0);
+    expect(html).toContain("Başvuru yapıldı");
+    expect(html).toContain("Şirket onaylandı");
+    expect(html).not.toContain("companies.approve");
+    expect(html).toContain('data-testid="object-timeline-audit-disabled"');
+  });
+
+  it("says when an older server sent no dated field and the audit log is empty", async () => {
+    stubMe([...APPROVER, "audit.read"]);
+    watchDetail(company({ createdAt: null, approvalDecidedAt: null }));
+    watchAudit([]);
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Bu şirket için zamanı bilinen bir olay yok.");
+    expect(html).toContain("Bu kayıt için denetim satırı yok.");
   });
 });
 

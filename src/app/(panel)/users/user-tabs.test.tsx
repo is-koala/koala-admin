@@ -540,9 +540,29 @@ describe("the sikayetler tab", () => {
 });
 
 describe("the denetim tab", () => {
-  it("draws the roles and the audit rows for this user with audit.read", async () => {
+  const BADGE = {
+    code: "PUNCTUAL",
+    family: "RELIABILITY",
+    tier: "GOLD",
+    name: "Dakik",
+    description: null,
+    iconUrl: null,
+    earnedAt: "2026-09-04T10:00:00.000000000Z",
+  };
+  const USER_WITH_HISTORY = {
+    ...USER,
+    createdAt: "2026-09-01T09:00:00.000000000Z",
+    badges: [BADGE],
+  };
+
+  /**
+   * koala-admin#107: kaydın kendi anları (hesap açılışı, rozet) ve personel
+   * kararları tek çizelgede, zamana göre. Rol yazımı 03.09, rozet 04.09,
+   * açılış 01.09: satırlar etikete değil zamana göre dizilir.
+   */
+  it("merges the user's own events with the audit rows in one timeline, with audit.read", async () => {
     stubMe([...READER, "audit.read"]);
-    stubUser();
+    stubUser(USER_WITH_HISTORY);
     const audit = watch("/admin/audit-log", () =>
       envelope(
         "/admin/audit-log",
@@ -550,9 +570,10 @@ describe("the denetim tab", () => {
           [
             {
               ...categoryCreatedEntry,
+              occurredAt: "2026-09-03T12:00:00.000Z",
               permission: "user.role.manage",
               action: "user.role.grant",
-              resourceType: "user",
+              resourceType: "users",
               resourceId: USER_ID,
             },
           ],
@@ -568,34 +589,90 @@ describe("the denetim tab", () => {
     expect(audit.urls[0]?.searchParams.get("size")).toBe("10");
     expect(audit.urls[0]?.searchParams.has("permission")).toBe(false);
     expect(html).toContain("Bu kullanıcının hiç rolü yok.");
-    expect(html).toContain("user.role.grant");
-    expect(html).toContain("Katalog Editörü");
-    expect(html).toContain("Toplam 14 kayıt; ilk 1 satır.");
+
+    const timeline = html.slice(html.indexOf('data-testid="object-timeline"'));
+    const positions = ["Hesap oluşturuldu", "user.role.grant", "Rozet kazanıldı"].map((label) =>
+      timeline.indexOf(label),
+    );
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(timeline).toContain("Katalog Editörü");
+    expect(timeline).toContain("Dakik");
+    expect(timeline).toContain("Denetim izinden en yeni 1 satır; toplam 14 kayıt.");
     expect(html).toContain(`href="/audit-log?resourceId=${USER_ID}"`);
+    // Aktör bağlantısı `staff.read` ister; READER'da yok, ad düz metin.
+    expect(timeline).not.toContain("/staff#personel-");
   });
 
-  it("keeps the roles but closes the audit half without audit.read, sending no request", async () => {
-    stubMe(READER);
+  it("links the actor to the staff page for a staff.read holder", async () => {
+    stubMe([...READER, "audit.read", "staff.read"]);
     stubUser();
+    watch("/admin/audit-log", () =>
+      envelope(
+        "/admin/audit-log",
+        pageOf([{ ...categoryCreatedEntry, resourceType: "users", resourceId: USER_ID }]),
+      ),
+    );
+
+    const html = await render({ sekme: "denetim" });
+
+    expect(html).toContain(`href="/staff#personel-${categoryCreatedEntry.actorStaffId}"`);
+  });
+
+  it("keeps the roles and the record's own events but closes the audit half without audit.read, sending no request", async () => {
+    stubMe(READER);
+    stubUser(USER_WITH_HISTORY);
     const audit = watch("/admin/audit-log", () => envelope("/admin/audit-log", pageOf([])));
 
     const html = await render({ sekme: "denetim" });
 
     expect(audit.urls).toHaveLength(0);
     expect(html).toContain("Bu kullanıcının hiç rolü yok.");
-    expect(html).toContain('data-testid="user-inline-audit-disabled"');
+    expect(html).toContain("Hesap oluşturuldu");
+    expect(html).toContain('data-testid="object-timeline-audit-disabled"');
     expect(html).toContain("audit.read");
     expect(html).not.toContain(`href="/audit-log?resourceId=${USER_ID}"`);
+    expect(html).not.toContain("Her değişiklik denetim kaydında");
   });
 
-  it("says when the audit log has nothing for this user", async () => {
+  it("says when neither the record nor the audit log has a dated event", async () => {
     stubMe([...READER, "audit.read"]);
+    // Eski sunucu: `createdAt` ve rozet yok; denetim de boş.
     stubUser();
     watch("/admin/audit-log", () => envelope("/admin/audit-log", pageOf([])));
 
     const html = await render({ sekme: "denetim" });
 
-    expect(html).toContain("Bu kullanıcı için kaydedilmiş personel işlemi yok.");
+    expect(html).toContain("Bu kullanıcı için zamanı bilinen bir olay yok.");
+    expect(html).toContain("Bu kayıt için denetim satırı yok.");
     expect(html).toContain(`href="/audit-log?resourceId=${USER_ID}"`);
+    expect(html).toContain("Her değişiklik denetim kaydında");
+  });
+
+  it("keeps the record's own events and shows the backend's answer when the audit read fails", async () => {
+    stubMe([...READER, "audit.read"]);
+    stubUser(USER_WITH_HISTORY);
+    watch("/admin/audit-log", () =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Denetim deposu yanıt vermedi.",
+          httpStatus: "503 SERVICE_UNAVAILABLE",
+          errorCode: "AUDIT_UNAVAILABLE",
+          errorCategory: "UPSTREAM_FAILED",
+          requestId: "rid-audit-503",
+          path: "/admin/audit-log",
+          timeStamp: "2026-09-11T13:00:00.000000000Z",
+        },
+        { status: 503 },
+      ),
+    );
+
+    const html = await render({ sekme: "denetim" });
+
+    expect(html).toContain("Hesap oluşturuldu");
+    expect(html).toContain("Denetim izi yüklenemedi.");
+    expect(html).toContain("Denetim deposu yanıt vermedi.");
+    expect(html).not.toContain("Bu kayıt için denetim satırı yok.");
   });
 });

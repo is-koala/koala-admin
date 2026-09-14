@@ -173,12 +173,7 @@ async function UserObject({ id, tab }: { id: string; tab: UserTab }) {
       ) : tab === "sikayetler" ? (
         <ReportsTab accessToken={accessToken} userId={user.id} />
       ) : (
-        <AuditTab
-          accessToken={accessToken}
-          user={user}
-          canManage={canManage}
-          canReadAudit={held.has("audit.read")}
-        />
+        <AuditTab accessToken={accessToken} user={user} canManage={canManage} />
       )}
     </div>
   );

@@ -12,6 +12,7 @@ import {
   adminPaymentFixture,
   envelope,
 } from "../../../../test/fixtures/admin-detail";
+import { auditPageBody, categoryCreatedEntry } from "../../../../test/fixtures/audit-log";
 import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
@@ -33,6 +34,7 @@ const { default: AssignmentDetailPage } = await import("./[id]/page");
 const ADMIN_ME = apiUrl("/admin/me");
 const DETAIL = apiUrl(`/admin/job-assignments/${ASSIGNMENT_ID}`);
 const PAYMENTS = apiUrl(`/admin/job-assignments/${ASSIGNMENT_ID}/payments`);
+const AUDIT_LOG = apiUrl("/admin/audit-log");
 
 const ANALYST = ["payment.read"];
 
@@ -78,6 +80,18 @@ function watch(
     }),
   );
   return seen;
+}
+
+/** Zaman çizelgesinin denetim yarısı (koala-admin#107); her çağrının URL'si saklanır. */
+function watchAudit(rows: readonly (typeof categoryCreatedEntry)[] = [], totalElements?: number) {
+  const urls: URL[] = [];
+  server.use(
+    http.get(AUDIT_LOG, ({ request }) => {
+      urls.push(new URL(request.url));
+      return HttpResponse.json(auditPageBody({ content: rows, totalElements, size: 10 }));
+    }),
+  );
+  return { urls };
 }
 
 const render = async (id: string = ASSIGNMENT_ID) =>
@@ -189,6 +203,7 @@ describe("party pictures and the audit pointer", () => {
 
     stubMe([...ANALYST, "audit.read"]);
     watch();
+    watchAudit();
     const html = await render();
     expect(html).toContain("Her değişiklik denetim kaydında");
     expect(html).toContain(`href="/audit-log?resourceId=${ASSIGNMENT_ID}"`);
@@ -548,5 +563,82 @@ describe("the extended timeline and its cards", () => {
     expect(legacy).toMatch(/İşveren türü<\/dt><dd[^>]*>—</);
     expect(legacy).toContain("Atama zamanı");
     expect(legacy).not.toContain("Başvuru yapıldı");
+  });
+});
+
+/**
+ * koala-admin#107: atamanın çizelgesi artık `ObjectTimeline`. DTO olayları
+ * aynı, üstüne `audit.read` varken bu atamanın denetim satırları zamana göre
+ * araya girer; izin yoksa istek çıkmaz ve yalnız DTO olayları kalır.
+ */
+describe("the timeline's audit half", () => {
+  const RELEASE_ROW = {
+    ...categoryCreatedEntry,
+    id: "aa000000-0000-4c00-8000-0000000000e1",
+    occurredAt: "2026-09-04T09:30:00.000Z",
+    permission: "payout.release",
+    action: "job-assignments.release",
+    resourceType: "job-assignments",
+    resourceId: ASSIGNMENT_ID,
+    sensitivity: "FINANCIAL" as const,
+  };
+
+  it("interleaves the staff decision with the record's own events by time", async () => {
+    stubMe([...ANALYST, "audit.read"]);
+    const detail = adminAssignmentDetailFixture({
+      createdAt: "2026-09-01T09:00:00Z",
+      actualCompletionDateTime: "2026-09-03T17:00:00Z",
+    });
+    watch(detail, []);
+    const audit = watchAudit(
+      [
+        RELEASE_ROW,
+        {
+          ...RELEASE_ROW,
+          id: "aa000000-0000-4c00-8000-0000000000e2",
+          occurredAt: "2026-09-02T08:00:00.000Z",
+          action: "job-assignments.read",
+          permission: "payment.read",
+          allowed: false,
+        },
+      ],
+      27,
+    );
+
+    const html = await render();
+
+    expect(audit.urls).toHaveLength(1);
+    expect(audit.urls[0]?.searchParams.get("resourceId")).toBe(ASSIGNMENT_ID);
+    expect(audit.urls[0]?.searchParams.get("size")).toBe("10");
+
+    const timeline = html.slice(html.indexOf('data-testid="object-timeline"'));
+    const order = [
+      "Atama oluşturuldu",
+      "job-assignments.read",
+      "İş tamamlandı",
+      "job-assignments.release",
+    ];
+    const positions = order.map((label) => timeline.indexOf(label));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(timeline).toContain("Katalog Editörü");
+    expect(timeline).toContain("Reddedildi");
+    expect(timeline).toContain('data-source="audit"');
+    expect(timeline).toContain('data-source="record"');
+    expect(timeline).toContain("Denetim izinden en yeni 2 satır; toplam 27 kayıt.");
+  });
+
+  it("draws only the record's events and says why, sending no audit request without audit.read", async () => {
+    stubMe(ANALYST);
+    watch();
+    const audit = watchAudit([RELEASE_ROW]);
+
+    const html = await render();
+
+    expect(audit.urls).toHaveLength(0);
+    expect(html).toContain("Atama zamanı");
+    expect(html).not.toContain("job-assignments.release");
+    expect(html).toContain('data-testid="object-timeline-audit-disabled"');
+    expect(html).not.toContain('data-testid="object-timeline-audit-all"');
   });
 });

@@ -3,15 +3,15 @@ import type { Route } from "next";
 import type { ReactNode } from "react";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
-import { AuditLogTable } from "@/components/panel/audit-log-table";
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
+import { ObjectTimeline } from "@/components/panel/object-timeline";
 import { QueueLoadFailure, type QueueFailure } from "@/components/panel/queue";
 import { Badge, EmptyState } from "@/components/ui";
-import { NO_AUDIT_FILTERS } from "@/lib/audit-log";
 import { formatInteger } from "@/lib/format";
+import { TimelineBuilder, type TimelineEvent } from "@/lib/object-timeline";
 import {
   assignmentsForEmployerHref,
   assignmentsForWorkerHref,
-  auditLogForResourceHref,
   disputesForUserHref,
   payoutsForWorkerHref,
   reportsAboutUserHref,
@@ -20,7 +20,6 @@ import {
   userTabHref,
 } from "@/lib/panel-href";
 import { USER_TABS, USER_TAB_SPECS, isTabEnabled, type UserTab } from "@/lib/user-tabs";
-import { getAuditLog } from "@/server/api/audit";
 import { getDisputes, type Dispute } from "@/server/api/disputes";
 import { ASSIGNMENT_PAGING, getAdminAssignments } from "@/server/api/escrow";
 import { getMarketplaceUserRoles } from "@/server/api/marketplace-user-roles";
@@ -29,7 +28,6 @@ import { firstPage } from "@/server/api/paging";
 import { PAYOUT_PAGING, PAYOUT_STATUSES, getPayouts } from "@/server/api/payout-reconciliation";
 import { REPORT_PAGING, getReports } from "@/server/api/reports";
 import type { PageDto } from "@/server/api/types";
-import { permissionLabelsFor } from "@/server/authz/audit-permission-labels";
 import { isPermission, permissionLabel, type Permission } from "@/server/authz/permissions";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
@@ -49,8 +47,8 @@ import { UserRoleDetail, type UserGrants } from "../user-roles";
  *
  * İzin politikası liste sayfalarınınkiyle aynı: sekme görünür ama izin yoksa
  * bağlantı verilmez, seçilirse gerekçe yazılır ve istek çıkmaz. `denetim`
- * sekmesinin rol yarısı `user.read` ile okunur; denetim izi yarısı
- * `audit.read` ister ve yalnız o yarı kapanır.
+ * sekmesinin rol yarısı `user.read` ile okunur; zaman çizelgesinin denetim
+ * yarısı `audit.read` ister ve yalnız o yarı kapanır (koala-admin#107).
  */
 
 /** Sekme başına satır; toplam sayı başlıkta, kalanı "Tümünü aç" ile. */
@@ -394,20 +392,20 @@ export async function ReportsTab({ accessToken, userId }: { accessToken: string;
 
 /**
  * Rol yarısı `user.read` ile okunur, yazma formları `user.role.manage` ile.
- * Denetim izi yarısı yalnız `audit.read` varken istenir: bu kaydın bütün
- * satırları (`resourceId`), izne süzmeden — bir kullanıcıya rol yazımı da
- * silme talebi kararı da düşer.
+ * Zaman çizelgesi (koala-admin#107) kaydın kendi anlarını — hesap açılışı,
+ * rozetler — personel kararlarıyla tek listede çizer; denetim yarısı
+ * `ObjectTimeline` içinde yalnız `audit.read` varken istenir ve bu kaydın
+ * bütün satırlarını (`resourceId`) izne süzmeden getirir — bir kullanıcıya
+ * rol yazımı da silme talebi kararı da düşer.
  */
 export async function AuditTab({
   accessToken,
   user,
   canManage,
-  canReadAudit,
 }: {
   accessToken: string;
   user: MarketplaceUserDetail;
   canManage: boolean;
-  canReadAudit: boolean;
 }) {
   let grants: UserGrants;
   try {
@@ -415,16 +413,6 @@ export async function AuditTab({
   } catch {
     grants = { status: "failed" };
   }
-
-  const audit = canReadAudit
-    ? await inline(() =>
-        getAuditLog(accessToken, {
-          filters: { ...NO_AUDIT_FILTERS, resourceId: user.id },
-          page: 0,
-          size: INLINE_ROWS,
-        }),
-      )
-    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -441,30 +429,29 @@ export async function AuditTab({
         </AuditPointer>
       ) : null}
 
-      {audit === null ? (
-        <section
-          className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4"
-          data-testid="user-inline-audit-disabled"
-        >
-          <h2 className="text-sm font-semibold">Denetim izi</h2>
-          <p className="max-w-prose text-sm text-ink-muted">
-            Bu kaydın denetim satırları <code className="font-mono">audit.read</code> ister; istek
-            gönderilmedi.
-          </p>
-        </section>
-      ) : (
-        <InlineSection
-          id="audit"
-          title="Denetim izi"
-          unit="kayıt"
-          permission="audit.read"
-          allHref={auditLogForResourceHref(user.id)}
-          result={audit}
-          emptyTitle="Bu kullanıcı için kaydedilmiş personel işlemi yok."
-        >
-          {(rows) => <AuditLogTable entries={rows} permissionLabels={permissionLabelsFor(rows)} />}
-        </InlineSection>
-      )}
+      <ObjectTimeline resourceId={user.id} subject="Bu kullanıcı" events={userTimelineEvents(user)}>
+        Kaydın kendi anları DTO&apos;dan (hesap açılışı, rozetler); rol yazımı, silme talebi ve
+        kimlik kararları gibi personel işlemleri denetim izinden, bu kullanıcı kimliğiyle.
+      </ObjectTimeline>
+
+      <ObjectAuditPointer resourceId={user.id} linkLabel="Bu kullanıcının denetim kayıtlarını aç">
+        Rol yazımı, silme talebi ve kimlik kararları backend tarafından bu kullanıcı kimliğiyle
+        denetim kaydına yazılır; personelin bu kaydı açması da kayda düşer.
+      </ObjectAuditPointer>
     </div>
   );
+}
+
+/**
+ * Kullanıcının DTO'dan türeyen anları. Eski sunucu `createdAt` ve rozetleri
+ * göndermez; o satırlar yalnız yoklukla eksilir. Kimlik incelemesi ve silme
+ * talebi tarih taşımaz, çizelgeye giremez — kararları denetim yarısında.
+ */
+function userTimelineEvents(user: MarketplaceUserDetail): readonly TimelineEvent[] {
+  const timeline = new TimelineBuilder();
+  timeline.push(user.createdAt, "Hesap oluşturuldu");
+  for (const badge of user.badges ?? []) {
+    timeline.push(badge.earnedAt, "Rozet kazanıldı", { detail: badge.name ?? badge.code });
+  }
+  return timeline.build();
 }
