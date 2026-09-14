@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
@@ -13,18 +12,8 @@ import {
   activeSearch,
   searchEmptyTitle,
 } from "@/components/panel/queue";
-import {
-  Badge,
-  EmptyState,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
-} from "@/components/ui";
-import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
-import { ALL_STATUSES_PARAM, reportHref, userHref, userHrefOrNull } from "@/lib/panel-href";
+import { EmptyState } from "@/components/ui";
+import { ALL_STATUSES_PARAM } from "@/lib/panel-href";
 import {
   pageWindow,
   readEnumParam,
@@ -38,11 +27,7 @@ import {
   REPORT_PAGING,
   REPORT_STATUSES,
   getReports,
-  reportPartyName,
-  reportReasonLabel,
   reportStatusLabel,
-  reportTargetLabel,
-  reportTargets,
   type ReportStatus,
 } from "@/server/api/reports";
 import {
@@ -54,7 +39,7 @@ import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
-import { REPORT_STATUS_TONES } from "./report-decision";
+import { ReportTable } from "./report-table";
 
 export const metadata: Metadata = { title: "Şikayetler" };
 
@@ -254,79 +239,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
         />
       ) : (
         <>
-          <Table caption="Şikayet kuyruğu">
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Tarih</TableHeaderCell>
-                <TableHeaderCell>Durum</TableHeaderCell>
-                <TableHeaderCell>Gerekçe</TableHeaderCell>
-                <TableHeaderCell>Şikayet eden</TableHeaderCell>
-                <TableHeaderCell>Şikayet edilen</TableHeaderCell>
-                <TableHeaderCell>Geçmiş</TableHeaderCell>
-                <TableHeaderCell>Hedef</TableHeaderCell>
-                <TableHeaderCell>Detay</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {page.content.map((report) => {
-                const reporterHref = userHrefOrNull(report.reporter?.id);
-                return (
-                  <TableRow key={report.id}>
-                    <TableCell>{formatDateTime(report.createdAt)}</TableCell>
-                    <TableCell>
-                      <Badge tone={REPORT_STATUS_TONES[report.status] ?? "neutral"}>
-                        {reportStatusLabel(report.status)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{reportReasonLabel(report.reason)}</TableCell>
-                    <TableCell>
-                      {report.reporter === null ? (
-                        EMPTY_VALUE
-                      ) : reporterHref === null ? (
-                        reportPartyName(report.reporter)
-                      ) : (
-                        <Link href={reporterHref} className="text-brand hover:underline">
-                          {reportPartyName(report.reporter)}
-                        </Link>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {report.reportedUserId === null ? (
-                        EMPTY_VALUE
-                      ) : (
-                        <Link
-                          href={userHref(report.reportedUserId)}
-                          className="text-brand hover:underline"
-                        >
-                          {reportPartyName(report.reportedUser)}
-                        </Link>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {report.reportedUserId === null
-                        ? EMPTY_VALUE
-                        : formatInteger(report.reportedUserReportCount)}
-                    </TableCell>
-                    <TableCell>
-                      <span className="flex flex-wrap gap-1">
-                        {reportTargets(report).map((target) => (
-                          <Badge key={`${target.kind}-${target.id}`}>
-                            {reportTargetLabel(target.kind)}
-                          </Badge>
-                        ))}
-                        {reportTargets(report).length === 0 ? EMPTY_VALUE : null}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Link href={reportHref(report.id)} className="text-brand hover:underline">
-                        İncele
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <ReportTable reports={page.content} />
 
           <QueuePager window={pageWindow(page)} state={viewState} unit="şikayet" />
         </>

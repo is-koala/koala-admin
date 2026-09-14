@@ -77,6 +77,28 @@ export function userHrefOrNull(userId: string | null | undefined): Route | null 
   return userId !== null && userId !== undefined && isUuid(userId) ? userHref(userId) : null;
 }
 
+/**
+ * Kullanıcı sayfasının sekmeleri (koala-admin#103). Sekme URL'de `?sekme=`
+ * ile taşınır ki geri dönüşte ve paylaşılan bağlantıda korunsun; `genel`
+ * varsayılan olduğu için adrese yazılmaz.
+ */
+export const USER_TABS = [
+  "genel",
+  "atamalar",
+  "hakedisler",
+  "uyusmazliklar",
+  "sikayetler",
+  "denetim",
+] as const;
+
+export type UserTab = (typeof USER_TABS)[number];
+
+export const USER_TAB_PARAM = "sekme";
+
+export function userTabHref(userId: string, tab: UserTab): Route {
+  return withQuery(`/users/${userId}`, tab === "genel" ? {} : { [USER_TAB_PARAM]: tab });
+}
+
 /** Atama nesne sayfası (koala-admin#95); `?atama=` bakışı liste sayfasında kaldı. */
 export function assignmentHref(assignmentId: string): Route {
   return asRoute(`/assignments/${assignmentId}`);
@@ -172,4 +194,9 @@ export function jobsForCompanyHref(companyId: string): Route {
 
 export function payoutReconcileHref(payoutId: string): Route {
   return asRoute(`/payout-reconciliation?hakedis=${encodeURIComponent(payoutId)}`);
+}
+
+/** Bir kaydın bütün denetim satırları; süzgeç adı backend'in `resourceId` parametresi. */
+export function auditLogForResourceHref(resourceId: string): Route {
+  return withQuery("/audit-log", { resourceId });
 }
