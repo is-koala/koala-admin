@@ -199,14 +199,13 @@ describe("the assignment list", () => {
     );
 
     const page = await getAdminAssignments("ACCESS-TOKEN", {
-      page: 0,
-      size: 20,
-      sort: ASSIGNMENT_PAGING.defaultSort,
+      paging: { page: 0, size: 20, sort: ASSIGNMENT_PAGING.defaultSort },
     });
 
     expect(url).not.toBeNull();
     const params = url as unknown as URL;
     expect(params.pathname.endsWith("/admin/job-assignments")).toBe(true);
+    expect(params.searchParams.has("query")).toBe(false);
     expect(params.searchParams.get("sort")).toBe("createdAt,desc");
     expect(page.content[0]?.id).toBe(ASSIGNMENT);
     expect(page.content[0]?.pricing.employerTotal).toBe("1378.33");
@@ -280,5 +279,70 @@ describe("the escrow summary read", () => {
     expect(isKoalaApiError(error)).toBe(true);
     if (!isKoalaApiError(error)) throw new Error("unreachable");
     expect(error.isForbidden).toBe(true);
+  });
+});
+
+function searchEnvelope(path: string) {
+  return {
+    success: true,
+    message: "Listelendi.",
+    httpStatus: "200 OK",
+    path,
+    requestId: "rid-search",
+    timeStamp: "2026-09-14T08:00:00Z",
+    data: {
+      content: [],
+      page: 0,
+      size: 20,
+      totalElements: 0,
+      totalPages: 0,
+      first: true,
+      last: true,
+    },
+  };
+}
+
+/**
+ * koala-backend#263: `query` 2–100 karakter, kırpılmış; kısa değer süzmez.
+ * Kuralın kendisi `search-query.test.ts`'de; burada yalnız bu kurucunun ona
+ * uyduğu ve parametreyi backend'in beklediği adla gönderdiği sabitlenir.
+ */
+describe("the assignment search goes to the backend as query", () => {
+  function watchSearch() {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(ASSIGNMENTS_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json(searchEnvelope(ASSIGNMENTS_PATH));
+      }),
+    );
+    return seen;
+  }
+
+  it("forwards a trimmed search as query", async () => {
+    const seen = watchSearch();
+
+    await getAdminAssignments("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: ASSIGNMENT_PAGING.defaultSort },
+      query: "  Ayşe Yılmaz  ",
+    });
+
+    expect(seen.url?.searchParams.get("query")).toBe("Ayşe Yılmaz");
+  });
+
+  it("sends no query for one character, and clips at 100", async () => {
+    const seen = watchSearch();
+
+    await getAdminAssignments("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: ASSIGNMENT_PAGING.defaultSort },
+      query: "a",
+    });
+    expect(seen.url?.searchParams.has("query")).toBe(false);
+
+    await getAdminAssignments("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: ASSIGNMENT_PAGING.defaultSort },
+      query: "k".repeat(120),
+    });
+    expect(seen.url?.searchParams.get("query")).toHaveLength(100);
   });
 });

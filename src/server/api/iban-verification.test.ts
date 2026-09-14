@@ -82,14 +82,13 @@ describe("the pending IBAN queue", () => {
     );
 
     const page = await getPendingIbanVerifications("ACCESS-TOKEN", {
-      page: 0,
-      size: 20,
-      sort: IBAN_PENDING_PAGING.defaultSort,
+      paging: { page: 0, size: 20, sort: IBAN_PENDING_PAGING.defaultSort },
     });
 
     expect(url).not.toBeNull();
     const params = url as unknown as URL;
     expect(params.searchParams.get("status")).toBe("PENDING");
+    expect(params.searchParams.has("query")).toBe(false);
     expect(params.searchParams.get("sort")).toBe("verificationStartedAt,desc");
     expect(page.content[0]?.maskedIban).toBe("TR18***2315");
     expect(page.content[0]).not.toHaveProperty("iban");
@@ -109,9 +108,7 @@ describe("the pending IBAN queue", () => {
     );
 
     const page = await getPendingIbanVerifications("ACCESS-TOKEN", {
-      page: 0,
-      size: 20,
-      sort: IBAN_PENDING_PAGING.defaultSort,
+      paging: { page: 0, size: 20, sort: IBAN_PENDING_PAGING.defaultSort },
     });
 
     expect(page.content[0]).not.toHaveProperty("iban");
@@ -165,5 +162,70 @@ describe("IBAN verification confirm transport", () => {
     await confirmIbanVerification("ACCESS-TOKEN", "../other", OBSERVATION);
 
     expect(url).toContain("%2F");
+  });
+});
+
+function searchEnvelope(path: string) {
+  return {
+    success: true,
+    message: "Listelendi.",
+    httpStatus: "200 OK",
+    path,
+    requestId: "rid-search",
+    timeStamp: "2026-09-14T08:00:00Z",
+    data: {
+      content: [],
+      page: 0,
+      size: 20,
+      totalElements: 0,
+      totalPages: 0,
+      first: true,
+      last: true,
+    },
+  };
+}
+
+/**
+ * koala-backend#263: `query` 2–100 karakter, kırpılmış; kısa değer süzmez.
+ * Kuralın kendisi `search-query.test.ts`'de; burada yalnız bu kurucunun ona
+ * uyduğu ve parametreyi backend'in beklediği adla gönderdiği sabitlenir.
+ */
+describe("the IBAN queue search goes to the backend as query", () => {
+  function watchSearch() {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(IBAN_PENDING_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json(searchEnvelope(IBAN_PENDING_PATH));
+      }),
+    );
+    return seen;
+  }
+
+  it("forwards a trimmed search as query", async () => {
+    const seen = watchSearch();
+
+    await getPendingIbanVerifications("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: IBAN_PENDING_PAGING.defaultSort },
+      query: "  Ayşe Yılmaz  ",
+    });
+
+    expect(seen.url?.searchParams.get("query")).toBe("Ayşe Yılmaz");
+  });
+
+  it("sends no query for one character, and clips at 100", async () => {
+    const seen = watchSearch();
+
+    await getPendingIbanVerifications("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: IBAN_PENDING_PAGING.defaultSort },
+      query: "a",
+    });
+    expect(seen.url?.searchParams.has("query")).toBe(false);
+
+    await getPendingIbanVerifications("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: IBAN_PENDING_PAGING.defaultSort },
+      query: "k".repeat(120),
+    });
+    expect(seen.url?.searchParams.get("query")).toHaveLength(100);
   });
 });

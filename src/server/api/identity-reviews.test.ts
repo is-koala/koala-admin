@@ -6,6 +6,7 @@ import { apiUrl, server } from "../../../test/msw";
 import { readPaging } from "./paging";
 import {
   IDENTITY_REVIEW_PAGING,
+  IDENTITY_REVIEWS_PATH,
   approveIdentityReview,
   getIdentityReview,
   getIdentityReviews,
@@ -255,5 +256,73 @@ describe("deciding an identity review", () => {
     expect(identityDocumentDownloadPath("../../me", "x/y")).toBe(
       "/admin/identity-verifications/..%2F..%2Fme/documents/x%2Fy/download",
     );
+  });
+});
+
+function searchEnvelope(path: string) {
+  return {
+    success: true,
+    message: "Listelendi.",
+    httpStatus: "200 OK",
+    path,
+    requestId: "rid-search",
+    timeStamp: "2026-09-14T08:00:00Z",
+    data: {
+      content: [],
+      page: 0,
+      size: 20,
+      totalElements: 0,
+      totalPages: 0,
+      first: true,
+      last: true,
+    },
+  };
+}
+
+/**
+ * koala-backend#263: `query` 2–100 karakter, kırpılmış; kısa değer süzmez.
+ * Kuralın kendisi `search-query.test.ts`'de; burada yalnız bu kurucunun ona
+ * uyduğu ve parametreyi backend'in beklediği adla gönderdiği sabitlenir.
+ */
+describe("the identity review search goes to the backend as query", () => {
+  function watchSearch() {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(IDENTITY_REVIEWS_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json(searchEnvelope(IDENTITY_REVIEWS_PATH));
+      }),
+    );
+    return seen;
+  }
+
+  it("forwards a trimmed search as query", async () => {
+    const seen = watchSearch();
+
+    await getIdentityReviews("ACCESS-TOKEN", {
+      status: "PENDING",
+      paging: readPaging({}, IDENTITY_REVIEW_PAGING),
+      query: "  Ayşe Yılmaz  ",
+    });
+
+    expect(seen.url?.searchParams.get("query")).toBe("Ayşe Yılmaz");
+  });
+
+  it("sends no query for one character, and clips at 100", async () => {
+    const seen = watchSearch();
+
+    await getIdentityReviews("ACCESS-TOKEN", {
+      status: "PENDING",
+      paging: readPaging({}, IDENTITY_REVIEW_PAGING),
+      query: "a",
+    });
+    expect(seen.url?.searchParams.has("query")).toBe(false);
+
+    await getIdentityReviews("ACCESS-TOKEN", {
+      status: "PENDING",
+      paging: readPaging({}, IDENTITY_REVIEW_PAGING),
+      query: "k".repeat(120),
+    });
+    expect(seen.url?.searchParams.get("query")).toHaveLength(100);
   });
 });

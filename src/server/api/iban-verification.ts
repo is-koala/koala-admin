@@ -7,6 +7,7 @@ import { BANK_ACCOUNT_VERIFICATION_STATUSES } from "@/lib/iban-verification";
 import { koalaApi } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
+import { searchQueryParam } from "./search-query";
 import type { PageDto } from "./types";
 import { safeUserSchema } from "./users";
 
@@ -82,16 +83,23 @@ const bankAccountSchema = z.object({
 
 export type BankAccount = z.infer<typeof bankAccountSchema>;
 
+export interface IbanPendingQuery {
+  readonly paging: Paging;
+  /** koala-backend#263: hesap sahibinin ad-soyadı, e-postası ve doğrulama referansı. */
+  readonly query?: string | null;
+}
+
 export function getPendingIbanVerifications(
   accessToken: string,
-  paging: Paging,
+  query: IbanPendingQuery,
 ): Promise<PageDto<IbanPending>> {
   return koalaApi.get({
     path: IBAN_PENDING_PATH,
     schema: pageDtoSchema(ibanPendingSchema),
     query: {
       status: "PENDING",
-      ...pagingQuery(paging),
+      query: searchQueryParam(query.query),
+      ...pagingQuery(query.paging),
     },
     accessToken,
     cache: "no-store",

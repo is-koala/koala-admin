@@ -1,7 +1,11 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
+import {
+  adminMeSuccessBody,
+  resourceNotFoundBody,
+  searchQueryTooLongBody,
+} from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -346,5 +350,71 @@ describe("a review that does not exist", () => {
 
     expect(detail.calls).toBe(0);
     expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+});
+
+describe("the search box — koala-admin#94", () => {
+  it("sends q to the backend as query, next to the status, and names it in the result line", async () => {
+    stubMe(REVIEWER);
+    const queue = watchQueue([PENDING_REVIEW]);
+
+    const html = await render({ q: " yusuf ", durum: "PENDING", sayfa: "2" });
+
+    expect(queue.url?.searchParams.get("query")).toBe("yusuf");
+    expect(queue.url?.searchParams.get("status")).toBe("PENDING");
+    expect(queue.url?.searchParams.get("page")).toBe("2");
+    expect(html).toContain("“yusuf” için 1 inceleme bulundu.");
+    expect(html).toContain('name="q"');
+    expect(html).toContain('value="yusuf"');
+  });
+
+  it("offers Temizle, which drops q and keeps the view", async () => {
+    stubMe(REVIEWER);
+    watchQueue([PENDING_REVIEW]);
+
+    const html = await render({ q: "yusuf", durum: "APPROVED", boyut: "50" });
+
+    expect(html).toContain(
+      'href="/identity-reviews?durum=APPROVED&amp;sirala=createdAt%2Cdesc&amp;boyut=50"',
+    );
+    expect(html).toContain("Temizle");
+  });
+
+  it("carries q into the object link so the return trip keeps the search", async () => {
+    stubMe(REVIEWER);
+    watchQueue([PENDING_REVIEW]);
+
+    const html = await render({ q: "yusuf" });
+
+    expect(html).toContain(
+      `/identity-reviews/${REVIEW_ID}?durum=PENDING&amp;sirala=createdAt%2Cdesc&amp;boyut=20&amp;q=yusuf`,
+    );
+  });
+
+  it("says there is no result for the query rather than that the status is empty", async () => {
+    stubMe(REVIEWER);
+    watchQueue([]);
+
+    const html = await render({ q: "kimse" });
+
+    expect(html).toContain("“kimse” için sonuç yok.");
+    expect(html).not.toContain("Bekliyor durumunda inceleme yok.");
+  });
+
+  it("shows the backend's 400 for an over-long query inline, next to the box", async () => {
+    stubMe(REVIEWER);
+    server.use(
+      http.get(REVIEWS, () =>
+        HttpResponse.json(searchQueryTooLongBody("/admin/identity-verifications"), {
+          status: 400,
+        }),
+      ),
+    );
+
+    const html = await render({ q: "k".repeat(120) });
+
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
+    expect(html).not.toContain("Kimlik kuyruğu yüklenemedi.");
   });
 });

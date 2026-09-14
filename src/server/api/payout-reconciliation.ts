@@ -5,6 +5,7 @@ import { z } from "zod";
 import { koalaApi } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
+import { searchQueryParam } from "./search-query";
 import type { PageDto } from "./types";
 
 /** `PayoutStatus.java`, verbatim. */
@@ -55,15 +56,20 @@ export interface PayoutSettlementEvidence {
   readonly settledAt: string;
 }
 
-export function getPayouts(
-  accessToken: string,
-  query: { readonly paging: Paging; readonly status?: PayoutStatus | null },
-): Promise<PageDto<Payout>> {
+export interface PayoutQueueQuery {
+  readonly paging: Paging;
+  readonly status?: PayoutStatus | null;
+  /** koala-backend#263: hakediş id'si, atama id'si, alıcının ad-soyadı ve e-postası. */
+  readonly query?: string | null;
+}
+
+export function getPayouts(accessToken: string, query: PayoutQueueQuery): Promise<PageDto<Payout>> {
   return koalaApi.get({
     path: PAYOUTS_PATH,
     schema: pageDtoSchema(payoutSchema),
     query: {
       ...(query.status ? { status: query.status } : {}),
+      query: searchQueryParam(query.query),
       ...pagingQuery(query.paging),
     },
     accessToken,

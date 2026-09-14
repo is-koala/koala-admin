@@ -3,6 +3,7 @@ import "server-only";
 import { koalaApi, koalaRequestNoData } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
+import { searchQueryParam } from "./search-query";
 import type { KoalaResultMeta, PageDto } from "./types";
 import { safeUserSchema } from "./users";
 
@@ -162,14 +163,26 @@ export function getEscrowSummary(
   });
 }
 
+export interface AssignmentQueueQuery {
+  readonly paging: Paging;
+  /**
+   * koala-backend#263: atama id'si, ilan başlığı, işveren ve çalışanın
+   * ad-soyadı ile e-postasında arar. 2–100 kuralı `searchQueryParam`'da.
+   */
+  readonly query?: string | null;
+}
+
 export function getAdminAssignments(
   accessToken: string,
-  paging: Paging,
+  query: AssignmentQueueQuery,
 ): Promise<PageDto<EscrowSummary>> {
   return koalaApi.get({
     path: ASSIGNMENTS_PATH,
     schema: pageDtoSchema(escrowSummarySchema),
-    query: pagingQuery(paging),
+    query: {
+      query: searchQueryParam(query.query),
+      ...pagingQuery(query.paging),
+    },
     accessToken,
     cache: "no-store",
   });

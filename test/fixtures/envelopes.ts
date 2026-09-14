@@ -145,3 +145,22 @@ export const validationFailedBody = {
     { field: "code", message: "Kod benzersiz olmalı." },
   ],
 };
+
+/**
+ * `StaffSearchQuery.normalize` 100 karakteri aşan `query` için —
+ * koala-backend#263. `ValidationException` → 400, kod mesaj anahtarından
+ * türetilir (`admin.search.query.too.long`). Yedi liste ucu aynı zarfı döner;
+ * `path` çağıranın işi.
+ */
+export function searchQueryTooLongBody(path: string) {
+  return {
+    success: false,
+    message: "Arama metni en fazla 100 karakter olabilir.",
+    httpStatus: "400 BAD_REQUEST",
+    errorCode: "ADMIN_SEARCH_QUERY_TOO_LONG",
+    errorCategory: "VALIDATION_FAILED",
+    requestId: "rid-search-too-long",
+    path,
+    timeStamp: "2026-09-14T08:00:00.000000000Z",
+  };
+}

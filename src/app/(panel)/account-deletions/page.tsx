@@ -2,7 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/panel/page-header";
-import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
+import {
+  ListSearchForm,
+  QueueFilters,
+  QueueLoadFailure,
+  QueuePager,
+  SEARCH_PARAM,
+  SearchResultSummary,
+  activeSearch,
+  searchEmptyTitle,
+} from "@/components/panel/queue";
 import {
   EmptyState,
   Table,
@@ -26,9 +35,15 @@ import {
   pageWindow,
   readEnumParam,
   readPaging,
+  readParam,
   sortParam,
   type SearchParams,
 } from "@/server/api/paging";
+import {
+  SEARCH_QUERY_TOO_LONG_MESSAGE,
+  isSearchQueryTooLong,
+  readSearchQuery,
+} from "@/server/api/search-query";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
@@ -84,11 +99,14 @@ async function DeletionQueue({ params }: { params: SearchParams }) {
   );
   const status: DeletionStatus | undefined = filter === "ALL" ? undefined : filter;
   const paging = readPaging(params, DELETION_PAGING);
+  const query = readSearchQuery(readParam(params, SEARCH_PARAM));
+  const search = activeSearch(query);
 
   const viewState = {
     durum: filter,
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
+    ...(query === null ? {} : { [SEARCH_PARAM]: query }),
   };
   const objectQuery = { ...viewState, sayfa: String(paging.page) };
 
@@ -111,18 +129,40 @@ async function DeletionQueue({ params }: { params: SearchParams }) {
           options: SORT_OPTIONS,
         },
       ]}
-      carry={{ boyut: String(paging.size) }}
+      carry={{ boyut: String(paging.size), ...(query === null ? {} : { [SEARCH_PARAM]: query }) }}
       notice="Durum ve sıralama sunucuya gider. Durum seçilmezse backend üç durumu birden döner. Ret talep sayfasındadır."
+    />
+  );
+
+  const searchForm = (error: string | null = null) => (
+    <ListSearchForm
+      id="silme-ara"
+      label="Hesap silme taleplerinde ara"
+      pathname="/account-deletions"
+      query={query}
+      state={viewState}
+      placeholder="ör. ayse@example.com"
+      hint="Talep sahibinin e-postasında arar; durum süzgeciyle kesişir. Liste e-postayı göstermez."
+      error={error}
     />
   );
 
   let page;
   try {
-    page = await getAccountDeletions(await getKoalaAccessToken(), { status, paging });
+    page = await getAccountDeletions(await getKoalaAccessToken(), { status, paging, query });
   } catch (error) {
+    if (isSearchQueryTooLong(error)) {
+      return (
+        <div className="flex flex-col gap-6">
+          {filters}
+          {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col gap-6">
         {filters}
+        {searchForm()}
         <QueueLoadFailure
           subject="Hesap silme kuyruğu"
           permission="user.read_pii"
@@ -137,13 +177,17 @@ async function DeletionQueue({ params }: { params: SearchParams }) {
   return (
     <div className="flex flex-col gap-6">
       {filters}
+      {searchForm()}
+      <SearchResultSummary search={search} total={page.totalElements} unit="talep" />
 
       {rows.length === 0 ? (
         <EmptyState
           title={
-            filter === "ALL"
-              ? "Hesap silme talebi yok."
-              : `"${deletionStatusLabel(filter)}" durumunda talep yok.`
+            search !== null
+              ? searchEmptyTitle(search)
+              : filter === "ALL"
+                ? "Hesap silme talebi yok."
+                : `"${deletionStatusLabel(filter)}" durumunda talep yok.`
           }
           description="Kuyruk sunucudaki sayfadır; panel gelen satırları süzmez."
         />

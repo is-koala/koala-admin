@@ -3,7 +3,14 @@ import type { Metadata } from "next";
 
 import { RecentOperationsList } from "@/components/escrow/recent-operations-list";
 import { PageHeader } from "@/components/panel/page-header";
-import { QueuePager } from "@/components/panel/queue";
+import {
+  ListSearchForm,
+  QueuePager,
+  SEARCH_PARAM,
+  SearchResultSummary,
+  activeSearch,
+  searchEmptyTitle,
+} from "@/components/panel/queue";
 import {
   Badge,
   EmptyState,
@@ -18,9 +25,20 @@ import {
 import { formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
 import { assignmentLookupHref, disputeHref, userHrefOrNull } from "@/lib/panel-href";
 import { DISPUTE_PAGING, getDisputes, type Dispute } from "@/server/api/disputes";
-import { pageWindow, readPaging, type PageWindow, type SearchParams } from "@/server/api/paging";
+import {
+  pageWindow,
+  readPaging,
+  readParam,
+  type PageWindow,
+  type SearchParams,
+} from "@/server/api/paging";
 import { getEscrowSummary } from "@/server/api/escrow";
 import { isKoalaApiError } from "@/server/api/errors";
+import {
+  SEARCH_QUERY_TOO_LONG_MESSAGE,
+  isSearchQueryTooLong,
+  readSearchQuery,
+} from "@/server/api/search-query";
 import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { getStaffContext } from "@/server/authz/staff-context";
@@ -70,7 +88,11 @@ export default async function DisputesPage({ searchParams }: PageProps) {
       />
 
       <RequirePermission permission="dispute.resolve">
-        <DisputeWorkspace filter={readFilter(params.durum)} paging={paging} />
+        <DisputeWorkspace
+          filter={readFilter(params.durum)}
+          paging={paging}
+          query={readSearchQuery(readParam(params, SEARCH_PARAM))}
+        />
       </RequirePermission>
     </div>
   );
@@ -78,8 +100,10 @@ export default async function DisputesPage({ searchParams }: PageProps) {
 
 type QueueResult =
   | { ok: true; disputes: Dispute[]; window: PageWindow }
+  | { ok: false; searchTooLong: true }
   | {
       ok: false;
+      searchTooLong?: false;
       title: string;
       description: string;
       errorCode: string | null;
@@ -90,12 +114,14 @@ async function loadQueue(
   accessToken: string,
   paging: { page: number; size: number },
   filter: StatusFilter,
+  query: string | null,
 ): Promise<QueueResult> {
   try {
     const page = await getDisputes(accessToken, {
       page: paging.page,
       size: paging.size,
       status: filter === "ALL" ? null : filter,
+      query,
     });
     return {
       ok: true,
@@ -103,6 +129,9 @@ async function loadQueue(
       window: pageWindow(page),
     };
   } catch (error) {
+    if (isSearchQueryTooLong(error)) {
+      return { ok: false, searchTooLong: true };
+    }
     if (isKoalaApiError(error) && error.isForbidden) {
       return {
         ok: false,
@@ -179,16 +208,42 @@ async function loadSummaries(
 interface WorkspaceProps {
   filter: StatusFilter;
   paging: { page: number; size: number };
+  query: string | null;
 }
 
-async function DisputeWorkspace({ filter, paging }: WorkspaceProps) {
+async function DisputeWorkspace({ filter, paging, query }: WorkspaceProps) {
   const context = await getStaffContext();
   const accessToken = await getKoalaAccessToken();
-  const queue = await loadQueue(accessToken, paging, filter);
+  const queue = await loadQueue(accessToken, paging, filter, query);
+  const search = activeSearch(query);
+
+  const viewState = {
+    ...(filter !== "ALL" ? { durum: filter } : {}),
+    boyut: String(paging.size),
+    ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+  };
+
+  const searchForm = (error: string | null = null) => (
+    <ListSearchForm
+      id="uyusmazlik-ara"
+      label="Uyuşmazlıklarda ara"
+      pathname="/disputes"
+      query={query}
+      state={viewState}
+      placeholder="ör. d1000000, 9a1c0f10 veya ayşe yılmaz"
+      hint="Uyuşmazlık kimliği, atama kimliği ve tarafların ad-soyadı ile e-postasında arar; durum süzgeciyle kesişir."
+      error={error}
+    />
+  );
+
+  if (!queue.ok && queue.searchTooLong === true) {
+    return <div className="flex flex-col gap-8">{searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}</div>;
+  }
 
   if (!queue.ok) {
     return (
       <div className="flex flex-col gap-8">
+        {searchForm()}
         <ErrorState
           title={queue.title}
           description={queue.description}
@@ -242,13 +297,15 @@ async function DisputeWorkspace({ filter, paging }: WorkspaceProps) {
           </p>
         </div>
 
+        {searchForm()}
+
         <nav className="flex flex-wrap gap-2" aria-label="Duruma göre süzgeç">
           {STATUS_FILTERS.map((candidate) => (
             <Link
               key={candidate}
               href={{
                 pathname: "/disputes",
-                query: filterQuery(candidate, queue.window.page),
+                query: filterQuery(candidate, queue.window.page, query),
               }}
               aria-current={candidate === filter ? "page" : undefined}
               className={
@@ -262,17 +319,23 @@ async function DisputeWorkspace({ filter, paging }: WorkspaceProps) {
           ))}
         </nav>
 
+        <SearchResultSummary search={search} total={queue.window.totalElements} unit="uyuşmazlık" />
+
         {visible.length === 0 ? (
           <EmptyState
             title={
-              filter === "ALL"
-                ? "Bekleyen uyuşmazlık yok."
-                : `${FILTER_LABELS[filter]} durumunda uyuşmazlık yok.`
+              search !== null
+                ? searchEmptyTitle(search)
+                : filter === "ALL"
+                  ? "Bekleyen uyuşmazlık yok."
+                  : `${FILTER_LABELS[filter]} durumunda uyuşmazlık yok.`
             }
             description={
-              filter === "ALL"
-                ? "Emanetteki hiçbir ödeme bir uyuşmazlık tarafından bloke edilmiyor."
-                : "Başka bir durum seçebilir ya da kuyruğu daha sonra yenileyebilirsiniz."
+              search !== null
+                ? "Arama seçili durum süzgeciyle kesişir; başka bir durum seçebilir ya da aramayı temizleyebilirsiniz."
+                : filter === "ALL"
+                  ? "Emanetteki hiçbir ödeme bir uyuşmazlık tarafından bloke edilmiyor."
+                  : "Başka bir durum seçebilir ya da kuyruğu daha sonra yenileyebilirsiniz."
             }
           />
         ) : (
@@ -349,14 +412,7 @@ async function DisputeWorkspace({ filter, paging }: WorkspaceProps) {
         )}
 
         {queue.window.totalElements > 0 ? (
-          <QueuePager
-            window={queue.window}
-            state={{
-              ...(filter !== "ALL" ? { durum: filter } : {}),
-              boyut: String(paging.size),
-            }}
-            unit="uyuşmazlık"
-          />
+          <QueuePager window={queue.window} state={viewState} unit="uyuşmazlık" />
         ) : null}
       </section>
 
@@ -384,9 +440,15 @@ function readFilter(value: string | string[] | undefined): StatusFilter {
   return STATUS_FILTERS.find((entry) => entry === candidate) ?? "ALL";
 }
 
-function filterQuery(filter: StatusFilter, page = 0): Record<string, string> {
+/** Durum sekmesi aramayı taşır: aynı metin başka durumda da anlamlıdır. */
+function filterQuery(
+  filter: StatusFilter,
+  page = 0,
+  search: string | null = null,
+): Record<string, string> {
   const query: Record<string, string> = {};
   if (filter !== "ALL") query.durum = filter;
   if (page > 0) query.sayfa = String(page);
+  if (search !== null) query[SEARCH_PARAM] = search;
   return query;
 }

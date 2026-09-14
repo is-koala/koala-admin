@@ -16,7 +16,7 @@ import { IdentityReviewBody, IdentityStatusBadge, identityDisplayName } from "..
 
 export const metadata: Metadata = { title: "Kimlik incelemesi" };
 
-const QUEUE_KEYS = ["durum", "sirala", "boyut", "sayfa"] as const;
+const QUEUE_KEYS = ["durum", "sirala", "boyut", "sayfa", "q"] as const;
 
 /**
  * Kuyruk süzgecini nesne URL'sinden geri taşımak için. Karar sonrası dönüş

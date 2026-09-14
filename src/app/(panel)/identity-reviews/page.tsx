@@ -2,7 +2,16 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
-import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
+import {
+  ListSearchForm,
+  QueueFilters,
+  QueueLoadFailure,
+  QueuePager,
+  SEARCH_PARAM,
+  SearchResultSummary,
+  activeSearch,
+  searchEmptyTitle,
+} from "@/components/panel/queue";
 import {
   EmptyState,
   Table,
@@ -30,6 +39,11 @@ import {
   sortParam,
   type SearchParams,
 } from "@/server/api/paging";
+import {
+  SEARCH_QUERY_TOO_LONG_MESSAGE,
+  isSearchQueryTooLong,
+  readSearchQuery,
+} from "@/server/api/search-query";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
@@ -80,11 +94,14 @@ async function IdentityQueue({ params }: { params: SearchParams }) {
   const rawDecisionResult = readParam(params, "sonuc");
   const decisionResult =
     rawDecisionResult === "approved" || rawDecisionResult === "rejected" ? rawDecisionResult : null;
+  const query = readSearchQuery(readParam(params, SEARCH_PARAM));
+  const search = activeSearch(query);
 
   const viewState = {
     durum: status,
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
+    ...(query === null ? {} : { [SEARCH_PARAM]: query }),
   };
   const objectQuery = { ...viewState, sayfa: String(paging.page) };
 
@@ -107,18 +124,40 @@ async function IdentityQueue({ params }: { params: SearchParams }) {
           options: SORT_OPTIONS,
         },
       ]}
-      carry={{ boyut: String(paging.size) }}
+      carry={{ boyut: String(paging.size), ...(query === null ? {} : { [SEARCH_PARAM]: query }) }}
       notice="Durum ve sıralama kuyruğu süzer. TCKK fotoğrafları ve karar inceleme sayfasındadır."
+    />
+  );
+
+  const searchForm = (error: string | null = null) => (
+    <ListSearchForm
+      id="kimlik-ara"
+      label="Kimlik incelemelerinde ara"
+      pathname="/identity-reviews"
+      query={query}
+      state={viewState}
+      placeholder="ör. ayşe yılmaz veya ayse@example.com"
+      hint="Profildeki ad-soyad ve e-posta ile belgede beyan edilen ad-soyadta arar; durum süzgeciyle kesişir."
+      error={error}
     />
   );
 
   let page;
   try {
-    page = await getIdentityReviews(await getKoalaAccessToken(), { status, paging });
+    page = await getIdentityReviews(await getKoalaAccessToken(), { status, paging, query });
   } catch (error) {
+    if (isSearchQueryTooLong(error)) {
+      return (
+        <div className="flex flex-col gap-4">
+          {filters}
+          {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col gap-4">
         {filters}
+        {searchForm()}
         {decisionResult === null ? null : <DecisionSuccess result={decisionResult} />}
         <QueueLoadFailure
           subject="Kimlik kuyruğu"
@@ -134,12 +173,22 @@ async function IdentityQueue({ params }: { params: SearchParams }) {
   return (
     <div className="flex flex-col gap-6">
       {filters}
+      {searchForm()}
       {decisionResult === null ? null : <DecisionSuccess result={decisionResult} />}
+      <SearchResultSummary search={search} total={page.totalElements} unit="inceleme" />
 
       {reviews.length === 0 ? (
         <EmptyState
-          title={`${identityReviewStatusLabel(status)} durumunda inceleme yok.`}
-          description="Başka bir durum seçebilir ya da kuyruğu daha sonra yenileyebilirsiniz."
+          title={
+            search === null
+              ? `${identityReviewStatusLabel(status)} durumunda inceleme yok.`
+              : searchEmptyTitle(search)
+          }
+          description={
+            search === null
+              ? "Başka bir durum seçebilir ya da kuyruğu daha sonra yenileyebilirsiniz."
+              : `Arama "${identityReviewStatusLabel(status)}" durumuyla kesişir; başka bir durum seçebilir ya da aramayı temizleyebilirsiniz.`
+          }
         />
       ) : (
         <Table caption="Kimlik belge kuyruğu">

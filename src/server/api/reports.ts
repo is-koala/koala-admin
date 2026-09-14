@@ -5,6 +5,7 @@ import { z } from "zod";
 import { koalaApi } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
+import { searchQueryParam } from "./search-query";
 import type { PageDto } from "./types";
 import { safeUserName, safeUserSchema } from "./users";
 
@@ -180,6 +181,8 @@ export interface ReportQueueQuery {
   readonly status: ReportStatus;
   readonly reportedUserId?: string | null;
   readonly paging: Paging;
+  /** koala-backend#263: şikayet eden/edilenin ad-soyadı ve e-postası, ilan başlığı. */
+  readonly query?: string | null;
 }
 
 /**
@@ -197,6 +200,7 @@ export function getReports(accessToken: string, query: ReportQueueQuery): Promis
     query: {
       status: query.status,
       reportedUserId: query.reportedUserId?.trim() || undefined,
+      query: searchQueryParam(query.query),
       ...pagingQuery(query.paging),
     },
     accessToken,

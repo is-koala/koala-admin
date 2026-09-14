@@ -5,6 +5,7 @@ import {
   adminMeSuccessBody,
   endpointNotFoundBody,
   resourceNotFoundBody,
+  searchQueryTooLongBody,
 } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
@@ -617,5 +618,53 @@ describe("a report that does not exist", () => {
     expect(outcome.thrown).toBeNull();
     expect(calls).toBe(0);
     expect(outcome.html).toContain("403 — Bu sayfa için yetkiniz yok");
+  });
+});
+
+describe("the search box — koala-admin#94", () => {
+  it("sends q to the backend as query, next to the status, and names it in the result line", async () => {
+    stubMe(MODERATOR);
+    const queue = watchQueue([row()]);
+
+    const html = await render({ q: " berk ", durum: "OPEN" });
+
+    expect(queue.url?.searchParams.get("query")).toBe("berk");
+    expect(queue.url?.searchParams.get("status")).toBe("OPEN");
+    expect(html).toContain("“berk” için 1 şikayet bulundu.");
+    expect(html).toContain('name="q"');
+  });
+
+  it("offers Temizle, which drops q but keeps status, sort and the user filter", async () => {
+    stubMe(MODERATOR);
+    watchQueue([row()]);
+
+    const html = await render({ q: "berk", durum: "ACTIONED", kullanici: REPORTED.id });
+
+    expect(html).toContain(
+      `href="/reports?durum=ACTIONED&amp;sirala=createdAt%2Cdesc&amp;boyut=20&amp;kullanici=${REPORTED.id}"`,
+    );
+    expect(html).toContain("Temizle");
+  });
+
+  it("says there is no result for the query rather than that the status is empty", async () => {
+    stubMe(MODERATOR);
+    watchQueue([]);
+
+    const html = await render({ q: "kimse" });
+
+    expect(html).toContain("“kimse” için sonuç yok.");
+    expect(html).not.toContain("durumunda şikayet yok.");
+  });
+
+  it("shows the backend's 400 for an over-long query inline", async () => {
+    stubMe(MODERATOR);
+    watchQueue([], () =>
+      HttpResponse.json(searchQueryTooLongBody("/admin/reports"), { status: 400 }),
+    );
+
+    const html = await render({ q: "k".repeat(120) });
+
+    expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
+    expect(html).not.toContain("Şikayet kuyruğu yüklenemedi.");
   });
 });

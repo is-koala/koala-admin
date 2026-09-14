@@ -16,7 +16,7 @@ import { DeletionReviewBody, DeletionStatusBadge } from "../deletion-detail";
 
 export const metadata: Metadata = { title: "Hesap silme talebi" };
 
-const QUEUE_KEYS = ["durum", "sirala", "boyut", "sayfa"] as const;
+const QUEUE_KEYS = ["durum", "sirala", "boyut", "sayfa", "q"] as const;
 
 function queueReturnTo(params: SearchParams): Route {
   const state: Record<string, string> = {};
