@@ -6,6 +6,8 @@ import { ASSIGNMENT_STATUS_LABELS } from "@/app/(panel)/assignments/labels";
 import {
   GLOBAL_SEARCH_DEFAULT_COOLDOWN_MS,
   GLOBAL_SEARCH_GROUP_SIZE,
+  GLOBAL_SEARCH_MIN_QUERY_LENGTH,
+  SEARCH_GROUP_KINDS,
   type GlobalSearchResponse,
   type SearchGroup,
   type SearchGroupFailure,
@@ -58,6 +60,7 @@ import { staffPartyName } from "@/server/api/shared/staff-party";
 import { isSearchQueryTooLong, searchQueryParam } from "@/server/api/search-query";
 import { safeUserName } from "@/server/api/users";
 import type { Permission } from "@/server/authz/permissions";
+import { routePermission, type GatedRoutePath } from "@/server/authz/routes";
 
 /**
  * Global arama — koala-admin#104. Backend'de birleşik bir `GET /admin/search`
@@ -91,28 +94,48 @@ export interface GlobalSearchInput {
 
 interface ObjectTarget {
   readonly kind: SearchObjectKind;
+  /** Bulunan nesnenin açılacağı sayfa; izin buradan, `ROUTES`'tan okunur. */
+  readonly route: GatedRoutePath;
   readonly permission: Permission;
   readonly path: (id: string) => string;
   readonly href: (id: string) => string;
 }
 
-/** Issue'daki sıra; yarışın kazananı sıraya değil cevabın hızına bağlıdır. */
+function target(
+  kind: SearchObjectKind,
+  route: GatedRoutePath,
+  path: (id: string) => string,
+  href: (id: string) => string,
+): ObjectTarget {
+  return { kind, route, permission: routePermission(route), path, href };
+}
+
+/**
+ * Issue'daki sıra; yarışın kazananı sıraya değil cevabın hızına bağlıdır.
+ * İzin ikinci kez yazılmaz: hedefin açacağı sayfanın kapısı neyse odur —
+ * paletin bir nesneyi sayfanın göstermeyeceği birine açması mümkün olmasın.
+ */
 export const OBJECT_TARGETS: readonly ObjectTarget[] = [
-  { kind: "user", permission: "user.read", path: marketplaceUserPath, href: userHref },
-  { kind: "assignment", permission: "payment.read", path: escrowSummaryPath, href: assignmentHref },
-  { kind: "payment", permission: "payment.read", path: paymentPath, href: paymentHref },
-  { kind: "payout", permission: "payout.reconcile", path: payoutPath, href: payoutHref },
-  { kind: "dispute", permission: "dispute.resolve", path: disputeDetailPath, href: disputeHref },
-  { kind: "job", permission: "job.read", path: jobPath, href: jobHref },
-  { kind: "company", permission: "company.approve", path: companyDetailPath, href: companyHref },
+  target("user", "/users/[id]", marketplaceUserPath, userHref),
+  target("assignment", "/assignments/[id]", escrowSummaryPath, assignmentHref),
+  target("payment", "/payments/[id]", paymentPath, paymentHref),
+  target("payout", "/payout-reconciliation/[id]", payoutPath, payoutHref),
+  target("dispute", "/disputes/[id]", disputeDetailPath, disputeHref),
+  target("job", "/jobs/[id]", jobPath, jobHref),
+  target("company", "/companies/[id]", companyDetailPath, companyHref),
 ];
 
-export const GROUP_PERMISSIONS: Record<SearchGroupKind, Permission> = {
-  user: "user.read",
-  job: "job.read",
-  company: "company.approve",
-  assignment: "payment.read",
+/** Her metin grubunun liste sayfası; izin yine `ROUTES`'tan. */
+export const GROUP_ROUTES: Record<SearchGroupKind, GatedRoutePath> = {
+  user: "/users",
+  job: "/jobs",
+  company: "/companies",
+  assignment: "/assignments",
 };
+
+export function groupPermission(kind: SearchGroupKind): Permission {
+  return routePermission(GROUP_ROUTES[kind]);
+}
 
 /**
  * Varlık yoklaması için yeter: `id` dışındaki her alan atılır, böylece bir
@@ -123,16 +146,29 @@ const existsSchema = z.object({ id: z.string() });
 
 export async function globalSearch(input: GlobalSearchInput): Promise<GlobalSearchResponse> {
   const trimmed = input.query.trim();
+  if (isTooShort(trimmed)) {
+    return { kind: "idle" };
+  }
   if (isUuid(trimmed)) {
     return lookupObject(input, trimmed.toLowerCase());
   }
 
   const query = searchQueryParam(trimmed);
+  /* v8 ignore next 3 -- `isTooShort` aynı eşiği önce uyguladı; burası yalnız tip için. */
   if (query === undefined) {
     return { kind: "idle" };
   }
 
   return searchText(input, query);
+}
+
+/**
+ * Sunucunun kısa devresi: `/api/search` bunu `/admin/me`'ye gitmeden önce
+ * sorar, palet de aynı sabitle isteği hiç atmaz. Kırpılmış ölçülür; boşluk
+ * karakter değildir.
+ */
+export function isTooShort(raw: string): boolean {
+  return raw.trim().length < GLOBAL_SEARCH_MIN_QUERY_LENGTH;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -217,27 +253,22 @@ interface GroupOutcome {
 
 async function searchText(input: GlobalSearchInput, query: string): Promise<GlobalSearchResponse> {
   const showPii = input.has("user.read_pii");
-  const loaders: Partial<Record<SearchGroupKind, () => Promise<SearchGroup>>> = {
+  const loaders: Record<SearchGroupKind, () => Promise<SearchGroup>> = {
     user: () => loadUsers(input.accessToken, query),
     job: () => loadJobs(input.accessToken, query, showPii),
     company: () => loadCompanies(input.accessToken, query),
     assignment: () => loadAssignments(input.accessToken, query),
   };
 
-  const wanted = (Object.keys(GROUP_PERMISSIONS) as SearchGroupKind[]).filter((kind) =>
-    input.has(GROUP_PERMISSIONS[kind]),
-  );
+  const wanted = SEARCH_GROUP_KINDS.filter((kind) => input.has(groupPermission(kind)));
   if (wanted.length === 0) {
     return { kind: "no-permission" };
   }
 
   const outcomes = await Promise.all(
     wanted.map(async (kind): Promise<GroupOutcome> => {
-      const load = loaders[kind];
-      /* v8 ignore next -- her grup için bir yükleyici var; tip bunu bilmiyor. */
-      if (load === undefined) throw new Error(`Yükleyici yok: ${kind}`);
       try {
-        return { kind, result: { ok: true, group: await load() } };
+        return { kind, result: { ok: true, group: await loaders[kind]() } };
       } catch (error) {
         return {
           kind,

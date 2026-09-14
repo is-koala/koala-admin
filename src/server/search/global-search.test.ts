@@ -13,10 +13,16 @@ import {
 import { reviewCompany } from "../../../test/fixtures/companies";
 import { resourceNotFoundBody } from "../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../test/msw";
-import { GLOBAL_SEARCH_GROUP_SIZE, SEARCH_GROUP_KINDS } from "@/lib/global-search";
+import {
+  GLOBAL_SEARCH_GROUP_SIZE,
+  GLOBAL_SEARCH_MIN_QUERY_LENGTH,
+  SEARCH_GROUP_KINDS,
+} from "@/lib/global-search";
 import type { Permission } from "@/server/authz/permissions";
 
-import { GROUP_PERMISSIONS, OBJECT_TARGETS, globalSearch } from "./global-search";
+import { ROUTES } from "@/server/authz/routes";
+
+import { GROUP_ROUTES, OBJECT_TARGETS, globalSearch, groupPermission } from "./global-search";
 
 /**
  * Global aramanın sunucu yarısı (koala-admin#104).
@@ -363,9 +369,18 @@ describe("free text fans out to the permitted list endpoints", () => {
     expect(result).toEqual({ kind: "unavailable" });
   });
 
-  it("is idle for a query the backend would not filter on, and makes no request", async () => {
+  it("is idle below the shared minimum length, and makes no request", async () => {
     const seen: URL[] = [];
     stubLists(seen);
+
+    expect(GLOBAL_SEARCH_MIN_QUERY_LENGTH).toBe(2);
+    expect(
+      await globalSearch({
+        accessToken: TOKEN,
+        has: hasOnly(ALL_PERMISSIONS),
+        query: "a".repeat(GLOBAL_SEARCH_MIN_QUERY_LENGTH - 1),
+      }),
+    ).toEqual({ kind: "idle" });
 
     expect(
       await globalSearch({ accessToken: TOKEN, has: hasOnly(ALL_PERMISSIONS), query: "a" }),
@@ -396,10 +411,15 @@ describe("free text fans out to the permitted list endpoints", () => {
 });
 
 describe("the registries agree with the route table", () => {
-  it("maps every group and object target to a permission the panel knows", () => {
-    for (const kind of SEARCH_GROUP_KINDS) {
-      expect(GROUP_PERMISSIONS[kind]).toBeTypeOf("string");
+  const routeFor = (path: string) => {
+    const route = ROUTES.find((entry) => entry.path === path);
+    if (route === undefined || route.access !== "permission") {
+      throw new Error(`${path} kayıt defterinde izinli bir sayfa değil.`);
     }
+    return route;
+  };
+
+  it("gates every object target with the permission of the page it opens", () => {
     expect(OBJECT_TARGETS.map((target) => target.kind)).toEqual([
       "user",
       "assignment",
@@ -409,8 +429,27 @@ describe("the registries agree with the route table", () => {
       "job",
       "company",
     ]);
+    for (const target of OBJECT_TARGETS) {
+      expect(target.permission, target.kind).toBe(routeFor(target.route).permission);
+      // Ürettiği bağlantı, izni alındığı sayfanın yoluna gider.
+      const expectedHref = target.route.replace("[id]", PAYOUT_ID);
+      expect(target.href(PAYOUT_ID), target.kind).toBe(expectedHref);
+    }
     expect(OBJECT_TARGETS.find((target) => target.kind === "payout")?.path(PAYOUT_ID)).toBe(
       `/admin/payouts/${PAYOUT_ID}`,
     );
+  });
+
+  it("gates every text group with the permission of its list page", () => {
+    for (const kind of SEARCH_GROUP_KINDS) {
+      expect(groupPermission(kind), kind).toBe(routeFor(GROUP_ROUTES[kind]).permission);
+    }
+    // Sabitlenen değerler: kayıt defteri değişirse bu satır diff'te görünsün.
+    expect(SEARCH_GROUP_KINDS.map((kind) => [kind, groupPermission(kind)])).toEqual([
+      ["user", "user.read"],
+      ["job", "job.read"],
+      ["company", "company.approve"],
+      ["assignment", "payment.read"],
+    ]);
   });
 });

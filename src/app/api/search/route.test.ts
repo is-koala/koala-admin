@@ -2,7 +2,11 @@ import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pageEnvelope } from "../../../../test/fixtures/admin-detail";
-import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
+import {
+  adminMeNoStaffRecordBody,
+  adminMeSuccessBody,
+  resourceNotFoundBody,
+} from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { StaffAuthError } from "@/server/auth/errors";
 
@@ -59,6 +63,37 @@ describe("GET /api/search", () => {
     expect(response.status).toBe(401);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({ kind: "no-permission" });
+  });
+
+  it("answers 403 no-permission when the token resolves to no staff record", async () => {
+    server.use(
+      http.get(apiUrl("/admin/me"), () =>
+        HttpResponse.json(adminMeNoStaffRecordBody, { status: 403 }),
+      ),
+    );
+
+    const response = await GET(request("ayşe"));
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ kind: "no-permission" });
+  });
+
+  it("does not call a /admin/me outage 'no permission': 503 there is 502 unavailable here", async () => {
+    server.use(http.get(apiUrl("/admin/me"), () => HttpResponse.text("down", { status: 503 })));
+
+    const response = await GET(request("ayşe"));
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ kind: "unavailable" });
+  });
+
+  it("short-circuits a too-short query before touching /admin/me", async () => {
+    // Stub yok: `/admin/me`'ye giden bir istek `onUnhandledRequest: "error"` ile düşerdi.
+    const response = await GET(request("a"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ kind: "idle" });
+    expect(getKoalaAccessToken).not.toHaveBeenCalled();
   });
 
   it("runs the UUID path with the resolved permissions and returns the panel href", async () => {

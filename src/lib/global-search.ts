@@ -6,7 +6,16 @@
  * hiçbir şey burada değil — o taraf `src/server/search/global-search.ts`.
  */
 
+import { SEARCH_QUERY_MIN_LENGTH } from "@/server/api/search-query";
+
 export const GLOBAL_SEARCH_ENDPOINT = "/api/search";
+
+/**
+ * Bundan kısa metin için istek çıkmaz — ne tarayıcıdan `/api/search`'e, ne
+ * sunucudan `/admin/me`'ye. Liste uçlarının 2–100 kuralıyla aynı sayı
+ * (`core/helpers/StaffSearchQuery.java`); iki yerde iki sayı olmasın.
+ */
+export const GLOBAL_SEARCH_MIN_QUERY_LENGTH = SEARCH_QUERY_MIN_LENGTH;
 
 /** Tuşa basıldıkça değil, operatör durunca sorulur. */
 export const GLOBAL_SEARCH_DEBOUNCE_MS = 300;
@@ -14,7 +23,11 @@ export const GLOBAL_SEARCH_DEBOUNCE_MS = 300;
 /** Metin aramasında her gruptan istenen satır sayısı. */
 export const GLOBAL_SEARCH_GROUP_SIZE = 5;
 
-/** Backend 429 döndüğünde, `Retry-After` yoksa paletin bekleyeceği süre. */
+/**
+ * Backend 429 döndüğünde paletin bekleyeceği süre. Sabit, çünkü
+ * `koalaRequest` yanıt başlıklarını zarfa taşımıyor — bir `Retry-After`
+ * gelse de okunmuyor. Başlık bir gün zarfa girerse bu sabit yalnız yedek olur.
+ */
 export const GLOBAL_SEARCH_DEFAULT_COOLDOWN_MS = 10_000;
 
 /**
@@ -102,17 +115,35 @@ export type GlobalSearchResponse =
   /** Hiçbir uç cevap vermedi (5xx, ağ). */
   | { readonly kind: "unavailable" };
 
-/** Cevabın kaba bir doğrulaması: palet `fetch`'ten dönen JSON'a güvenmez. */
-export function isGlobalSearchResponse(value: unknown): value is GlobalSearchResponse {
-  if (typeof value !== "object" || value === null) return false;
+const RESPONSE_KINDS: ReadonlySet<string> = new Set<GlobalSearchResponse["kind"]>([
+  "idle",
+  "object",
+  "not-found",
+  "groups",
+  "no-permission",
+  "rate-limited",
+  "unavailable",
+]);
+
+/**
+ * `fetch`'ten dönen JSON'u sözleşmeye çevirir; uymuyorsa `null`. Palet bu
+ * gövdeye güvenmez: `kind` bilinmiyorsa cevap yok sayılır, `rate-limited`
+ * içinde sayı olmayan ya da sıfır/eksi bir `retryAfterMs` varsayılan soğumaya
+ * düşer — sıfırlık bir bekleme, 429'a 429 ile cevap veren bir döngü olurdu.
+ */
+export function parseGlobalSearchResponse(value: unknown): GlobalSearchResponse | null {
+  if (typeof value !== "object" || value === null) return null;
   const kind = (value as { kind?: unknown }).kind;
-  return (
-    kind === "idle" ||
-    kind === "object" ||
-    kind === "not-found" ||
-    kind === "groups" ||
-    kind === "no-permission" ||
-    kind === "rate-limited" ||
-    kind === "unavailable"
-  );
+  if (typeof kind !== "string" || !RESPONSE_KINDS.has(kind)) return null;
+  if (kind === "rate-limited") {
+    const retryAfterMs = (value as { retryAfterMs?: unknown }).retryAfterMs;
+    return {
+      kind,
+      retryAfterMs:
+        typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs) && retryAfterMs > 0
+          ? retryAfterMs
+          : GLOBAL_SEARCH_DEFAULT_COOLDOWN_MS,
+    };
+  }
+  return value as GlobalSearchResponse;
 }

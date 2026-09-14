@@ -145,6 +145,18 @@ describe("CommandPalette", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("sends nothing for a single character and says how many it needs", async () => {
+    const user = userEvent.setup();
+    renderPalette();
+    await openWithShortcut(user);
+
+    await user.keyboard("a");
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent("En az 2 karakter yazın.");
+  });
+
   it("renders grouped options, walks them with the arrow keys and opens the active one on Enter", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(jsonResponse(groups));

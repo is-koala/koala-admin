@@ -483,6 +483,24 @@ export function gatedRoutes(): readonly GatedRoute[] {
   return ROUTES.filter((route): route is GatedRoute => route.access === "permission");
 }
 
+/** Only the gated paths, so a caller cannot ask for `/giris`'s permission. */
+export type GatedRoutePath = GatedRoute["path"];
+
+/**
+ * The permission a gated page requires, read from the registry rather than
+ * written a second time. Global search (koala-admin#104) decides which backend
+ * endpoint it may probe by asking which panel page the hit would open — so the
+ * palette can never quietly gate a target differently from the page itself.
+ */
+export function routePermission(path: GatedRoutePath): Permission {
+  const route = gatedRoutes().find((entry) => entry.path === path);
+  /* v8 ignore next 3 -- unreachable: the parameter type is the gated path union. */
+  if (route === undefined) {
+    throw new Error(`Kayıt defterinde izinli rota yok: ${path}`);
+  }
+  return route.permission;
+}
+
 /** A gated route that also appears in the menu — the only kind that can. */
 type NavRoute = Extract<GatedRoute, { nav: object }>;
 

@@ -16,9 +16,10 @@ import { cn } from "@/lib/cn";
 import {
   GLOBAL_SEARCH_DEBOUNCE_MS,
   GLOBAL_SEARCH_ENDPOINT,
+  GLOBAL_SEARCH_MIN_QUERY_LENGTH,
   SEARCH_GROUP_LABELS,
   SEARCH_OBJECT_LABELS,
-  isGlobalSearchResponse,
+  parseGlobalSearchResponse,
   type GlobalSearchResponse,
   type SearchHit,
 } from "@/lib/global-search";
@@ -178,8 +179,8 @@ export function CommandPalette() {
         if (response.redirected || response.status === 401 || !isJson) {
           next = { phase: "failed", reason: "session" };
         } else {
-          const body: unknown = await response.json();
-          if (!isGlobalSearchResponse(body)) {
+          const body = parseGlobalSearchResponse(await response.json());
+          if (body === null) {
             next = { phase: "failed", reason: "network" };
           } else if (body.kind === "rate-limited") {
             const until = Date.now() + body.retryAfterMs;
@@ -207,8 +208,8 @@ export function CommandPalette() {
 
   function onQueryChange(value: string) {
     setQuery(value);
-    if (value.trim().length === 0) {
-      // Boş kutu bekleyen isteği de ekrandaki cevabı da geçersiz kılar.
+    if (value.trim().length < GLOBAL_SEARCH_MIN_QUERY_LENGTH) {
+      // Kısa kutu bekleyen isteği de ekrandaki cevabı da geçersiz kılar.
       abortRef.current?.abort();
       requestSeq.current += 1;
       setState({ phase: "idle" });
@@ -219,7 +220,8 @@ export function CommandPalette() {
   useEffect(() => {
     if (!open) return;
     const trimmed = query.trim();
-    if (trimmed.length === 0) return;
+    // Sunucu da aynı eşikte `idle` döner; bir harf için istek çıkmaz.
+    if (trimmed.length < GLOBAL_SEARCH_MIN_QUERY_LENGTH) return;
     // Soğuma süresi debounce'un üstüne değil yerine geçer: hangisi geçse o.
     const delay = Math.max(GLOBAL_SEARCH_DEBOUNCE_MS, cooldownUntil.current - Date.now());
     const timer = window.setTimeout(() => void runSearch(trimmed), delay);
@@ -428,8 +430,11 @@ function StatusLine({ id, state, query }: { id: string; state: PaletteState; que
 function statusText(state: PaletteState, query: string): string | null {
   switch (state.phase) {
     case "idle":
-      return query.trim().length === 0
-        ? "Ad, e-posta ya da ilan başlığı yazın; bir kimlik (UUID) yapıştırırsanız nesne doğrudan açılır."
+      if (query.trim().length === 0) {
+        return "Ad, e-posta ya da ilan başlığı yazın; bir kimlik (UUID) yapıştırırsanız nesne doğrudan açılır.";
+      }
+      return query.trim().length < GLOBAL_SEARCH_MIN_QUERY_LENGTH
+        ? `En az ${GLOBAL_SEARCH_MIN_QUERY_LENGTH} karakter yazın.`
         : null;
     case "loading":
       return "Aranıyor…";
@@ -447,7 +452,7 @@ function statusText(state: PaletteState, query: string): string | null {
 function doneText(response: GlobalSearchResponse): string | null {
   switch (response.kind) {
     case "idle":
-      return "En az 2 karakter yazın.";
+      return `En az ${GLOBAL_SEARCH_MIN_QUERY_LENGTH} karakter yazın.`;
     case "object":
       return `${SEARCH_OBJECT_LABELS[response.objectKind]} açılıyor…`;
     case "not-found":
