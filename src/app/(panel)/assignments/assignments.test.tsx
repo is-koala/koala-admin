@@ -265,13 +265,24 @@ describe("the search box — koala-admin#94", () => {
     expect(html).toContain("Temizle");
   });
 
-  it("keeps the search when a row is opened by id", async () => {
+  it("links the row to the assignment's own page (koala-admin#95)", async () => {
     stubMe(ANALYST);
     watchList();
 
     const html = await render({ ara: "garson" });
 
-    expect(html).toContain(`/assignments?atama=${ASSIGNMENT_ID}&amp;ara=garson`);
+    expect(html).toContain(`href="/assignments/${ASSIGNMENT_ID}"`);
+    expect(html).not.toContain(`/assignments?atama=${ASSIGNMENT_ID}`);
+  });
+
+  it("links the inline UUID summary to the same page", async () => {
+    stubMe(ANALYST);
+    watchList();
+
+    const html = await render({ atama: ASSIGNMENT_ID });
+
+    expect(html).toContain("Detayı aç");
+    expect(html).toContain(`href="/assignments/${ASSIGNMENT_ID}"`);
   });
 
   it("says there is no result for the query", async () => {

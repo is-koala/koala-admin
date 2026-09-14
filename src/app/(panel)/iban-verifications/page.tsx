@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatCurrency, formatDateTime } from "@/lib/format";
-import { userHrefOrNull } from "@/lib/panel-href";
+import { ibanVerificationHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   getPendingIbanVerifications,
   IBAN_PENDING_PAGING,
@@ -52,7 +52,8 @@ export const metadata: Metadata = { title: "IBAN doğrulama" };
  * `GET /admin/bank-account-verifications` yalnız PENDING + süresi dolmamış
  * satırları sayfalar. Tam IBAN yoktur. Ret ucu yoktur; onay satırdan
  * `?referans=` / `?tutar=` ile mevcut confirm formuna düşer. Gönderen IBAN
- * hâlâ ekstreden yazılır — kuyruk onu taşımaz.
+ * hâlâ ekstreden yazılır — kuyruk onu taşımaz. Satırdaki referans nesne
+ * sayfasına gider (`/iban-verifications/{referans}`, koala-admin#95).
  */
 export default async function IbanVerificationsPage({
   searchParams,
@@ -244,7 +245,12 @@ function PendingRow({
       </TableCell>
       <TableCell>{row.amount === null ? EMPTY_VALUE : formatCurrency(row.amount)}</TableCell>
       <TableCell>
-        <span className="font-mono text-xs">{row.reference}</span>
+        <Link
+          href={ibanVerificationHref(row.reference)}
+          className="font-mono text-xs text-brand hover:underline"
+        >
+          {row.reference}
+        </Link>
       </TableCell>
       <TableCell>{formatDateTime(row.startedAt)}</TableCell>
       <TableCell>{formatDateTime(row.expiresAt)}</TableCell>

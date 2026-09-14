@@ -442,7 +442,7 @@ describe("the selected dispute", () => {
     expect(html).toContain("İşçi · Ayşe Yılmaz");
     expect(html).toContain("05.09.2026 11:15");
     expect(html).toContain(`/api/disputes/${DISPUTE}/evidence/${EVIDENCE_ID}/download`);
-    expect(html).toContain(`/assignments?atama=${ASSIGNMENT}`);
+    expect(html).toContain(`/assignments/${ASSIGNMENT}`);
     expect(html).not.toContain("koala-backend.test");
     expect(html).not.toContain("İmzalı indirme kaynakları tanımlı değil");
   });

@@ -10,6 +10,7 @@ import {
   formatNumber,
   formatPercent,
   formatTime,
+  formatWallClock,
 } from "./format";
 
 /** A real `timeStamp` from the backend: an instant in UTC. */
@@ -40,6 +41,26 @@ describe("date formatting", () => {
     expect(formatDate(undefined)).toBe(EMPTY_VALUE);
     expect(formatDate("")).toBe(EMPTY_VALUE);
     expect(formatDateTime("yarın")).toBe(EMPTY_VALUE);
+  });
+});
+
+describe("wall-clock formatting", () => {
+  it("prints a zone-less LocalDateTime as written, without converting it", () => {
+    // İlan başlangıcı duvar saatidir; UTC'de koşan bir süreçte bile 09:00 kalır.
+    expect(formatWallClock("2026-09-20T09:00:00")).toBe("20.09.2026 09:00");
+    expect(formatWallClock("2026-09-20T09:00")).toBe("20.09.2026 09:00");
+    expect(formatWallClock("2026-09-20T23:30:00.123")).toBe("20.09.2026 23:30");
+  });
+
+  it("falls back to instant formatting for a value that carries an offset", () => {
+    expect(formatWallClock("2026-09-06T01:58:48.643136333Z")).toBe(
+      formatDateTime("2026-09-06T01:58:48.643136333Z"),
+    );
+  });
+
+  it("returns the placeholder for nothing", () => {
+    expect(formatWallClock(null)).toBe("—");
+    expect(formatWallClock("")).toBe("—");
   });
 });
 

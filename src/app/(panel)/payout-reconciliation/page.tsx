@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { formatCurrency, formatDateTime } from "@/lib/format";
-import { assignmentLookupHref, isUuid } from "@/lib/panel-href";
+import { assignmentHref, isUuid, payoutHref } from "@/lib/panel-href";
 import { getPayouts, PAYOUT_PAGING, type Payout } from "@/server/api/payout-reconciliation";
 import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
 import {
@@ -44,6 +44,8 @@ export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
  * PROCESSING kuyruğu + UUID yedek. Liste `GET /admin/payouts` (`payout.reconcile`);
  * status gönderilmez ki backend AWAITING_SETTLEMENT (= PROCESSING) dönsün.
  * Onay mevcut reconcile formundan; satır `?hakedis=` ile formu doldurur.
+ * Satırın tarihi hakediş nesne sayfasına gider (`/payout-reconciliation/{id}`,
+ * koala-admin#95): #80'in kanıt alanları ve settlement geçmişi orada.
  */
 export default async function PayoutReconciliationPage({
   searchParams,
@@ -196,14 +198,18 @@ function PayoutRow({
 }) {
   return (
     <TableRow>
-      <TableCell>{formatDateTime(row.createdAt)}</TableCell>
+      <TableCell>
+        <Link href={payoutHref(row.id)} className="text-brand hover:underline">
+          {formatDateTime(row.createdAt)}
+        </Link>
+      </TableCell>
       <TableCell>{formatCurrency(row.amount, row.currency)}</TableCell>
       <TableCell>
         <Badge tone="warning">İşleniyor</Badge>
       </TableCell>
       <TableCell>
         <Link
-          href={assignmentLookupHref(row.jobAssignmentId)}
+          href={assignmentHref(row.jobAssignmentId)}
           className="font-mono text-xs text-brand hover:underline"
         >
           {row.jobAssignmentId}

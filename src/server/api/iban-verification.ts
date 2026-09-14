@@ -106,6 +106,36 @@ export function getPendingIbanVerifications(
   });
 }
 
+/**
+ * Tek bir bekleyen doğrulama, referansıyla (koala-admin#95).
+ *
+ * Backend'de `GET .../{reference}` yoktur; kuyruk `query=` ile referansta da
+ * arar (koala-backend#263), sonuç burada tam eşleşmeye indirilir. Kısmi
+ * eşleşen komşular (`KOALA-9F3A` ararken `KOALA-9F3A1`) elenir. `null`,
+ * "PENDING kuyruğunda böyle bir satır yok" demektir — onaylanmış ya da
+ * süresi dolmuş bir doğrulama da buraya düşer; nesne sayfası bunu 404 sayar.
+ */
+export async function findPendingIbanVerification(
+  accessToken: string,
+  reference: string,
+): Promise<IbanPending | null> {
+  const page = await koalaApi.get({
+    path: IBAN_PENDING_PATH,
+    schema: pageDtoSchema(ibanPendingSchema),
+    query: {
+      status: "PENDING",
+      query: searchQueryParam(reference),
+      page: 0,
+      size: 50,
+      sort: "verificationStartedAt,desc",
+    },
+    accessToken,
+    cache: "no-store",
+  });
+
+  return page.content.find((row) => row.reference === reference) ?? null;
+}
+
 export function confirmIbanVerification(
   accessToken: string,
   reference: string,

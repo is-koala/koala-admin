@@ -23,7 +23,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
-import { assignmentLookupHref, disputeHref, userHrefOrNull } from "@/lib/panel-href";
+import { assignmentHref, disputeHref, userHrefOrNull } from "@/lib/panel-href";
 import { DISPUTE_PAGING, getDisputes, type Dispute } from "@/server/api/disputes";
 import {
   pageWindow,
@@ -380,7 +380,7 @@ async function DisputeWorkspace({ filter, paging, query }: WorkspaceProps) {
                       </TableCell>
                       <TableCell>
                         <Link
-                          href={assignmentLookupHref(dispute.jobAssignmentId)}
+                          href={assignmentHref(dispute.jobAssignmentId)}
                           className="font-mono text-xs text-brand hover:underline"
                         >
                           {dispute.jobAssignmentId}

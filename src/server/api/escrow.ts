@@ -163,6 +163,49 @@ export function getEscrowSummary(
   });
 }
 
+/**
+ * `core/dtos/common/LinkedRecordDto.java` — bağlı kaydın yalnız kimliği,
+ * durumu ve zamanı. Durum serbest metin: ödeme, hakediş, uyuşmazlık ve
+ * şikayet enum'ları farklı; panel onu olduğu gibi yazar, çevirmez.
+ */
+export const linkedRecordSchema = z.object({
+  id: z.string(),
+  status: nullableString,
+  createdAt: nullableString,
+});
+
+export type LinkedRecord = z.infer<typeof linkedRecordSchema>;
+
+/**
+ * `AdminAssignmentDetailDto` (koala-backend#265) — `AdminAssignmentDto`'nun
+ * üst kümesi. Bağlı kayıtlar `LinkedRecordDto`; ödeme denemelerinin gövdesi
+ * ayrı uçtan (`getAssignmentPayments`, `payments.ts`) okunur.
+ *
+ * Eski `escrowSummarySchema` aynı uca karşı çalışmaya devam eder: zod
+ * bilinmeyen alanları düşürür, uyuşmazlık sayfası ve emanet kapısı tek bir
+ * alan bile değiştirmeden aynı özeti alır.
+ */
+export const assignmentDetailSchema = escrowSummarySchema.extend({
+  payments: z.array(linkedRecordSchema).default([]),
+  payout: linkedRecordSchema.nullish().transform((value) => value ?? null),
+  disputes: z.array(linkedRecordSchema).default([]),
+  reports: z.array(linkedRecordSchema).default([]),
+});
+
+export type AssignmentDetail = z.infer<typeof assignmentDetailSchema>;
+
+export function getAssignmentDetail(
+  accessToken: string,
+  assignmentId: string,
+): Promise<AssignmentDetail> {
+  return koalaApi.get({
+    path: escrowSummaryPath(assignmentId),
+    schema: assignmentDetailSchema,
+    accessToken,
+    cache: "no-store",
+  });
+}
+
 export interface AssignmentQueueQuery {
   readonly paging: Paging;
   /**

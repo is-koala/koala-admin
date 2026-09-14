@@ -5,12 +5,15 @@ import { apiUrl, server } from "../../../test/msw";
 
 import { readPaging } from "./paging";
 import {
+  getPayoutDetail,
   getPayouts,
   PAYOUT_PAGING,
   PAYOUTS_PATH,
+  payoutPath,
   reconcilePayout,
   type PayoutSettlementEvidence,
 } from "./payout-reconciliation";
+import { adminPayoutDetailFixture } from "../../../test/fixtures/admin-detail";
 
 const PAYOUT_ID = "9c000000-0000-4000-8000-000000000033";
 const RECONCILE = apiUrl(`/admin/payouts/${PAYOUT_ID}/reconcile`);
@@ -237,5 +240,46 @@ describe("the payout queue search goes to the backend as query", () => {
       query: "k".repeat(120),
     });
     expect(seen.url?.searchParams.get("query")).toHaveLength(100);
+  });
+});
+
+/** `GET /admin/payouts/{payoutId}` — `AdminPayoutDetailDto` (koala-backend#265). */
+describe("getPayoutDetail", () => {
+  it("reads the evidence fields, settlement tasks and linked attempts", async () => {
+    let authorization: string | null = null;
+    server.use(
+      http.get(apiUrl(payoutPath(PAYOUT_ID)), ({ request }) => {
+        authorization = request.headers.get("authorization");
+        return success(adminPayoutDetailFixture());
+      }),
+    );
+
+    const detail = await getPayoutDetail("TOKEN", PAYOUT_ID);
+
+    expect(authorization).toBe("Bearer TOKEN");
+    expect(detail.providerReference).toBe("iyz-transaction-000033");
+    expect(detail.maskedIban).toBe("TR** **** **** **** **** **12 34");
+    expect(detail.worker?.email).toBe("ayse@example.com");
+    expect(detail.settlementTasks).toHaveLength(2);
+    expect(detail.settlementTasks[1]?.lastError).toBe("Provider timeout");
+    expect(detail.paymentAttempts[0]?.status).toBe("SUCCEEDED");
+  });
+
+  it("tolerates a detail with only the required fields", async () => {
+    server.use(
+      http.get(apiUrl(payoutPath(PAYOUT_ID)), () =>
+        success({
+          id: PAYOUT_ID,
+          jobAssignmentId: "8c000000-0000-4000-8000-000000000034",
+          status: "PENDING",
+        }),
+      ),
+    );
+
+    const detail = await getPayoutDetail("TOKEN", PAYOUT_ID);
+
+    expect(detail.settlementTasks).toEqual([]);
+    expect(detail.paymentAttempts).toEqual([]);
+    expect(detail.amount).toBeNull();
   });
 });

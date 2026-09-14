@@ -23,7 +23,8 @@
  * Sonraki dalgalar üç tane daha ekledi ve panel bunları bilmiyordu:
  * `user.deletion.manage`, `bank.account.verify` ve `staff.read`. Banka
  * mutabakatı da `payout.reconcile` ile ayrı bir finans kapısıdır. Kimlik
- * belge kuyruğu `identity.review` ile yirmi bir.
+ * belge kuyruğu `identity.review` ile yirmi bir; koala-backend#265'in ilan
+ * okuması `job.read` ile yirmi iki.
  *
  * Eksik kalan bir ad, "izin verilmiş gibi görünmek" değil, **adlandırılamamak**
  * demekti: `partitionPermissions` onu `unknownPermissions`'a atıyor, yani o izne
@@ -97,6 +98,12 @@ const CATALOGUE = [
     mutating: true,
     sensitivity: "NORMAL",
     label: "Şirket başvurularını onayla",
+  },
+  {
+    name: "job.read",
+    mutating: false,
+    sensitivity: "PERSONAL_DATA",
+    label: "İlanları görüntüle",
   },
   {
     name: "dispute.resolve",

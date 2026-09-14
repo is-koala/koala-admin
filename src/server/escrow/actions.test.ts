@@ -194,7 +194,7 @@ describe("the escrow Server Action boundary", () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
-  it("revalidates the dispute, the queue and home after a successful resolution", async () => {
+  it("revalidates the dispute, the assignment, both queues and home after a successful resolution", async () => {
     stubMe(["dispute.resolve", "payment.read", "payout.release"]);
     watch("get", SUMMARY, () =>
       HttpResponse.json(envelope(`/admin/job-assignments/${ASSIGNMENT}`, SUMMARY_BODY)),
@@ -230,6 +230,8 @@ describe("the escrow Server Action boundary", () => {
     expect(revalidatePath.mock.calls.map(([path]) => path)).toEqual([
       `/disputes/${DISPUTE}`,
       "/disputes",
+      `/assignments/${ASSIGNMENT}`,
+      "/assignments",
       "/",
     ]);
   });

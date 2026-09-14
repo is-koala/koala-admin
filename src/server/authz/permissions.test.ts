@@ -21,6 +21,7 @@ const EXPECTED = [
   "dispute.resolve",
   "finance.read",
   "identity.review",
+  "job.read",
   "payment.read",
   "payment.refund",
   "payout.reconcile",
@@ -36,7 +37,7 @@ const EXPECTED = [
 ];
 
 describe("the permission catalogue", () => {
-  it("names the twenty-one permissions koala-backend defines, and no others", () => {
+  it("names the twenty-two permissions koala-backend defines, and no others", () => {
     expect([...PERMISSIONS].sort()).toEqual(EXPECTED);
   });
 
@@ -114,7 +115,7 @@ describe("the permission catalogue", () => {
   });
 
   it("refuses names it does not know", () => {
-    // A backend that grows a twenty-second permission must not be able to widen
+    // A backend that grows a twenty-third permission must not be able to widen
     // the panel's vocabulary by simply naming it in a response.
     expect(isPermission("category.manage")).toBe(true);
     expect(isPermission("category.mange")).toBe(false);

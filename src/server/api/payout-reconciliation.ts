@@ -47,6 +47,136 @@ const payoutSchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
 });
 
+/** `entities/SettlementOperation.java` — iyzico onay kuyruğundaki iş türü. */
+export const SETTLEMENT_OPERATIONS = ["APPROVE", "DISAPPROVE", "REFUND"] as const;
+export type SettlementOperation = (typeof SETTLEMENT_OPERATIONS)[number];
+
+export const SETTLEMENT_OPERATION_LABELS: Record<SettlementOperation, string> = {
+  APPROVE: "Onay",
+  DISAPPROVE: "Onay iptali",
+  REFUND: "İade",
+};
+
+/** `entities/SettlementTaskStatus.java`. */
+export const SETTLEMENT_TASK_STATUSES = ["PENDING", "SUCCEEDED", "FAILED"] as const;
+export type SettlementTaskStatus = (typeof SETTLEMENT_TASK_STATUSES)[number];
+
+export const SETTLEMENT_TASK_STATUS_LABELS: Record<SettlementTaskStatus, string> = {
+  PENDING: "Bekliyor",
+  SUCCEEDED: "Başarılı",
+  FAILED: "Başarısız",
+};
+
+export const PAYOUT_STATUS_LABELS: Record<PayoutStatus, string> = {
+  PENDING: "Bekliyor",
+  PROCESSING: "İşleniyor",
+  COMPLETED: "Tamamlandı",
+  FAILED: "Başarısız",
+};
+
+const nullableString = z
+  .string()
+  .nullish()
+  .transform((value) => value ?? null);
+
+const nullableInt = z
+  .number()
+  .int()
+  .nullish()
+  .transform((value) => value ?? null);
+
+/** `StaffPartyDto` — hakedişin tarafları e-postayla; yalnız `payout.reconcile`. */
+const staffPartySchema = z.object({
+  id: z.string(),
+  firstName: nullableString,
+  lastName: nullableString,
+  email: nullableString,
+});
+
+export type PayoutParty = z.infer<typeof staffPartySchema>;
+
+/** `AdminSettlementTaskDto` — bir settlement denemesi. */
+export const settlementTaskSchema = z.object({
+  id: z.string(),
+  operation: z.enum(SETTLEMENT_OPERATIONS),
+  status: z.enum(SETTLEMENT_TASK_STATUSES),
+  attempts: nullableInt,
+  nextAttemptAt: nullableString,
+  lastError: nullableString,
+  providerTransactionId: nullableString,
+  providerReference: nullableString,
+  amount: nullableString,
+  completedAt: nullableString,
+  createdAt: nullableString,
+  updatedAt: nullableString,
+});
+
+export type SettlementTask = z.infer<typeof settlementTaskSchema>;
+
+const linkedRecordSchema = z.object({
+  id: z.string(),
+  status: nullableString,
+  createdAt: nullableString,
+});
+
+/**
+ * `AdminPayoutDetailDto` (koala-backend#265). #80'in kanıt alanları —
+ * sağlayıcı referansı, alıcı, maskeli IBAN, tutar, para birimi — burada;
+ * `settlementTasks` mutabakat geçmişi, `paymentAttempts` bağlı tahsilatlar.
+ * Liste şemasından gevşek: detay yeni uç, para metni yine ondalık string
+ * ama biçimini burada zorlamak yeni bir alan için bütün sayfayı düşürürdü.
+ */
+export const payoutDetailSchema = z.object({
+  id: z.string(),
+  jobAssignmentId: z.string(),
+  jobId: nullableString,
+  jobTitle: nullableString,
+  companyName: nullableString,
+  worker: staffPartySchema.nullish().transform((value) => value ?? null),
+  employer: staffPartySchema.nullish().transform((value) => value ?? null),
+  paymentId: nullableString,
+  maskedIban: nullableString,
+  amount: nullableString,
+  currency: nullableString,
+  status: z.enum(PAYOUT_STATUSES),
+  providerReference: nullableString,
+  settlementReference: nullableString,
+  failureReason: nullableString,
+  processingAt: nullableString,
+  completedAt: nullableString,
+  createdAt: nullableString,
+  updatedAt: nullableString,
+  settlementTasks: z.array(settlementTaskSchema).default([]),
+  paymentAttempts: z.array(linkedRecordSchema).default([]),
+});
+
+export type PayoutDetail = z.infer<typeof payoutDetailSchema>;
+
+export function payoutPath(payoutId: string): string {
+  return `${PAYOUTS_PATH}/${encodeURIComponent(payoutId)}`;
+}
+
+export function getPayoutDetail(accessToken: string, payoutId: string): Promise<PayoutDetail> {
+  return koalaApi.get({
+    path: payoutPath(payoutId),
+    schema: payoutDetailSchema,
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+/** Tarafın adı; ad yoksa e-posta, o da yoksa kimlik. */
+export function payoutPartyName(party: PayoutParty | null): string {
+  if (party === null) return "—";
+  const full = [party.firstName, party.lastName]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join(" ")
+    .trim();
+  if (full.length > 0) return full;
+  if (party.email !== null && party.email.length > 0) return party.email;
+  return party.id;
+}
+
 /** `ConfirmPayoutSettlementDto.java`. Amount is deliberately decimal text. */
 export interface PayoutSettlementEvidence {
   readonly settlementReference: string;
