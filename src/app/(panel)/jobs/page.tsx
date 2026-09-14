@@ -24,6 +24,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
+import { objectQueryFor } from "@/lib/breadcrumb";
 import { EMPTY_VALUE, formatDateTime, formatInteger, formatWallClock } from "@/lib/format";
 import { jobHref, jobsHref, userHrefOrNull } from "@/lib/panel-href";
 import {
@@ -119,6 +120,7 @@ async function JobQueue({ params }: { params: SearchParams }) {
   };
   if (query !== null) viewState[SEARCH_PARAM] = query;
   if (companyId !== null) viewState.sirket = companyId;
+  const objectQuery = objectQueryFor(viewState, paging.page);
 
   const filters = (
     <QueueFilters
@@ -237,7 +239,7 @@ async function JobQueue({ params }: { params: SearchParams }) {
           </TableHead>
           <TableBody>
             {page.content.map((job) => (
-              <JobRow key={job.id} job={job} />
+              <JobRow key={job.id} job={job} objectQuery={objectQuery} />
             ))}
           </TableBody>
         </Table>
@@ -250,7 +252,7 @@ async function JobQueue({ params }: { params: SearchParams }) {
   );
 }
 
-function JobRow({ job }: { job: AdminJob }) {
+function JobRow({ job, objectQuery }: { job: AdminJob; objectQuery: Record<string, string> }) {
   const employerHref = job.employer === null ? null : userHrefOrNull(job.employer.id);
   const location = [job.districtName, job.cityName]
     .filter((part): part is string => part !== null && part.length > 0)
@@ -259,7 +261,10 @@ function JobRow({ job }: { job: AdminJob }) {
   return (
     <TableRow>
       <TableCell>
-        <Link href={jobHref(job.id)} className="font-medium text-brand hover:underline">
+        <Link
+          href={jobHref(job.id, objectQuery)}
+          className="font-medium text-brand hover:underline"
+        >
           {job.title ?? job.id}
         </Link>
       </TableCell>

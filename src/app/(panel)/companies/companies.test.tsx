@@ -9,6 +9,12 @@ import {
 } from "../../../../test/fixtures/companies";
 import { categoryCreatedEntry } from "../../../../test/fixtures/audit-log";
 import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
+import {
+  STAFF_HREF,
+  STAFF_ID,
+  STAFF_NAME,
+  stubStaffMember,
+} from "../../../../test/support/stub-staff-member";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 import { detailValuesOf, watchAudit } from "../../../../test/support/watch-audit";
@@ -24,7 +30,7 @@ const { default: CompanyDetailPage } = await import("./[id]/page");
 
 const ADMIN_ME = apiUrl("/admin/me");
 const COMPANIES = apiUrl("/admin/companies");
-const STAFF_ID = "b7f4a2c1-0000-4c00-8000-000000000007";
+const TIMELINE_STAFF_ID = "b7f4a2c1-0000-4c00-8000-000000000007";
 
 const APPROVER = ["company.approve"];
 const MODERATOR = ["content.moderate"];
@@ -453,7 +459,7 @@ describe("the company timeline", () => {
     ...categoryCreatedEntry,
     id: "aa000000-0000-4c00-8000-0000000000c1",
     occurredAt: "2026-09-02T10:00:00.000Z",
-    actorStaffId: STAFF_ID,
+    actorStaffId: TIMELINE_STAFF_ID,
     actorDisplayName: "Şirket İnceleyici",
     permission: "company.approve",
     action: "companies.approve",
@@ -465,7 +471,7 @@ describe("the company timeline", () => {
       createdAt: "2026-09-01T08:00:00Z",
       approvalStatus: "APPROVED",
       approvalDecidedAt: "2026-09-02T10:00:00Z",
-      approvedByStaffId: STAFF_ID,
+      approvedByStaffId: TIMELINE_STAFF_ID,
       approvalNote: "Vergi levhası doğrulandı.",
     });
 
@@ -489,21 +495,43 @@ describe("the company timeline", () => {
     expect(timeline).toContain("Vergi levhası doğrulandı.");
     expect(timeline).toContain("Şirket İnceleyici");
     // Ad çözümü yok (koala-admin#112): kısa kimlik, tam kimlik `title`'da.
-    expect(timeline).toContain(`title="${STAFF_ID}"`);
+    expect(timeline).toContain(`title="${TIMELINE_STAFF_ID}"`);
     expect(timeline).toContain(">b7f4a2c1<");
     expect(timeline).not.toContain("/staff#personel-");
     for (const value of detailValuesOf(APPROVE_ROW)) expect(html).not.toContain(value);
     expect(html.match(/href="\/audit-log\?resourceId=/g)).toHaveLength(1);
   });
 
-  it("links staff actors to the staff page for a staff.read holder", async () => {
+  it("links staff actors to the staff page for a staff.read holder, short id when the lookup fails", async () => {
     stubMe([...APPROVER, "audit.read", "staff.read"]);
     watchDetail(decided());
     watchAudit({ rows: [APPROVE_ROW] });
+    // Fixture bu kimliği tanımaz (404): DTO aktörü kısa kimlikte kalır, bağlantı yine çapaya.
+    const staff = stubStaffMember();
 
     const html = await renderDetail();
 
-    expect(html.match(new RegExp(`href="/staff#personel-${STAFF_ID}"`, "g"))).toHaveLength(2);
+    expect(staff.ids).toEqual([TIMELINE_STAFF_ID]);
+    // Denetim satırı, çizelgedeki karar satırı ve "Kararı veren personel" alanı: üçü de çapaya.
+    expect(html.match(new RegExp(`href="/staff#personel-${TIMELINE_STAFF_ID}"`, "g"))).toHaveLength(
+      3,
+    );
+    expect(html).toContain(">b7f4a2c1<");
+  });
+
+  it("fills the record actor's name from resolveStaffRefs (koala-admin#112)", async () => {
+    stubMe([...APPROVER, "audit.read", "staff.read"]);
+    watchDetail(company({ ...decided(), approvedByStaffId: STAFF_ID }));
+    watchAudit({ rows: [] });
+    const staff = stubStaffMember();
+
+    const html = await renderDetail();
+    const timeline = html.slice(html.indexOf('data-testid="object-timeline"'));
+
+    expect(staff.ids).toEqual([STAFF_ID]);
+    expect(timeline).toContain(`href="${STAFF_HREF.replaceAll("&", "&amp;")}"`);
+    expect(timeline).toContain(`>${STAFF_NAME}<`);
+    expect(timeline).not.toContain(">5f000000<");
   });
 
   it("keeps the record's events and explains the missing half without audit.read, sending no request", async () => {
@@ -744,12 +772,13 @@ describe("contacts, website, job count and the deciding staff member", () => {
 
   it("draws website, description, logo and the deciding staff id, with empty values when absent", async () => {
     stubMe(APPROVER);
+    const staff = stubStaffMember();
     watchDetail(
       company({
         website: "https://koalakahve.test",
         description: "Üçüncü dalga kahve.",
         logoUrl: "https://storage.koala.test/logos/koala.png",
-        approvedByStaffId: "5f000000-0000-4000-8000-000000000055",
+        approvedByStaffId: STAFF_ID,
       }),
     );
     const html = await renderDetail();
@@ -757,9 +786,12 @@ describe("contacts, website, job count and the deciding staff member", () => {
     expect(html).toContain('target="_blank"');
     expect(html).toContain("Üçüncü dalga kahve.");
     expect(html).toContain('src="https://storage.koala.test/logos/koala.png"');
+    // staff.read yok: istek çıkmaz, kısa kimlik bağlantısız, tam kimlik title'da.
+    expect(staff.ids).toEqual([]);
     expect(html).toMatch(
-      /Kararı veren personel<\/dt><dd[^>]*>5f000000-0000-4000-8000-000000000055</,
+      new RegExp(`Kararı veren personel</dt><dd[^>]*><span[^>]*title="${STAFF_ID}">5f000000<`),
     );
+    expect(html).not.toContain(`#personel-${STAFF_ID}`);
 
     stubMe(APPROVER);
     watchDetail(company({ website: "javascript:alert(1)", logoUrl: "data:image/png;base64,AAAA" }));
@@ -768,5 +800,49 @@ describe("contacts, website, job count and the deciding staff member", () => {
     expect(unsafe).not.toContain('src="data:');
     expect(unsafe).toContain("javascript:alert(1)");
     expect(unsafe).toMatch(/Kararı veren personel<\/dt><dd[^>]*>—</);
+  });
+});
+
+/** koala-admin#112: personel kimliği ada çözülür, kırıntı süzgeci taşır. */
+describe("the deciding staff member's name and the breadcrumb", () => {
+  it("resolves approvedByStaffId to a name linked to /staff when the actor holds staff.read", async () => {
+    stubMe([...APPROVER, "staff.read"]);
+    const staff = stubStaffMember();
+    watchDetail(company({ approvedByStaffId: STAFF_ID }));
+
+    const html = await renderDetail();
+
+    expect(staff.ids).toEqual([STAFF_ID]);
+    expect(html).toContain(`href="${STAFF_HREF.replaceAll("&", "&amp;")}"`);
+    expect(html).toMatch(new RegExp(`title="${STAFF_ID}">${STAFF_NAME}<`));
+  });
+
+  it("falls back to the short id, still linked, when the staff lookup fails", async () => {
+    stubMe([...APPROVER, "staff.read"]);
+    const unknown = "5f000000-0000-4000-8000-000000000099";
+    const staff = stubStaffMember();
+    watchDetail(company({ approvedByStaffId: unknown }));
+
+    const html = await renderDetail();
+
+    expect(staff.ids).toEqual([unknown]);
+    expect(html).toContain(`href="/staff#personel-${unknown}"`);
+    expect(html).toMatch(new RegExp(`title="${unknown}">5f000000<`));
+    expect(html).toContain("Koala Kahve A.Ş.");
+  });
+
+  it("writes the location as Şirketler › short id and carries the queue view back", async () => {
+    stubMe(APPROVER);
+    watchDetail();
+
+    const html = await renderDetail(COMPANY_REVIEW_ID, { durum: "REJECTED", sayfa: "2" });
+
+    expect(html).toContain('<nav aria-label="Konum">');
+    expect(html).toContain('href="/companies?durum=REJECTED&amp;sayfa=2"');
+    expect(html).toMatch(
+      new RegExp(
+        `<span aria-current="page"[^>]*><span[^>]*title="${COMPANY_REVIEW_ID}">${COMPANY_REVIEW_ID.slice(0, 8)}<`,
+      ),
+    );
   });
 });

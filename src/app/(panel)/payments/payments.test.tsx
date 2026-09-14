@@ -317,3 +317,56 @@ describe("the payout link and the refund origin", () => {
     expect(html).not.toContain("/disputes/");
   });
 });
+
+/** koala-admin#112: ödemenin listesi yok; kırıntı atamayı `?atama=` ile tanır. */
+describe("the payment page's breadcrumb", () => {
+  it("writes Atama özeti › payment when the address carries no assignment", async () => {
+    stubMe(ANALYST);
+    watch();
+
+    const html = await render();
+
+    expect(html).toContain('<nav aria-label="Konum">');
+    expect(html).toContain('href="/assignments"><span>Atama özeti</span></a>');
+    expect(html).toContain(`title="${PAYMENT_ID}">${PAYMENT_ID.slice(0, 8)}<`);
+    expect(html).not.toContain(`title="${ASSIGNMENT_ID}">${ASSIGNMENT_ID.slice(0, 8)}</span></a>`);
+  });
+
+  it("inserts the assignment as a linked middle crumb when ?atama= is a UUID", async () => {
+    stubMe(ANALYST);
+    watch();
+
+    const html = (
+      await renderServerComponent(
+        <PaymentDetailPage
+          params={Promise.resolve({ id: PAYMENT_ID })}
+          searchParams={Promise.resolve({ atama: ASSIGNMENT_ID })}
+        />,
+      )
+    ).replaceAll("<!-- -->", "");
+
+    expect(html).toContain(
+      `href="/assignments/${ASSIGNMENT_ID}"><span class="font-mono text-xs" title="${ASSIGNMENT_ID}">${ASSIGNMENT_ID.slice(0, 8)}</span></a>`,
+    );
+    expect(html).toContain(
+      `aria-current="page" class="text-ink"><span class="font-mono text-xs" title="${PAYMENT_ID}">`,
+    );
+  });
+
+  it("ignores an ?atama= that is not a UUID", async () => {
+    stubMe(ANALYST);
+    watch();
+
+    const html = (
+      await renderServerComponent(
+        <PaymentDetailPage
+          params={Promise.resolve({ id: PAYMENT_ID })}
+          searchParams={Promise.resolve({ atama: "javascript:alert(1)" })}
+        />,
+      )
+    ).replaceAll("<!-- -->", "");
+
+    expect(html).not.toContain("javascript:");
+    expect(html).toContain('href="/assignments"><span>Atama özeti</span></a>');
+  });
+});

@@ -504,6 +504,23 @@ export function routePermission(path: GatedRoutePath): Permission {
 /** A gated route that also appears in the menu — the only kind that can. */
 type NavRoute = Extract<GatedRoute, { nav: object }>;
 
+export type NavRoutePath = NavRoute["path"];
+
+/**
+ * Menüdeki ad, kırıntı için (koala-admin#112): "Şirket onayları › 9c000000"
+ * kenar çubuğuyla aynı sözcüğü kullanır; liste adı ikinci bir yerde yazılmaz.
+ */
+export function navLabel(path: NavRoutePath): string {
+  const route = ROUTES.find(
+    (candidate): candidate is NavRoute =>
+      candidate.path === path && candidate.access === "permission" && "nav" in candidate,
+  );
+  if (route === undefined) {
+    throw new Error(`Menüde olmayan yol için kırıntı istendi: ${path}`);
+  }
+  return route.nav.label;
+}
+
 export interface NavEntry {
   /**
    * Narrowed to the menu's own routes rather than to every path the panel

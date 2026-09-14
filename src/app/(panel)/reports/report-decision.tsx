@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
+import { StaffRefLink } from "@/components/panel/staff-ref-link";
 import { Badge, type BadgeTone } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
 import {
@@ -20,6 +21,7 @@ import {
   type Report,
   type ReportContent,
 } from "@/server/api/reports";
+import type { StaffRefs } from "@/server/staff/staff-refs";
 
 import { submitReportReview } from "./actions";
 import { ImageRemovalForm } from "./image-removal-form";
@@ -64,6 +66,7 @@ export function ReportDecision({
   content,
   canOpenJob = false,
   canOpenAssignment = false,
+  staffRefs,
 }: {
   report: Report;
   content: ReportContent | null;
@@ -71,6 +74,8 @@ export function ReportDecision({
   canOpenJob?: boolean;
   /** Atama sayfası `payment.read` ister (koala-backend#283 `jobAssignmentId`). */
   canOpenAssignment?: boolean;
+  /** `reviewedByStaffId` için çözülmüş adlar (koala-admin#112). */
+  staffRefs: StaffRefs;
 }) {
   const targets = reportTargets(report);
   const closed = CLOSED_STATUSES.has(report.status);
@@ -211,7 +216,9 @@ export function ReportDecision({
         {report.reviewedByStaffId !== null ? (
           <>
             <dt className="text-sm text-ink-muted">Kararı veren personel</dt>
-            <dd className="font-mono text-xs break-all">{report.reviewedByStaffId}</dd>
+            <dd className="text-sm break-all">
+              <StaffRefLink staffId={report.reviewedByStaffId} refs={staffRefs} />
+            </dd>
           </>
         ) : null}
 

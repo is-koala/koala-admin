@@ -7,6 +7,12 @@ import {
   resourceNotFoundBody,
   searchQueryTooLongBody,
 } from "../../../../test/fixtures/envelopes";
+import {
+  STAFF_HREF,
+  STAFF_ID,
+  STAFF_NAME,
+  stubStaffMember,
+} from "../../../../test/support/stub-staff-member";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -798,24 +804,65 @@ describe("the reporter filter, the assignment link and the deciding staff member
 
   it("draws the deciding staff id next to the reviewer and omits both rows for a #265 server", async () => {
     stubMe(MODERATOR);
+    const staff = stubStaffMember();
     watchDetail(
       row({
         status: "ACTIONED",
         reviewedBy: REPORTER,
-        reviewedByStaffId: "5f000000-0000-4000-8000-000000000055",
+        reviewedByStaffId: STAFF_ID,
         reviewNote: "Mesajlar doğrulandı.",
         reviewedAt: "2026-09-02T08:00:00Z",
       }),
     );
     const decided = await renderDetail();
+    // staff.read yok: kısa kimlik, bağlantısız, istek yok (koala-admin#112).
+    expect(staff.ids).toEqual([]);
     expect(decided).toMatch(
-      /Kararı veren personel<\/dt><dd[^>]*>5f000000-0000-4000-8000-000000000055</,
+      new RegExp(`Kararı veren personel</dt><dd[^>]*><span[^>]*title="${STAFF_ID}">5f000000<`),
     );
+    expect(decided).not.toContain("#personel-");
 
     stubMe(MODERATOR);
     watchDetail(row());
     const legacy = await renderDetail();
     expect(legacy).not.toContain("Kararı veren personel");
     expect(legacy).not.toMatch(/>Atama</);
+  });
+});
+
+/** koala-admin#112: personel adı `staff.read` ile, kırıntı süzgeçle. */
+describe("the deciding staff member's name and the report breadcrumb", () => {
+  it("resolves reviewedByStaffId to a linked name for a staff.read holder", async () => {
+    stubMe([...MODERATOR, "staff.read"]);
+    const staff = stubStaffMember();
+    watchDetail(row({ status: "ACTIONED", reviewedByStaffId: STAFF_ID }));
+
+    const html = await renderDetail();
+
+    expect(staff.ids).toEqual([STAFF_ID]);
+    expect(html).toContain(`href="${STAFF_HREF.replaceAll("&", "&amp;")}"`);
+    expect(html).toContain(`title="${STAFF_ID}">${STAFF_NAME}<`);
+  });
+
+  it("writes Şikayetler › short id and carries the queue view back", async () => {
+    stubMe(MODERATOR);
+    watchDetail();
+
+    const html = (
+      await renderServerComponent(
+        <ReportDetailPage
+          params={Promise.resolve({ id: row().id })}
+          searchParams={Promise.resolve({ durum: "OPEN", kullanici: REPORTED.id, sayfa: "1" })}
+        />,
+      )
+    ).replaceAll("<!-- -->", "");
+
+    expect(html).toContain('<nav aria-label="Konum">');
+    expect(html).toContain(
+      `href="/reports?durum=OPEN&amp;sayfa=1&amp;kullanici=${REPORTED.id}"><span>Şikayetler</span>`,
+    );
+    expect(html).toContain(
+      `aria-current="page" class="text-ink"><span class="font-mono text-xs" title="${row().id}">11111111<`,
+    );
   });
 });

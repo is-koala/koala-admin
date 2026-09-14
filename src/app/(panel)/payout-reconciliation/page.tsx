@@ -15,6 +15,7 @@ import {
 } from "@/components/panel/queue";
 import { PayoutReconciliationForm } from "@/components/payout-reconciliation/payout-reconciliation-form";
 import { EmptyState } from "@/components/ui";
+import { objectQueryFor } from "@/lib/breadcrumb";
 import { ALL_STATUSES_PARAM, isUuid, payoutsHref } from "@/lib/panel-href";
 import { PAYOUT_PAGING, PAYOUT_STATUSES, getPayouts } from "@/server/api/payout-reconciliation";
 import {
@@ -94,6 +95,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
     ...(workerId === null ? {} : { isci: workerId }),
     ...(allStatuses ? { durum: ALL_STATUSES_PARAM } : {}),
   };
+  const objectQuery = objectQueryFor(viewState, paging.page);
 
   const workerNotice =
     workerId === null ? null : (
@@ -183,6 +185,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
             rows={rows}
             caption="Bekleyen hakedişler"
             action={{ selectedId, page: paging.page, query }}
+            objectQuery={objectQuery}
           />
         )}
 

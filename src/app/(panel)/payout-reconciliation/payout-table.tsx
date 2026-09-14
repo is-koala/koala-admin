@@ -38,10 +38,13 @@ export function PayoutTable({
   rows,
   caption = "Hakedişler",
   action,
+  objectQuery = {},
 }: {
   rows: readonly Payout[];
   caption?: string;
   action?: PayoutActionContext;
+  /** Satır bağlantısına eklenen liste görünümü; nesne sayfasının kırıntısı geri okur. */
+  objectQuery?: Readonly<Record<string, string>>;
 }) {
   return (
     <Table caption={caption}>
@@ -59,7 +62,7 @@ export function PayoutTable({
         {rows.map((row) => (
           <TableRow key={row.id}>
             <TableCell>
-              <Link href={payoutHref(row.id)} className="text-brand hover:underline">
+              <Link href={payoutHref(row.id, objectQuery)} className="text-brand hover:underline">
                 {formatDateTime(row.createdAt)}
               </Link>
             </TableCell>

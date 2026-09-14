@@ -397,7 +397,11 @@ describe("rejection provenance and the live blockers", () => {
 
     expect(html).toContain('data-testid="deletion-rejection-reason"');
     expect(html).toContain("Açık hakediş var.");
-    expect(html).toMatch(/Reddeden personel<\/dt><dd[^>]*>5f000000-0000-4000-8000-000000000055</);
+    // staff.read yok: kısa kimlik, tam kimlik title'da, bağlantısız (koala-admin#112).
+    expect(html).toMatch(
+      /Reddeden personel<\/dt><dd[^>]*><span[^>]*title="5f000000-0000-4000-8000-000000000055">5f000000</,
+    );
+    expect(html).not.toContain("#personel-");
   });
 
   it("writes the empty value for a rejected request from a #265 server and omits the rows while pending", async () => {
@@ -442,5 +446,22 @@ describe("rejection provenance and the live blockers", () => {
     watchDetail(row({ blockers: [] }));
     const html = await renderDetail();
     expect(html).toContain("Engelleyici yok");
+  });
+});
+
+/** koala-admin#112: kırıntı menüdeki adla, kuyruk görünümü geri taşınır. */
+describe("the deletion request's breadcrumb", () => {
+  it("writes Hesap silme › short id and links the queue with the carried view", async () => {
+    stubMe(READER);
+    watchDetail();
+
+    const html = await renderDetail(REQUEST_ID, { durum: "REJECTED", sirala: "requestedAt,desc" });
+
+    expect(html).toContain('<nav aria-label="Konum">');
+    expect(html).toContain(
+      'href="/account-deletions?durum=REJECTED&amp;sirala=requestedAt%2Cdesc"><span>Hesap silme</span></a>',
+    );
+    expect(html).toContain(`title="${REQUEST_ID}">${REQUEST_ID.slice(0, 8)}<`);
+    expect(html).not.toContain("Kuyruğa dön");
   });
 });

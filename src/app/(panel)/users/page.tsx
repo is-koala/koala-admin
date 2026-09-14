@@ -12,6 +12,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
+import { objectQueryFor } from "@/lib/breadcrumb";
 import { EMPTY_VALUE } from "@/lib/format";
 import { userHref } from "@/lib/panel-href";
 import {
@@ -95,6 +96,7 @@ async function UserDirectory({ params }: { params: SearchParams }) {
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
   };
+  const objectQuery = objectQueryFor(viewState, paging.page);
 
   const filters = (
     <QueueFilters
@@ -175,7 +177,10 @@ async function UserDirectory({ params }: { params: SearchParams }) {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
-                    <Link href={userHref(user.id)} className="text-brand hover:underline">
+                    <Link
+                      href={userHref(user.id, objectQuery)}
+                      className="text-brand hover:underline"
+                    >
                       {safeUserName(user)}
                     </Link>
                   </TableCell>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
@@ -17,6 +17,7 @@ import {
   formatPercent,
   formatWallClock,
 } from "@/lib/format";
+import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
 import { companyHref, isUuid, userHrefOrNull } from "@/lib/panel-href";
 import { companyTypeLabel } from "@/server/api/companies";
 import {
@@ -28,6 +29,7 @@ import {
   getAdminJob,
   type AdminJobDetail,
 } from "@/server/api/jobs";
+import type { SearchParams } from "@/server/api/paging";
 import { staffPartyName } from "@/server/api/shared/staff-party";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
@@ -45,21 +47,22 @@ export const metadata: Metadata = { title: "İlan" };
  * backend bunu bilerek böyle döner. Görseller backend'in verdiği adresten
  * çizilir; şikayet sayfasındaki kalıp. Yazma eylemi yok.
  */
-export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function JobDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<SearchParams>;
+}) {
   const { id } = await params;
+  const query = searchParams === undefined ? {} : await searchParams;
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="İlan"
-        description={
-          <>
-            İlanın tamamı: açıklama, kategori, fiyat, işveren ve şirket, tam adres, görseller.{" "}
-            <Link href={"/jobs" as Route} className="text-brand hover:underline">
-              Listeye dön
-            </Link>
-          </>
-        }
+        breadcrumb={objectBreadcrumb("/jobs", id, readQueueState(query))}
+        description="İlanın tamamı: açıklama, kategori, fiyat, işveren ve şirket, tam adres, görseller."
       />
 
       <RequirePermission permission="job.read">

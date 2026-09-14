@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
+import { StaffRefLink } from "@/components/panel/staff-ref-link";
 import { ProfilePicture } from "@/components/panel/profile-picture";
 import { Badge } from "@/components/ui";
 import { httpUrlOrNull } from "@/lib/external-url";
@@ -16,6 +17,7 @@ import {
   type CompanyContact,
   type CompanyReview,
 } from "@/server/api/companies";
+import type { StaffRefs } from "@/server/staff/staff-refs";
 
 import { submitCompanyDecision } from "./actions";
 import { GalleryPhoto } from "./gallery-photo";
@@ -29,11 +31,14 @@ export function CompanyReviewBody({
   company,
   returnTo,
   canOpenJobs = false,
+  staffRefs,
 }: {
   company: CompanyReview;
   returnTo: string;
   /** İlan listesi `job.read` ister; izni olmayana bağlantı 403 ekranı olurdu. */
   canOpenJobs?: boolean;
+  /** `approvedByStaffId` için çözülmüş adlar (koala-admin#112). */
+  staffRefs: StaffRefs;
 }) {
   const creator = company.createdBy;
   const creatorHref = userHrefOrNull(creator?.id);
@@ -157,7 +162,9 @@ export function CompanyReviewBody({
         <dd className="text-sm">{formatDateTime(company.approvalDecidedAt)}</dd>
 
         <dt className="text-sm text-ink-muted">Kararı veren personel</dt>
-        <dd className="font-mono text-xs break-all">{company.approvedByStaffId ?? EMPTY_VALUE}</dd>
+        <dd className="text-sm break-all">
+          <StaffRefLink staffId={company.approvedByStaffId} refs={staffRefs} />
+        </dd>
 
         <dt className="text-sm text-ink-muted">Kaydedilmiş karar gerekçesi</dt>
         <dd className="text-sm whitespace-pre-wrap">{company.approvalNote ?? EMPTY_VALUE}</dd>

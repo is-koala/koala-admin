@@ -14,6 +14,7 @@ import {
   searchEmptyTitle,
 } from "@/components/panel/queue";
 import { EmptyState, ErrorState } from "@/components/ui";
+import { objectQueryFor } from "@/lib/breadcrumb";
 import { formatInteger } from "@/lib/format";
 import { disputesHref } from "@/lib/panel-href";
 import { DISPUTE_PAGING, getDisputes, type Dispute } from "@/server/api/disputes";
@@ -173,6 +174,7 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
     ...(query === null ? {} : { [SEARCH_PARAM]: query }),
     ...(userId === null ? {} : { kullanici: userId }),
   };
+  const objectQuery = objectQueryFor(viewState, paging.page);
 
   const userNotice =
     userId === null ? null : (
@@ -316,6 +318,7 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
               disputes={visible}
               summaries={summaries}
               caption={filter === "RESOLVED" ? "Çözülmüş uyuşmazlıklar" : "Etkin uyuşmazlıklar"}
+              objectQuery={objectQuery}
             />
           </>
         )}

@@ -143,6 +143,20 @@ export function getStaffMembers(
 }
 
 /**
+ * `GET /admin/staff/{staffId}` — tek personel, `staff.read`. Nesne
+ * sayfalarındaki `approvedByStaffId` türü kimlikleri ada çevirmek için
+ * (koala-admin#112); toplu ve tekilleştirilmiş çağrı `resolveStaffRefs`'te.
+ */
+export function getStaffMember(accessToken: string, staffId: string): Promise<StaffMember> {
+  return koalaApi.get({
+    path: `${STAFF_PATH}/${encodeURIComponent(staffId)}`,
+    schema: staffMemberSchema,
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+/**
  * Rol grafiği yazımından etkilenebilecek doğrudan üyeliklerin tamamı.
  *
  * Backend bir kapsama eklerken yalnız ekrandaki yirmi kişiyi değil bütün

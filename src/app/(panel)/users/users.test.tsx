@@ -162,6 +162,10 @@ describe("who can see the directory", () => {
     expect(html).toContain("ada");
     expect(html).toContain("aaaaaaaa-1111-4111-8111-111111111111");
     expect(html).not.toContain("ACCESS-TOKEN");
+    // Satır bağlantısı liste görünümünü taşır; kullanıcı sayfasının kırıntısı geri okur (#112).
+    expect(html).toContain(
+      `href="/users/${row().id}?sirala=createdAt%2Cdesc&amp;boyut=20&amp;sayfa=0"`,
+    );
   });
 });
 
@@ -366,6 +370,28 @@ describe("a bookmarked marketplace user", () => {
       },
     };
   }
+
+  it("writes Kullanıcılar › short id and carries the directory view back (koala-admin#112)", async () => {
+    stubMe(READER);
+    const user = row();
+    stubUser(user);
+
+    const html = (
+      await renderServerComponent(
+        <UserDetailPage
+          params={Promise.resolve({ id: user.id })}
+          searchParams={Promise.resolve({ ara: "ada", sayfa: "2", sekme: "genel" })}
+        />,
+      )
+    ).replaceAll("<!-- -->", "");
+
+    expect(html).toContain('<nav aria-label="Konum">');
+    expect(html).toContain('href="/users?ara=ada&amp;sayfa=2"><span>Kullanıcılar</span></a>');
+    expect(html).toContain(
+      `aria-current="page" class="text-ink"><span class="font-mono text-xs" title="${user.id}">aaaaaaaa<`,
+    );
+    expect(html).not.toContain("Dizinine dön");
+  });
 
   it("loads GET /admin/users/{id} without a suspend control or a reports fetch", async () => {
     stubMe(READER);

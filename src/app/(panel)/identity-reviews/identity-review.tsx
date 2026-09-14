@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { StaffRefLink } from "@/components/panel/staff-ref-link";
 import { Badge } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
 import { isUuid, userHref } from "@/lib/panel-href";
@@ -9,6 +10,7 @@ import {
   identityReviewStatusLabel,
   type IdentityReview,
 } from "@/server/api/identity-reviews";
+import type { StaffRefs } from "@/server/staff/staff-refs";
 
 import { IdentityReviewDecision } from "./decision-form";
 import { DocumentPhoto } from "./document-photo";
@@ -26,9 +28,12 @@ export function identityDisplayName(review: IdentityReview): string {
 export function IdentityReviewBody({
   review,
   returnTo,
+  staffRefs,
 }: {
   review: IdentityReview;
   returnTo: string;
+  /** `reviewedByStaffId` için ad ve `/staff` bağlantısı (koala-admin#112). */
+  staffRefs: StaffRefs;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -69,16 +74,7 @@ export function IdentityReviewBody({
         <Row label="Ret zamanı" value={formatDateTime(review.rejectedAt)} />
         <Row
           label="Kararı veren personel"
-          value={
-            review.reviewedByStaffName === null ? (
-              <span className="font-mono text-xs">{review.reviewedByStaffId ?? EMPTY_VALUE}</span>
-            ) : (
-              <span className="flex flex-wrap justify-end gap-x-2">
-                <span>{review.reviewedByStaffName}</span>
-                <span className="font-mono text-xs">{review.reviewedByStaffId ?? EMPTY_VALUE}</span>
-              </span>
-            )
-          }
+          value={<StaffRefLink staffId={review.reviewedByStaffId} refs={staffRefs} />}
         />
       </dl>
 

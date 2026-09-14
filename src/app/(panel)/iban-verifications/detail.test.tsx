@@ -224,3 +224,20 @@ describe("the attempts left", () => {
     expect(legacy).toMatch(/Kalan deneme<\/dt><dd[^>]*>—</);
   });
 });
+
+/** koala-admin#112: referans UUID değil; kırıntı onu olduğu gibi yazar. */
+describe("the IBAN verification's breadcrumb", () => {
+  it("writes IBAN doğrulama › reference", async () => {
+    stubMe(OFFICER);
+    watchQueue();
+
+    const html = await render();
+
+    expect(html).toContain('<nav aria-label="Konum">');
+    expect(html).toContain('href="/iban-verifications"><span>IBAN doğrulama</span></a>');
+    expect(html).toContain(
+      `aria-current="page" class="text-ink"><span class="font-mono text-xs">${REFERENCE}<`,
+    );
+    expect(html).not.toContain("Kuyruğa dön");
+  });
+});

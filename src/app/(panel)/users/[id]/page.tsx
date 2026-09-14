@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { PageHeader } from "@/components/panel/page-header";
 import { ProfilePicture } from "@/components/panel/profile-picture";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
+import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
 import { EMPTY_VALUE, formatBoolean, formatDateTime, formatInteger } from "@/lib/format";
 import {
   accountDeletionHref,
@@ -82,15 +83,8 @@ export default async function UserDetailPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Kullanıcı"
-        description={
-          <>
-            Kimlik, üyelikler, rozetler ve geçmiş; e-posta ile telefon yalnız kişisel veri izniyle.
-            Askıya alma yoktur.{" "}
-            <Link href={"/users" as Route} className="text-brand hover:underline">
-              Dizinine dön
-            </Link>
-          </>
-        }
+        breadcrumb={objectBreadcrumb("/users", id, readQueueState(query))}
+        description="Kimlik, üyelikler, rozetler ve geçmiş; e-posta ile telefon yalnız kişisel veri izniyle. Askıya alma yoktur."
       />
 
       <RequirePermission permission="user.read">

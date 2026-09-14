@@ -1,11 +1,11 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
+import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
 import { formatDateTime } from "@/lib/format";
 import { readParam, type SearchParams } from "@/server/api/paging";
 import { getReport, reportReasonLabel, reportStatusLabel } from "@/server/api/reports";
@@ -13,6 +13,7 @@ import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
+import { resolveStaffRefs } from "@/server/staff/staff-refs";
 
 import { ReportDecision, REPORT_STATUS_TONES } from "../report-decision";
 
@@ -39,14 +40,8 @@ export default async function ReportDetailPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Şikayet"
-        description={
-          <>
-            Karar ve gerekçe denetim kaydına yazılır. Askıya alma yoktur.{" "}
-            <Link href={"/reports" as Route} className="text-brand hover:underline">
-              Kuyruğa dön
-            </Link>
-          </>
-        }
+        breadcrumb={objectBreadcrumb("/reports", id, readQueueState(query))}
+        description="Karar ve gerekçe denetim kaydına yazılır. Askıya alma yoktur."
       />
 
       {imageRemoved ? (
@@ -68,10 +63,11 @@ async function ReportObject({ id }: { id: string }) {
   if (!OBJECT_ID.test(id)) notFound();
 
   const context = await getStaffContext();
+  const accessToken = await getKoalaAccessToken();
 
   let detail;
   try {
-    detail = await getReport(await getKoalaAccessToken(), id);
+    detail = await getReport(accessToken, id);
   } catch (error) {
     notFoundIfMissing(error);
     return (
@@ -84,6 +80,7 @@ async function ReportObject({ id }: { id: string }) {
   }
 
   const { report, content } = detail;
+  const staffRefs = await resolveStaffRefs([report.reviewedByStaffId], { accessToken, context });
 
   return (
     <section className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface px-4 py-4">
@@ -99,6 +96,7 @@ async function ReportObject({ id }: { id: string }) {
         content={content}
         canOpenJob={context.has("job.read")}
         canOpenAssignment={context.has("payment.read")}
+        staffRefs={staffRefs}
       />
       <ObjectAuditPointer resourceId={report.id} linkLabel="Bu şikayetin denetim kayıtlarını aç">
         Karar ve görsel kaldırma backend tarafından bu şikayet kimliğiyle denetim kaydına yazılır;

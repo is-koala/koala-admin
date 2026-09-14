@@ -17,17 +17,18 @@ import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
 import {
   auditTimelineEvents,
   mergeTimeline,
-  shortId,
   type TimelineActor,
   type TimelineEvent,
 } from "@/lib/object-timeline";
 import { userHrefOrNull } from "@/lib/panel-href";
+import { shortId } from "@/lib/short-id";
 import { getAuditLog } from "@/server/api/audit";
 import type { PageDto } from "@/server/api/types";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import type { Permission } from "@/server/authz/permissions";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure } from "@/server/queue/decisions";
+import { NO_STAFF_REFS, type StaffRefs } from "@/server/staff/staff-refs";
 
 import { outcomePresentation } from "./audit-log-presentation";
 
@@ -83,6 +84,13 @@ export interface ObjectTimelineProps {
   events: readonly TimelineEvent[];
   /** Başlık altına düşen, bu nesnenin denetime neyi yazdırdığını anlatan cümle. */
   children?: ReactNode;
+  /**
+   * DTO olaylarındaki personel kimlikleri için çözülmüş adlar (koala-admin#112):
+   * sayfa `resolveStaffRefs` ile bir kez çözer, hem karar satırına hem buraya
+   * verir. Denetim satırları adı zaten taşır (`actorDisplayName`); bu küme
+   * yalnız `name: null` gelen aktörü tamamlar.
+   */
+  staffRefs?: StaffRefs;
 }
 
 /**
@@ -96,6 +104,7 @@ export async function ObjectTimeline({
   subject,
   events,
   children,
+  staffRefs = NO_STAFF_REFS,
 }: ObjectTimelineProps) {
   const context = await getStaffContext();
   const held = new Set<Permission>(context.staff?.permissions ?? []);
@@ -142,7 +151,7 @@ export async function ObjectTimeline({
           </TableHead>
           <TableBody>
             {merged.map((event) => (
-              <TimelineRow key={event.key} event={event} held={held} />
+              <TimelineRow key={event.key} event={event} held={held} staffRefs={staffRefs} />
             ))}
           </TableBody>
         </Table>
@@ -227,7 +236,15 @@ function AuditSummary({ audit }: { audit: AuditResult }) {
   );
 }
 
-function TimelineRow({ event, held }: { event: TimelineEvent; held: ReadonlySet<Permission> }) {
+function TimelineRow({
+  event,
+  held,
+  staffRefs,
+}: {
+  event: TimelineEvent;
+  held: ReadonlySet<Permission>;
+  staffRefs: StaffRefs;
+}) {
   const outcome = event.allowed ? null : outcomePresentation(false);
   return (
     <TableRow
@@ -246,7 +263,7 @@ function TimelineRow({ event, held }: { event: TimelineEvent; held: ReadonlySet<
         </time>
       </TableCell>
       <TableCell>
-        <Actor actor={event.actor} held={held} />
+        <Actor actor={event.actor} held={held} staffRefs={staffRefs} />
       </TableCell>
       <TableCell>
         <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -275,11 +292,20 @@ function TimelineRow({ event, held }: { event: TimelineEvent; held: ReadonlySet<
 }
 
 /**
- * Personel: ad varsa ad, yoksa kısa kimlik (tam kimlik `title`'da); `/staff`
- * çapasına bağlantı yalnız `staff.read` varken. Kullanıcı: ad, `user.read`
- * varken kullanıcı sayfasına. Fail bilinmiyorsa "—".
+ * Personel: ad varsa ad, yoksa `staffRefs`'ten çözülmüş ad, o da yoksa kısa
+ * kimlik (tam kimlik `title`'da); `/staff` çapasına bağlantı yalnız
+ * `staff.read` varken. Kullanıcı: ad, `user.read` varken kullanıcı
+ * sayfasına. Fail bilinmiyorsa "—".
  */
-function Actor({ actor, held }: { actor: TimelineActor | null; held: ReadonlySet<Permission> }) {
+function Actor({
+  actor,
+  held,
+  staffRefs,
+}: {
+  actor: TimelineActor | null;
+  held: ReadonlySet<Permission>;
+  staffRefs: StaffRefs;
+}) {
   if (actor === null) return <span className="text-ink-muted">{EMPTY_VALUE}</span>;
 
   if (actor.kind === "user") {
@@ -293,11 +319,13 @@ function Actor({ actor, held }: { actor: TimelineActor | null; held: ReadonlySet
     );
   }
 
-  const label = actor.name ?? (actor.staffId === null ? EMPTY_VALUE : shortId(actor.staffId));
-  const href = auditActorHref(actor.staffId, held);
+  const resolved = actor.staffId === null ? undefined : staffRefs[actor.staffId];
+  const name = actor.name ?? (resolved?.resolved ? resolved.label : null);
+  const label = name ?? (actor.staffId === null ? EMPTY_VALUE : shortId(actor.staffId));
+  const href = resolved?.href ?? auditActorHref(actor.staffId, held);
   const title = actor.staffId === null ? undefined : actor.staffId;
   return href === null ? (
-    <span title={title} className={actor.name === null ? "font-mono text-xs" : undefined}>
+    <span title={title} className={name === null ? "font-mono text-xs" : undefined}>
       {label}
     </span>
   ) : (
@@ -305,7 +333,7 @@ function Actor({ actor, held }: { actor: TimelineActor | null; held: ReadonlySet
       href={href}
       title={title}
       className={
-        actor.name === null
+        name === null
           ? "font-mono text-xs text-brand hover:underline"
           : "text-brand hover:underline"
       }

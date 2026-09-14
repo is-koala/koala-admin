@@ -24,9 +24,12 @@ import { ASSIGNMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONES }
 export function AssignmentTable({
   rows,
   caption = "Atamalar",
+  objectQuery = {},
 }: {
   rows: readonly EscrowSummary[];
   caption?: string;
+  /** Satır bağlantısına eklenen liste görünümü; nesne sayfasının kırıntısı geri okur. */
+  objectQuery?: Readonly<Record<string, string>>;
 }) {
   return (
     <Table caption={caption}>
@@ -64,7 +67,7 @@ export function AssignmentTable({
             <TableCell>{formatCurrency(row.pricing.employerTotal, row.pricing.currency)}</TableCell>
             <TableCell>
               <Link
-                href={assignmentHref(row.id)}
+                href={assignmentHref(row.id, objectQuery)}
                 className="text-sm font-medium text-brand hover:underline"
               >
                 Aç

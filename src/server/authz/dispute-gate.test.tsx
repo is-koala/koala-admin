@@ -8,6 +8,7 @@ import {
 } from "../../../test/fixtures/envelopes";
 import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment";
 import { categoryCreatedEntry } from "../../../test/fixtures/audit-log";
+import { stubStaffMember } from "../../../test/support/stub-staff-member";
 import { apiUrl, server } from "../../../test/msw";
 import { renderServerComponent } from "../../../test/render-server";
 import { detailValuesOf, watchAudit } from "../../../test/support/watch-audit";
@@ -510,11 +511,15 @@ describe("the selected dispute", () => {
       sensitivity: "FINANCIAL" as const,
     };
     const audit = watchAudit({ rows: [RESOLVE_ROW], totalElements: 1 });
+    // koala-admin#112: staff.read varken çözümleyici bir kez sorar; fixture bu kimliği
+    // tanımaz (404), kısa kimlik çapaya bağlı kalır.
+    const staff = stubStaffMember();
 
     const html = await renderDetail();
 
     expect(audit.urls).toHaveLength(1);
     expect(audit.urls[0]?.searchParams.get("resourceId")).toBe(DISPUTE);
+    expect(staff.ids).toEqual([STAFF_ID]);
 
     const timeline = html.slice(html.indexOf('data-testid="object-timeline"'));
     const positions = [
@@ -529,7 +534,8 @@ describe("the selected dispute", () => {
     expect(timeline).toContain("Vardiya kanıtlandı.");
     expect(timeline).toContain("Uyuşmazlık Hakemi");
     expect(timeline).toContain("Denetim izinden 1 kayıt.");
-    expect(html.match(new RegExp(`href="/staff#personel-${STAFF_ID}"`, "g"))).toHaveLength(2);
+    // Denetim satırı, çizelgedeki karar satırı ve "Çözen personel" alanı.
+    expect(html.match(new RegExp(`href="/staff#personel-${STAFF_ID}"`, "g"))).toHaveLength(3);
     for (const value of detailValuesOf(RESOLVE_ROW)) expect(html).not.toContain(value);
     expect(html.match(/href="\/audit-log\?resourceId=/g)).toHaveLength(1);
   });
@@ -891,9 +897,11 @@ describe("the user filter, the opener's side and the resolving staff member", ()
     const html = (await renderDetail()).replaceAll("<!-- -->", "");
 
     expect(html).toMatch(/Ayşe Yılmaz<\/a><span[^>]*>İşçi</);
+    // staff.read yok: kısa kimlik, tam kimlik title'da, bağlantısız (koala-admin#112).
     expect(html).toMatch(
-      /Çözen personel<\/dt><dd[^>]*><span[^>]*>5f000000-0000-4000-8000-000000000055</,
+      /Çözen personel<\/dt><dd[^>]*><span[^>]*title="5f000000-0000-4000-8000-000000000055">5f000000</,
     );
+    expect(html).not.toContain("#personel-");
   });
 
   it("writes neither side nor staff for a #265 server, and the empty value once resolved", async () => {
@@ -922,6 +930,6 @@ describe("the user filter, the opener's side and the resolving staff member", ()
       }),
     );
     const resolved = (await renderDetail()).replaceAll("<!-- -->", "");
-    expect(resolved).toMatch(/Çözen personel<\/dt><dd[^>]*><span[^>]*>—</);
+    expect(resolved).toMatch(/Çözen personel<\/dt><dd[^>]*>—</);
   });
 });

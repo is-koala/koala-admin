@@ -332,7 +332,7 @@ function PaymentsTable({ payments }: { payments: PaymentsResult }) {
                   <TableCell>{formatDateTime(payment.completedAt)}</TableCell>
                   <TableCell>
                     <Link
-                      href={paymentHref(payment.id)}
+                      href={paymentHref(payment.id, payment.jobAssignmentId)}
                       className="text-sm font-medium text-brand hover:underline"
                     >
                       Aç

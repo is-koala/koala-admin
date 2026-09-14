@@ -8,6 +8,12 @@ import {
 } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
+import {
+  STAFF_HREF,
+  STAFF_ID,
+  STAFF_NAME,
+  stubStaffMember,
+} from "../../../../test/support/stub-staff-member";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
 
@@ -306,7 +312,7 @@ describe("TCKK photos on the object page", () => {
     container.innerHTML = html;
 
     expect(container.querySelector<HTMLInputElement>('input[name="returnTo"]')?.value).toBe(
-      "/identity-reviews?durum=PENDING&sirala=createdAt%2Casc&boyut=40&sayfa=2&ara=yusuf",
+      "/identity-reviews?durum=PENDING&ara=yusuf&sirala=createdAt%2Casc&boyut=40&sayfa=2",
     );
   });
 
@@ -383,8 +389,9 @@ describe("the decision's time and author on the object page", () => {
 
     expect(html).toMatch(/Onay zamanı<\/dt><dd[^>]*>12\.09\.2026 12:30</);
     expect(html).toMatch(/Ret zamanı<\/dt><dd[^>]*>—</);
+    // Eski sunucu ad vermez, staff.read yok: kısa kimlik, tam kimlik title'da (koala-admin#112).
     expect(html).toMatch(
-      /Kararı veren personel<\/dt><dd[^>]*><span[^>]*>5f000000-0000-4000-8000-000000000055</,
+      /Kararı veren personel<\/dt><dd[^>]*><span[^>]*title="5f000000-0000-4000-8000-000000000055">5f000000</,
     );
   });
 
@@ -405,7 +412,7 @@ describe("the decision's time and author on the object page", () => {
     const pending = await renderDetail();
     expect(pending).toMatch(/Onay zamanı<\/dt><dd[^>]*>—</);
     expect(pending).toMatch(/Ret zamanı<\/dt><dd[^>]*>—</);
-    expect(pending).toMatch(/Kararı veren personel<\/dt><dd[^>]*><span[^>]*>—</);
+    expect(pending).toMatch(/Kararı veren personel<\/dt><dd[^>]*>—</);
   });
 
   it("points at the audit log filtered to this review, only for an audit.read holder", async () => {
@@ -507,22 +514,74 @@ describe("the search box — koala-admin#94", () => {
   });
 });
 
-/** koala-admin#100 / koala-backend#283: kararı veren personelin adı kimliğin yanında. */
+/**
+ * koala-admin#100 / koala-backend#283 adı DTO'ya koydu; koala-admin#112 onu
+ * `/staff`'a bağlar ve eski sunucuda `GET /admin/staff/{id}` ile tamamlar.
+ */
 describe("the deciding staff member's name", () => {
-  it("draws the name before the id when the DTO carries it", async () => {
-    stubMe(REVIEWER);
-    watchDetail({
-      ...PENDING_REVIEW,
-      status: "APPROVED",
-      verifiedAt: "2026-09-12T09:30:00Z",
-      reviewedByStaffId: "5f000000-0000-4000-8000-000000000055",
-      reviewedByStaffName: "Zeynep Kaya",
-    });
+  const decidedWithName = {
+    ...PENDING_REVIEW,
+    status: "APPROVED",
+    verifiedAt: "2026-09-12T09:30:00Z",
+    reviewedByStaffId: STAFF_ID,
+    reviewedByStaffName: STAFF_NAME,
+  };
+
+  it("uses the DTO's name without a staff request and links it for a staff.read holder", async () => {
+    stubMe([...REVIEWER, "staff.read"]);
+    watchDetail(decidedWithName);
+    const staff = stubStaffMember();
 
     const html = await renderDetail();
 
+    expect(staff.ids).toEqual([]);
     expect(html).toMatch(
-      /Kararı veren personel<\/dt><dd[^>]*><span[^>]*><span>Zeynep Kaya<\/span><span[^>]*>5f000000-0000-4000-8000-000000000055</,
+      new RegExp(
+        `Kararı veren personel</dt><dd[^>]*><a[^>]*href="/staff#personel-${STAFF_ID}"[^>]*><span[^>]*title="${STAFF_ID}">${STAFF_NAME}<`,
+      ),
     );
+  });
+
+  it("keeps the DTO's name as plain text without staff.read", async () => {
+    stubMe(REVIEWER);
+    watchDetail(decidedWithName);
+    const staff = stubStaffMember();
+
+    const html = await renderDetail();
+
+    expect(staff.ids).toEqual([]);
+    expect(html).toMatch(
+      new RegExp(`Kararı veren personel</dt><dd[^>]*><span[^>]*title="${STAFF_ID}">${STAFF_NAME}<`),
+    );
+    expect(html).not.toContain("#personel-");
+  });
+
+  it("resolves the name from GET /admin/staff/{id} for a #265 server that sends only the id", async () => {
+    stubMe([...REVIEWER, "staff.read"]);
+    watchDetail({ ...decidedWithName, reviewedByStaffName: null });
+    const staff = stubStaffMember();
+
+    const html = await renderDetail();
+
+    expect(staff.ids).toEqual([STAFF_ID]);
+    expect(html).toContain(`href="${STAFF_HREF.replaceAll("&", "&amp;")}"`);
+    expect(html).toContain(`title="${STAFF_ID}">${STAFF_NAME}<`);
+  });
+});
+
+/** koala-admin#112: kırıntı menüdeki adla, kuyruk görünümü geri taşınır. */
+describe("the identity review's breadcrumb", () => {
+  it("writes Kimlik incelemeleri › short id and links the queue with the carried view", async () => {
+    stubMe(REVIEWER);
+    watchDetail();
+
+    const html = await renderDetail(REVIEW_ID, { durum: "APPROVED", boyut: "50" });
+
+    expect(html).toContain('<nav aria-label="Konum">');
+    expect(html).toContain(
+      'href="/identity-reviews?durum=APPROVED&amp;boyut=50"><span>Kimlik incelemeleri</span></a>',
+    );
+    expect(html).toContain(`title="${REVIEW_ID}">${REVIEW_ID.slice(0, 8)}<`);
+    expect(html).not.toContain("Kuyruğa dön");
   });
 });
