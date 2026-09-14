@@ -13,7 +13,7 @@ import {
 } from "@/components/ui";
 import { NO_AUDIT_FILTERS, type AuditEntry } from "@/lib/audit-log";
 import { auditActorHref } from "@/lib/audit-links";
-import { EMPTY_VALUE, formatDateTimeSeconds, formatInteger } from "@/lib/format";
+import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
 import {
   auditTimelineEvents,
   mergeTimeline,
@@ -21,7 +21,7 @@ import {
   type TimelineActor,
   type TimelineEvent,
 } from "@/lib/object-timeline";
-import { auditLogForResourceHref, userHrefOrNull } from "@/lib/panel-href";
+import { userHrefOrNull } from "@/lib/panel-href";
 import { getAuditLog } from "@/server/api/audit";
 import type { PageDto } from "@/server/api/types";
 import { getKoalaAccessToken } from "@/server/auth/session";
@@ -48,22 +48,35 @@ import { outcomePresentation } from "./audit-log-presentation";
  * okunurdu. Personel bağlantısı `staff.read`, kullanıcı bağlantısı
  * `user.read` ister; izin yoksa ad düz metin.
  *
- * Denetim yarısı yalnız en yeni {@link TIMELINE_AUDIT_ROWS} satırı ister;
- * tamamı süzgeçli denetim sayfasında. Tarihi çok eski bir DTO olayının
+ * Denetim yarısı kimlik başına yalnız en yeni {@link TIMELINE_AUDIT_ROWS}
+ * satırı ister; tamamı süzgeçli denetim sayfasında (`ObjectAuditPointer`). Tarihi çok eski bir DTO olayının
  * yanında hiç denetim satırı görünmemesi bu yüzden "o gün personel hiçbir
  * şey yapmadı" demek değildir; altyazı bunu söyler.
  */
 
 export const TIMELINE_AUDIT_ROWS = 10;
 
-type AuditResult =
-  | { readonly kind: "loaded"; readonly page: PageDto<AuditEntry> }
-  | { readonly kind: "failed"; readonly failure: QueueFailure }
-  | { readonly kind: "no-permission" };
+interface AuditLoaded {
+  readonly kind: "loaded";
+  readonly entries: readonly AuditEntry[];
+  readonly totalElements: number;
+  /** Birden çok kimlik sorgulandıysa düşenlerin ilki; kalan sorguların satırları yine çizilir. */
+  readonly failure: QueueFailure | null;
+}
+
+type AuditResult = AuditLoaded | { readonly kind: "no-permission" };
 
 export interface ObjectTimelineProps {
   /** Denetim süzgecine geçen kimlik; nesnenin backend'deki kimliği. */
   resourceId: string;
+  /**
+   * Bu nesneye ait olup backend'in ayrı kimlikle yazdığı kayıtlar (örn.
+   * kullanıcının silme talebi): `AuditScope.resourceIdOf` yalnız ilk yol
+   * değişkenini yazar, `account-deletions/{requestId}` kararı kullanıcı
+   * kimliğiyle gelmez. Her biri ayrı `resourceId` sorgusu, paralel, aynı
+   * izinle; sonuç tek listede.
+   */
+  relatedResourceIds?: readonly string[];
   /** "Bu atama", "Bu kullanıcı" — boş ve eksik cümlelerinin öznesi. */
   subject: string;
   /** DTO'dan türeyen olaylar; sırasız gelebilir, burada sıralanır. */
@@ -72,19 +85,25 @@ export interface ObjectTimelineProps {
   children?: ReactNode;
 }
 
+/**
+ * Süzgeçli denetim sayfasına giden bağlantı burada yok: nesne sayfaları onu
+ * zaten `ObjectAuditPointer` ile verir, aynı adrese iki bağlantı ikinci bir
+ * şey vaat ederdi.
+ */
 export async function ObjectTimeline({
   resourceId,
+  relatedResourceIds = [],
   subject,
   events,
   children,
 }: ObjectTimelineProps) {
   const context = await getStaffContext();
   const held = new Set<Permission>(context.staff?.permissions ?? []);
-  const audit = await loadAudit(resourceId, held.has("audit.read"));
+  const audit = await loadAudit([resourceId, ...relatedResourceIds], held.has("audit.read"));
 
   const merged = mergeTimeline(
     events,
-    audit.kind === "loaded" ? auditTimelineEvents(audit.page.content) : [],
+    audit.kind === "loaded" ? auditTimelineEvents(audit.entries) : [],
   );
 
   return (
@@ -93,29 +112,18 @@ export async function ObjectTimeline({
       aria-labelledby="object-timeline-heading"
       data-testid="object-timeline"
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="flex flex-col gap-0.5">
-          <h2 id="object-timeline-heading" className="text-sm font-semibold">
-            Zaman çizelgesi
-          </h2>
-          <AuditSummary audit={audit} />
-        </div>
-        {audit.kind === "no-permission" ? null : (
-          <Link
-            href={auditLogForResourceHref(resourceId)}
-            className="text-sm font-medium text-brand hover:underline"
-            data-testid="object-timeline-audit-all"
-          >
-            Denetim kayıtlarını aç
-          </Link>
-        )}
+      <div className="flex flex-col gap-0.5">
+        <h2 id="object-timeline-heading" className="text-sm font-semibold">
+          Zaman çizelgesi
+        </h2>
+        <AuditSummary audit={audit} />
       </div>
 
       {children === undefined ? null : (
         <p className="max-w-prose text-xs text-ink-muted">{children}</p>
       )}
 
-      {audit.kind === "failed" ? (
+      {audit.kind === "loaded" && audit.failure !== null ? (
         <QueueLoadFailure subject="Denetim izi" permission="audit.read" failure={audit.failure} />
       ) : null}
 
@@ -153,29 +161,67 @@ export async function ObjectTimeline({
   );
 }
 
-async function loadAudit(resourceId: string, canReadAudit: boolean): Promise<AuditResult> {
+type OneQuery =
+  | { readonly ok: true; readonly page: PageDto<AuditEntry> }
+  | { readonly ok: false; readonly failure: QueueFailure };
+
+/**
+ * Kimlik başına bir sorgu, paralel. Biri düşerse diğerlerinin satırları
+ * durur ve düşen söylenir — tek kimliğin hatası yüzünden çizelgenin denetim
+ * yarısını boşaltmak "personel hiçbir şey yapmadı" diye okunurdu. Aynı
+ * satır iki sorguda gelemez (`resourceId` tek değer), yine de kimliğe göre
+ * tekilleştirilir.
+ */
+async function loadAudit(
+  resourceIds: readonly string[],
+  canReadAudit: boolean,
+): Promise<AuditResult> {
   if (!canReadAudit) return { kind: "no-permission" };
-  try {
-    const page = await getAuditLog(await getKoalaAccessToken(), {
-      filters: { ...NO_AUDIT_FILTERS, resourceId },
-      page: 0,
-      size: TIMELINE_AUDIT_ROWS,
-    });
-    return { kind: "loaded", page };
-  } catch (error) {
-    return { kind: "failed", failure: classifyQueueFailure(error) };
+  const accessToken = await getKoalaAccessToken();
+  const unique = [...new Set(resourceIds.filter((id) => id.length > 0))];
+  const results = await Promise.all(
+    unique.map(async (resourceId): Promise<OneQuery> => {
+      try {
+        const page = await getAuditLog(accessToken, {
+          filters: { ...NO_AUDIT_FILTERS, resourceId },
+          page: 0,
+          size: TIMELINE_AUDIT_ROWS,
+        });
+        return { ok: true, page };
+      } catch (error) {
+        return { ok: false, failure: classifyQueueFailure(error) };
+      }
+    }),
+  );
+
+  const seen = new Set<string>();
+  const entries: AuditEntry[] = [];
+  let totalElements = 0;
+  let failure: QueueFailure | null = null;
+  for (const result of results) {
+    if (!result.ok) {
+      failure ??= result.failure;
+      continue;
+    }
+    totalElements += result.page.totalElements;
+    for (const entry of result.page.content) {
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      entries.push(entry);
+    }
   }
+  return { kind: "loaded", entries, totalElements, failure };
 }
 
 function AuditSummary({ audit }: { audit: AuditResult }) {
-  if (audit.kind !== "loaded") return null;
-  const { totalElements, content } = audit.page;
+  if (audit.kind !== "loaded" || audit.failure !== null) return null;
+  const { totalElements, entries } = audit;
   return (
     <p className="text-xs text-ink-muted" data-testid="object-timeline-audit-summary">
       {totalElements === 0
         ? "Bu kayıt için denetim satırı yok."
-        : totalElements > content.length
-          ? `Denetim izinden en yeni ${formatInteger(content.length)} satır; toplam ${formatInteger(totalElements)} kayıt.`
+        : totalElements > entries.length
+          ? `Denetim izinden en yeni ${formatInteger(entries.length)} satır; toplam ${formatInteger(totalElements)} kayıt.`
           : `Denetim izinden ${formatInteger(totalElements)} kayıt.`}
     </p>
   );
@@ -196,7 +242,7 @@ function TimelineRow({ event, held }: { event: TimelineEvent; held: ReadonlySet<
     >
       <TableCell>
         <time dateTime={event.at} className="font-mono text-xs tabular-nums text-ink-muted">
-          {formatDateTimeSeconds(event.at)}
+          {formatDateTime(event.at)}
         </time>
       </TableCell>
       <TableCell>
@@ -206,12 +252,8 @@ function TimelineRow({ event, held }: { event: TimelineEvent; held: ReadonlySet<
         <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           {event.source === "audit" ? (
             <span className="font-mono text-xs">{event.label}</span>
-          ) : event.href === null ? (
-            <span>{event.label}</span>
           ) : (
-            <Link href={event.href} className="text-brand hover:underline">
-              {event.label}
-            </Link>
+            <span>{event.label}</span>
           )}
           {event.detail === null ? null : (
             <span

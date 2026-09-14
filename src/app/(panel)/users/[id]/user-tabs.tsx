@@ -395,8 +395,8 @@ export async function ReportsTab({ accessToken, userId }: { accessToken: string;
  * Zaman çizelgesi (koala-admin#107) kaydın kendi anlarını — hesap açılışı,
  * rozetler — personel kararlarıyla tek listede çizer; denetim yarısı
  * `ObjectTimeline` içinde yalnız `audit.read` varken istenir ve bu kaydın
- * bütün satırlarını (`resourceId`) izne süzmeden getirir — bir kullanıcıya
- * rol yazımı da silme talebi kararı da düşer.
+ * bütün satırlarını (`resourceId`) izne süzmeden getirir; bekleyen silme
+ * talebinin kimliğiyle yazılan karar ikinci sorguyla eklenir.
  */
 export async function AuditTab({
   accessToken,
@@ -429,14 +429,23 @@ export async function AuditTab({
         </AuditPointer>
       ) : null}
 
-      <ObjectTimeline resourceId={user.id} subject="Bu kullanıcı" events={userTimelineEvents(user)}>
-        Kaydın kendi anları DTO&apos;dan (hesap açılışı, rozetler); rol yazımı, silme talebi ve
-        kimlik kararları gibi personel işlemleri denetim izinden, bu kullanıcı kimliğiyle.
+      <ObjectTimeline
+        resourceId={user.id}
+        relatedResourceIds={
+          user.pendingDeletionRequestId === null ? [] : [user.pendingDeletionRequestId]
+        }
+        subject="Bu kullanıcı"
+        events={userTimelineEvents(user)}
+      >
+        Kaydın kendi anları DTO&apos;dan (hesap açılışı, rozetler); rol yazımı ve bu kullanıcı
+        kimliğiyle kayıtlı personel işlemleri denetim izinden. Bekleyen silme talebi varsa onun
+        kimliğiyle yazılan karar da eklenir; kimlik incelemesi kararları kendi kimliğiyle yazılır ve
+        burada görünmez.
       </ObjectTimeline>
 
       <ObjectAuditPointer resourceId={user.id} linkLabel="Bu kullanıcının denetim kayıtlarını aç">
-        Rol yazımı, silme talebi ve kimlik kararları backend tarafından bu kullanıcı kimliğiyle
-        denetim kaydına yazılır; personelin bu kaydı açması da kayda düşer.
+        Rol yazımı ve kullanıcı kaydını okuma backend tarafından bu kullanıcı kimliğiyle denetim
+        kaydına yazılır; personelin bu kaydı açması da kayda düşer.
       </ObjectAuditPointer>
     </div>
   );
@@ -445,7 +454,11 @@ export async function AuditTab({
 /**
  * Kullanıcının DTO'dan türeyen anları. Eski sunucu `createdAt` ve rozetleri
  * göndermez; o satırlar yalnız yoklukla eksilir. Kimlik incelemesi ve silme
- * talebi tarih taşımaz, çizelgeye giremez — kararları denetim yarısında.
+ * talebi tarih taşımaz, çizelgeye giremez. Backend `resourceId`'ye yalnız
+ * ilk yol değişkenini yazdığı için (`AuditScope.resourceIdOf`) silme talebi
+ * kararı kullanıcı kimliğiyle gelmez; `pendingDeletionRequestId` ikinci bir
+ * sorgu olarak `ObjectTimeline`'a verilir. Kimlik incelemesinin kimliği
+ * DTO'da yok (koala-backend#301 ile gelecek), o karar burada görünmez.
  */
 function userTimelineEvents(user: MarketplaceUserDetail): readonly TimelineEvent[] {
   const timeline = new TimelineBuilder();

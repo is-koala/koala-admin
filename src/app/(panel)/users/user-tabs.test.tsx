@@ -6,6 +6,7 @@ import { categoryCreatedEntry } from "../../../../test/fixtures/audit-log";
 import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
+import { detailValuesOf, watchAudit } from "../../../../test/support/watch-audit";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
 const backendSaysPasswordMustChange = vi.fn<() => Promise<boolean | null>>();
@@ -554,6 +555,14 @@ describe("the denetim tab", () => {
     createdAt: "2026-09-01T09:00:00.000000000Z",
     badges: [BADGE],
   };
+  const GRANT_ROW = {
+    ...categoryCreatedEntry,
+    occurredAt: "2026-09-03T12:00:00.000Z",
+    permission: "user.role.manage",
+    action: "user.role.grant",
+    resourceType: "users",
+    resourceId: USER_ID,
+  };
 
   /**
    * koala-admin#107: kaydın kendi anları (hesap açılışı, rozet) ve personel
@@ -563,24 +572,7 @@ describe("the denetim tab", () => {
   it("merges the user's own events with the audit rows in one timeline, with audit.read", async () => {
     stubMe([...READER, "audit.read"]);
     stubUser(USER_WITH_HISTORY);
-    const audit = watch("/admin/audit-log", () =>
-      envelope(
-        "/admin/audit-log",
-        pageOf(
-          [
-            {
-              ...categoryCreatedEntry,
-              occurredAt: "2026-09-03T12:00:00.000Z",
-              permission: "user.role.manage",
-              action: "user.role.grant",
-              resourceType: "users",
-              resourceId: USER_ID,
-            },
-          ],
-          14,
-        ),
-      ),
-    );
+    const audit = watchAudit({ rows: [GRANT_ROW], totalElements: 14 });
 
     const html = await render({ sekme: "denetim" });
 
@@ -599,20 +591,57 @@ describe("the denetim tab", () => {
     expect(timeline).toContain("Katalog Editörü");
     expect(timeline).toContain("Dakik");
     expect(timeline).toContain("Denetim izinden en yeni 1 satır; toplam 14 kayıt.");
+    // Denetim sayfasına tek bağlantı: `ObjectAuditPointer`'ınki.
+    expect(html.match(/href="\/audit-log\?resourceId=/g)).toHaveLength(1);
     expect(html).toContain(`href="/audit-log?resourceId=${USER_ID}"`);
     // Aktör bağlantısı `staff.read` ister; READER'da yok, ad düz metin.
     expect(timeline).not.toContain("/staff#personel-");
+    // Ayrıntı yarısı (gövde, IP, tarayıcı) çizelgeye inmez.
+    for (const value of detailValuesOf(GRANT_ROW)) expect(html).not.toContain(value);
+  });
+
+  /**
+   * Backend silme talebi kararını talep kimliğiyle yazar
+   * (`AuditScope.resourceIdOf` ilk yol değişkeni); kullanıcı kimliğine süzen
+   * sorgu onu getirmez. Bekleyen talep varsa ikinci sorgu, tek liste.
+   */
+  it("also asks for the pending deletion request's rows and merges them", async () => {
+    const REQUEST_ID = "de000000-0000-4000-8000-000000000001";
+    stubMe([...READER, "audit.read"]);
+    stubUser({ ...USER_WITH_HISTORY, pendingDeletionRequestId: REQUEST_ID });
+    const audit = watchAudit({
+      rowsFor: {
+        [USER_ID]: [GRANT_ROW],
+        [REQUEST_ID]: [
+          {
+            ...GRANT_ROW,
+            id: "aa000000-0000-4c00-8000-0000000000de",
+            occurredAt: "2026-09-05T09:00:00.000Z",
+            permission: "user.deletion.manage",
+            action: "account-deletions.reject",
+            resourceType: "account-deletions",
+            resourceId: REQUEST_ID,
+          },
+        ],
+      },
+    });
+
+    const html = await render({ sekme: "denetim" });
+
+    expect(audit.urls).toHaveLength(2);
+    expect(audit.urlsFor(USER_ID)).toHaveLength(1);
+    expect(audit.urlsFor(REQUEST_ID)).toHaveLength(1);
+    const timeline = html.slice(html.indexOf('data-testid="object-timeline"'));
+    expect(timeline.indexOf("user.role.grant")).toBeLessThan(
+      timeline.indexOf("account-deletions.reject"),
+    );
+    expect(timeline).toContain("Denetim izinden 2 kayıt.");
   });
 
   it("links the actor to the staff page for a staff.read holder", async () => {
     stubMe([...READER, "audit.read", "staff.read"]);
     stubUser();
-    watch("/admin/audit-log", () =>
-      envelope(
-        "/admin/audit-log",
-        pageOf([{ ...categoryCreatedEntry, resourceType: "users", resourceId: USER_ID }]),
-      ),
-    );
+    watchAudit({ rows: [GRANT_ROW] });
 
     const html = await render({ sekme: "denetim" });
 
@@ -621,8 +650,11 @@ describe("the denetim tab", () => {
 
   it("keeps the roles and the record's own events but closes the audit half without audit.read, sending no request", async () => {
     stubMe(READER);
-    stubUser(USER_WITH_HISTORY);
-    const audit = watch("/admin/audit-log", () => envelope("/admin/audit-log", pageOf([])));
+    stubUser({
+      ...USER_WITH_HISTORY,
+      pendingDeletionRequestId: "de000000-0000-4000-8000-000000000001",
+    });
+    const audit = watchAudit();
 
     const html = await render({ sekme: "denetim" });
 
@@ -631,7 +663,7 @@ describe("the denetim tab", () => {
     expect(html).toContain("Hesap oluşturuldu");
     expect(html).toContain('data-testid="object-timeline-audit-disabled"');
     expect(html).toContain("audit.read");
-    expect(html).not.toContain(`href="/audit-log?resourceId=${USER_ID}"`);
+    expect(html).not.toContain("/audit-log?");
     expect(html).not.toContain("Her değişiklik denetim kaydında");
   });
 
@@ -639,7 +671,7 @@ describe("the denetim tab", () => {
     stubMe([...READER, "audit.read"]);
     // Eski sunucu: `createdAt` ve rozet yok; denetim de boş.
     stubUser();
-    watch("/admin/audit-log", () => envelope("/admin/audit-log", pageOf([])));
+    watchAudit();
 
     const html = await render({ sekme: "denetim" });
 
@@ -652,21 +684,22 @@ describe("the denetim tab", () => {
   it("keeps the record's own events and shows the backend's answer when the audit read fails", async () => {
     stubMe([...READER, "audit.read"]);
     stubUser(USER_WITH_HISTORY);
-    watch("/admin/audit-log", () =>
-      HttpResponse.json(
-        {
-          success: false,
-          message: "Denetim deposu yanıt vermedi.",
-          httpStatus: "503 SERVICE_UNAVAILABLE",
-          errorCode: "AUDIT_UNAVAILABLE",
-          errorCategory: "UPSTREAM_FAILED",
-          requestId: "rid-audit-503",
-          path: "/admin/audit-log",
-          timeStamp: "2026-09-11T13:00:00.000000000Z",
-        },
-        { status: 503 },
-      ),
-    );
+    watchAudit({
+      respond: () =>
+        HttpResponse.json(
+          {
+            success: false,
+            message: "Denetim deposu yanıt vermedi.",
+            httpStatus: "503 SERVICE_UNAVAILABLE",
+            errorCode: "AUDIT_UNAVAILABLE",
+            errorCategory: "UPSTREAM_FAILED",
+            requestId: "rid-audit-503",
+            path: "/admin/audit-log",
+            timeStamp: "2026-09-11T13:00:00.000000000Z",
+          },
+          { status: 503 },
+        ),
+    });
 
     const html = await render({ sekme: "denetim" });
 

@@ -9,7 +9,7 @@ import { QueueLoadFailure } from "@/components/panel/queue";
 import { ErrorState } from "@/components/ui";
 import { TimelineBuilder, type TimelineEvent } from "@/lib/object-timeline";
 import {
-  DISPUTE_RESOLUTION_SPECS,
+  disputeResolutionSpec,
   disputeSideLabel,
   getDispute,
   getDisputeEvidence,
@@ -199,10 +199,7 @@ function disputeTimelineEvents(
     });
   }
   const resolution =
-    dispute.resolution === null
-      ? null
-      : (DISPUTE_RESOLUTION_SPECS.find((spec) => spec.resolution === dispute.resolution)?.label ??
-        dispute.resolution);
+    dispute.resolution === null ? null : disputeResolutionSpec(dispute.resolution).label;
   const decision = [resolution, dispute.resolutionNote]
     .filter((part): part is string => part !== null)
     .join(" · ");

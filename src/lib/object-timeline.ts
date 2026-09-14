@@ -1,5 +1,3 @@
-import type { Route } from "next";
-
 import type { AuditEntry } from "@/lib/audit-log";
 
 /**
@@ -38,8 +36,6 @@ export interface TimelineEvent {
   readonly source: TimelineSource;
   /** Denetim satırında backend'in kararı; DTO olayında her zaman `true`. */
   readonly allowed: boolean;
-  /** Olayın açtığı kayıt (ödeme, uyuşmazlık...); izin sayfada çözülür. */
-  readonly href: Route | null;
   /** Satır anahtarı; denetimde satır kimliği, DTO'da etiket+an. */
   readonly key: string;
 }
@@ -47,7 +43,6 @@ export interface TimelineEvent {
 interface EventOptions {
   readonly detail?: string | null;
   readonly actor?: TimelineActor | null;
-  readonly href?: Route | null;
 }
 
 function parsableInstant(at: string | null | undefined): at is string {
@@ -72,7 +67,6 @@ export class TimelineBuilder {
       actor: options.actor ?? null,
       source: "record",
       allowed: true,
-      href: options.href ?? null,
       key: `record:${label}:${at}:${this.events.length}`,
     });
     return this;
@@ -94,7 +88,6 @@ export function auditTimelineEvents(entries: readonly AuditEntry[]): readonly Ti
       actor: { kind: "staff", staffId: entry.actorStaffId, name: entry.actorDisplayName },
       source: "audit",
       allowed: entry.allowed,
-      href: null,
       key: `audit:${entry.id}`,
     }));
 }

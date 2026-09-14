@@ -12,10 +12,11 @@ import {
   adminPaymentFixture,
   envelope,
 } from "../../../../test/fixtures/admin-detail";
-import { auditPageBody, categoryCreatedEntry } from "../../../../test/fixtures/audit-log";
+import { categoryCreatedEntry } from "../../../../test/fixtures/audit-log";
 import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
+import { detailValuesOf, watchAudit } from "../../../../test/support/watch-audit";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
 const backendSaysPasswordMustChange = vi.fn<() => Promise<boolean | null>>();
@@ -34,7 +35,6 @@ const { default: AssignmentDetailPage } = await import("./[id]/page");
 const ADMIN_ME = apiUrl("/admin/me");
 const DETAIL = apiUrl(`/admin/job-assignments/${ASSIGNMENT_ID}`);
 const PAYMENTS = apiUrl(`/admin/job-assignments/${ASSIGNMENT_ID}/payments`);
-const AUDIT_LOG = apiUrl("/admin/audit-log");
 
 const ANALYST = ["payment.read"];
 
@@ -80,18 +80,6 @@ function watch(
     }),
   );
   return seen;
-}
-
-/** Zaman çizelgesinin denetim yarısı (koala-admin#107); her çağrının URL'si saklanır. */
-function watchAudit(rows: readonly (typeof categoryCreatedEntry)[] = [], totalElements?: number) {
-  const urls: URL[] = [];
-  server.use(
-    http.get(AUDIT_LOG, ({ request }) => {
-      urls.push(new URL(request.url));
-      return HttpResponse.json(auditPageBody({ content: rows, totalElements, size: 10 }));
-    }),
-  );
-  return { urls };
 }
 
 const render = async (id: string = ASSIGNMENT_ID) =>
@@ -590,8 +578,8 @@ describe("the timeline's audit half", () => {
       actualCompletionDateTime: "2026-09-03T17:00:00Z",
     });
     watch(detail, []);
-    const audit = watchAudit(
-      [
+    const audit = watchAudit({
+      rows: [
         RELEASE_ROW,
         {
           ...RELEASE_ROW,
@@ -602,8 +590,8 @@ describe("the timeline's audit half", () => {
           allowed: false,
         },
       ],
-      27,
-    );
+      totalElements: 27,
+    });
 
     const html = await render();
 
@@ -626,12 +614,19 @@ describe("the timeline's audit half", () => {
     expect(timeline).toContain('data-source="audit"');
     expect(timeline).toContain('data-source="record"');
     expect(timeline).toContain("Denetim izinden en yeni 2 satır; toplam 27 kayıt.");
+    // Çizelge saniye değil dakika yazar (atama sayfasının eski biçimi).
+    expect(timeline).toContain("01.09.2026 12:00");
+    expect(timeline).not.toContain("01.09.2026 12:00:00");
+    // Ayrıntı yarısı (gövde, IP, tarayıcı) çizelgeye inmez.
+    for (const value of detailValuesOf(RELEASE_ROW)) expect(html).not.toContain(value);
+    // Denetim sayfasına tek bağlantı: `ObjectAuditPointer`'ınki.
+    expect(html.match(/href="\/audit-log\?resourceId=/g)).toHaveLength(1);
   });
 
   it("draws only the record's events and says why, sending no audit request without audit.read", async () => {
     stubMe(ANALYST);
     watch();
-    const audit = watchAudit([RELEASE_ROW]);
+    const audit = watchAudit({ rows: [RELEASE_ROW] });
 
     const html = await render();
 
@@ -639,6 +634,6 @@ describe("the timeline's audit half", () => {
     expect(html).toContain("Atama zamanı");
     expect(html).not.toContain("job-assignments.release");
     expect(html).toContain('data-testid="object-timeline-audit-disabled"');
-    expect(html).not.toContain('data-testid="object-timeline-audit-all"');
+    expect(html).not.toContain("/audit-log?");
   });
 });

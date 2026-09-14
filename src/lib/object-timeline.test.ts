@@ -34,7 +34,6 @@ describe("TimelineBuilder", () => {
       source: "record",
       allowed: true,
       actor: null,
-      href: null,
     });
   });
 

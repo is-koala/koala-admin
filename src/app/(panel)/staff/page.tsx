@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
+import { staffMemberAnchor } from "@/lib/panel-href";
 import {
   FINANCE_BRANCH_ROLES,
   TRUST_BRANCH_ROLES,
@@ -255,7 +256,10 @@ async function StaffDirectory({ params }: { params: SearchParams }) {
               {members.map((member) => (
                 <TableRow key={member.id}>
                   <TableCell>
-                    <a href={`#personel-${member.id}`} className="text-brand hover:underline">
+                    <a
+                      href={`#${staffMemberAnchor(member.id)}`}
+                      className="text-brand hover:underline"
+                    >
                       {member.displayName ?? EMPTY_VALUE}
                     </a>
                   </TableCell>
@@ -431,7 +435,7 @@ function StaffDetail({
 
   return (
     <details
-      id={`personel-${member.id}`}
+      id={staffMemberAnchor(member.id)}
       className="rounded-lg border border-border-subtle bg-surface px-4 py-3"
     >
       <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-ink">

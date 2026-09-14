@@ -7,10 +7,11 @@ import {
   reviewCompany,
   type CompanyReviewOverrides,
 } from "../../../../test/fixtures/companies";
-import { auditPageBody, categoryCreatedEntry } from "../../../../test/fixtures/audit-log";
+import { categoryCreatedEntry } from "../../../../test/fixtures/audit-log";
 import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
+import { detailValuesOf, watchAudit } from "../../../../test/support/watch-audit";
 
 const getKoalaAccessToken = vi.fn<() => Promise<string>>();
 
@@ -23,7 +24,6 @@ const { default: CompanyDetailPage } = await import("./[id]/page");
 
 const ADMIN_ME = apiUrl("/admin/me");
 const COMPANIES = apiUrl("/admin/companies");
-const AUDIT_LOG = apiUrl("/admin/audit-log");
 const STAFF_ID = "b7f4a2c1-0000-4c00-8000-000000000007";
 
 const APPROVER = ["company.approve"];
@@ -443,18 +443,6 @@ describe("the audit pointer on the company page", () => {
   });
 });
 
-/** Zaman çizelgesinin denetim yarısı (koala-admin#107); her çağrının URL'si saklanır. */
-function watchAudit(rows: readonly (typeof categoryCreatedEntry)[] = [], totalElements?: number) {
-  const urls: URL[] = [];
-  server.use(
-    http.get(AUDIT_LOG, ({ request }) => {
-      urls.push(new URL(request.url));
-      return HttpResponse.json(auditPageBody({ content: rows, totalElements, size: 10 }));
-    }),
-  );
-  return { urls };
-}
-
 /**
  * koala-admin#107: başvuru ve kayıtlı karar DTO'dan, personel işlemleri
  * denetim izinden; tek çizelge, zamana göre. Kararı veren personel DTO'da
@@ -484,7 +472,7 @@ describe("the company timeline", () => {
   it("merges the application, the recorded decision and the audit row, oldest first", async () => {
     stubMe([...APPROVER, "audit.read"]);
     watchDetail(decided());
-    const audit = watchAudit([APPROVE_ROW], 3);
+    const audit = watchAudit({ rows: [APPROVE_ROW], totalElements: 3 });
 
     const html = await renderDetail();
 
@@ -504,12 +492,14 @@ describe("the company timeline", () => {
     expect(timeline).toContain(`title="${STAFF_ID}"`);
     expect(timeline).toContain(">b7f4a2c1<");
     expect(timeline).not.toContain("/staff#personel-");
+    for (const value of detailValuesOf(APPROVE_ROW)) expect(html).not.toContain(value);
+    expect(html.match(/href="\/audit-log\?resourceId=/g)).toHaveLength(1);
   });
 
   it("links staff actors to the staff page for a staff.read holder", async () => {
     stubMe([...APPROVER, "audit.read", "staff.read"]);
     watchDetail(decided());
-    watchAudit([APPROVE_ROW]);
+    watchAudit({ rows: [APPROVE_ROW] });
 
     const html = await renderDetail();
 
@@ -519,7 +509,7 @@ describe("the company timeline", () => {
   it("keeps the record's events and explains the missing half without audit.read, sending no request", async () => {
     stubMe(APPROVER);
     watchDetail(decided());
-    const audit = watchAudit([APPROVE_ROW]);
+    const audit = watchAudit({ rows: [APPROVE_ROW] });
 
     const html = await renderDetail();
 
@@ -533,7 +523,7 @@ describe("the company timeline", () => {
   it("says when an older server sent no dated field and the audit log is empty", async () => {
     stubMe([...APPROVER, "audit.read"]);
     watchDetail(company({ createdAt: null, approvalDecidedAt: null }));
-    watchAudit([]);
+    watchAudit();
 
     const html = await renderDetail();
 

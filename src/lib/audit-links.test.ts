@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { Permission } from "@/server/authz/permissions";
 
-import { auditActorHref, auditResourceHref, staffMemberHref } from "./audit-links";
+import { auditActorHref, auditResourceHref } from "./audit-links";
+import { staffMemberHref } from "./panel-href";
 
 /**
  * koala-admin#107: denetim satırından nesneye ve personele giden bağlantı

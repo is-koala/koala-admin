@@ -7,9 +7,10 @@ import {
   searchQueryTooLongBody,
 } from "../../../test/fixtures/envelopes";
 import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment";
-import { auditPageBody, categoryCreatedEntry } from "../../../test/fixtures/audit-log";
+import { categoryCreatedEntry } from "../../../test/fixtures/audit-log";
 import { apiUrl, server } from "../../../test/msw";
 import { renderServerComponent } from "../../../test/render-server";
+import { detailValuesOf, watchAudit } from "../../../test/support/watch-audit";
 
 /**
  * koala-admin#6's acceptance criteria, rendered.
@@ -49,7 +50,6 @@ const DISPUTES = apiUrl("/admin/disputes");
 const SUMMARY = apiUrl(`/admin/job-assignments/${ASSIGNMENT}`);
 const EVIDENCE = apiUrl(`/admin/disputes/${DISPUTE}/evidence`);
 const EVIDENCE_ID = "e1000000-0000-4c00-8000-000000000001";
-const AUDIT_LOG = apiUrl("/admin/audit-log");
 const STAFF_ID = "b7f4a2c1-0000-4c00-8000-000000000009";
 
 const OWNER_REVIEW_PERMISSIONS = [
@@ -269,18 +269,6 @@ function watchDispute(respond: () => Response = disputeOk) {
 
 const renderDetail = () =>
   renderServerComponent(<DisputeDetailPage params={Promise.resolve({ id: DISPUTE })} />);
-
-/** Zaman çizelgesinin denetim yarısı (koala-admin#107); her çağrının URL'si saklanır. */
-function watchAudit(rows: readonly (typeof categoryCreatedEntry)[] = [], totalElements?: number) {
-  const urls: URL[] = [];
-  server.use(
-    http.get(AUDIT_LOG, ({ request }) => {
-      urls.push(new URL(request.url));
-      return HttpResponse.json(auditPageBody({ content: rows, totalElements, size: 10 }));
-    }),
-  );
-  return { urls };
-}
 
 const summaryForbidden = () =>
   HttpResponse.json(
@@ -509,23 +497,19 @@ describe("the selected dispute", () => {
     );
     watchSummary();
     watchEvidence();
-    const audit = watchAudit(
-      [
-        {
-          ...categoryCreatedEntry,
-          id: "aa000000-0000-4c00-8000-0000000000d1",
-          occurredAt: "2026-09-06T08:00:00.000Z",
-          actorStaffId: STAFF_ID,
-          actorDisplayName: "Uyuşmazlık Hakemi",
-          permission: "dispute.resolve",
-          action: "disputes.resolve",
-          resourceType: "disputes",
-          resourceId: DISPUTE,
-          sensitivity: "FINANCIAL" as const,
-        },
-      ],
-      1,
-    );
+    const RESOLVE_ROW = {
+      ...categoryCreatedEntry,
+      id: "aa000000-0000-4c00-8000-0000000000d1",
+      occurredAt: "2026-09-06T08:00:00.000Z",
+      actorStaffId: STAFF_ID,
+      actorDisplayName: "Uyuşmazlık Hakemi",
+      permission: "dispute.resolve",
+      action: "disputes.resolve",
+      resourceType: "disputes",
+      resourceId: DISPUTE,
+      sensitivity: "FINANCIAL" as const,
+    };
+    const audit = watchAudit({ rows: [RESOLVE_ROW], totalElements: 1 });
 
     const html = await renderDetail();
 
@@ -546,6 +530,8 @@ describe("the selected dispute", () => {
     expect(timeline).toContain("Uyuşmazlık Hakemi");
     expect(timeline).toContain("Denetim izinden 1 kayıt.");
     expect(html.match(new RegExp(`href="/staff#personel-${STAFF_ID}"`, "g"))).toHaveLength(2);
+    for (const value of detailValuesOf(RESOLVE_ROW)) expect(html).not.toContain(value);
+    expect(html.match(/href="\/audit-log\?resourceId=/g)).toHaveLength(1);
   });
 
   it("draws only the dispute's own events without audit.read and sends no audit request", async () => {
@@ -553,7 +539,7 @@ describe("the selected dispute", () => {
     watchDispute();
     watchSummary();
     watchEvidence();
-    const audit = watchAudit([categoryCreatedEntry]);
+    const audit = watchAudit({ rows: [categoryCreatedEntry] });
 
     const html = await renderDetail();
 

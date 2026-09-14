@@ -56,7 +56,7 @@ export function assignmentTimelineEvents(
           ? null
           : cancellationPartyLabel(assignment.cancellation.cancelledByParty),
       actor:
-        cancelledBy === null || cancelledBy === undefined
+        cancelledBy === null
           ? null
           : { kind: "user", userId: cancelledBy.id, name: safeUserName(cancelledBy) },
     });

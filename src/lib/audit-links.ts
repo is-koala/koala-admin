@@ -12,6 +12,7 @@ import {
   paymentHref,
   payoutHref,
   reportHref,
+  staffMemberHref,
   userHref,
 } from "@/lib/panel-href";
 import type { Permission } from "@/server/authz/permissions";
@@ -69,11 +70,6 @@ const RESOURCE_TARGETS: Readonly<Record<string, ResourceTarget>> = {
   },
   staff: { permission: "staff.read", href: staffMemberHref, uuid: true },
 };
-
-/** Personel sayfası satır çapası; `/staff` sayfası her üyeye `personel-<id>` verir. */
-export function staffMemberHref(staffId: string): Route {
-  return `/staff#personel-${encodeURIComponent(staffId)}` as Route;
-}
 
 export function auditResourceHref(
   resourceType: string,

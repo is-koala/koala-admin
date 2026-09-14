@@ -125,12 +125,13 @@ async function CompanyObject({
         subject="Bu şirket"
         events={companyTimelineEvents(company)}
       >
-        Başvuru ve kayıtlı karar DTO&apos;dan; onay, ret ve galeri görseli kaldırma gibi personel
-        işlemleri denetim izinden, bu şirket kimliğiyle.
+        Başvuru ve kayıtlı karar DTO&apos;dan; onay, ret ve bu şirket kimliğiyle kayıtlı diğer
+        personel işlemleri denetim izinden. Galeri görseli kaldırma görsel kimliğiyle yazılır ve
+        burada görünmez.
       </ObjectTimeline>
       <ObjectAuditPointer resourceId={company.id} linkLabel="Bu şirketin denetim kayıtlarını aç">
-        Onay, ret ve galeri görseli kaldırma backend tarafından bu şirket kimliğiyle denetim kaydına
-        yazılır; personelin bu kaydı açması da kayda düşer.
+        Onay ve ret backend tarafından bu şirket kimliğiyle denetim kaydına yazılır; personelin bu
+        kaydı açması da kayda düşer. Galeri görseli kaldırma görsel kimliğiyle ayrı satırdır.
       </ObjectAuditPointer>
     </section>
   );
