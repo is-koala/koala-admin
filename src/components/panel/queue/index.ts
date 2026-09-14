@@ -19,6 +19,8 @@ export {
   type QueueFiltersProps,
   type QueueFilterSpec,
 } from "./filters";
+export { DateRangeFilter, type DateRangeFilterProps } from "./date-range-filter";
+export { CsvExportLink } from "./export-link";
 export { FilterId, FilterNotice } from "./filter-notice";
 export { QueueLoadFailure, type QueueFailure, type QueueLoadFailureProps } from "./load-failure";
 export { QueuePager, type QueuePagerProps } from "./pager";

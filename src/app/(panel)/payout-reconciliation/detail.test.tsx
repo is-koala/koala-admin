@@ -309,3 +309,31 @@ describe("release origin, settlement instant and the reconciling staff member", 
     expect(html).toMatch(/Banka hesabı<\/dt><dd[^>]*>—</);
   });
 });
+
+/** koala-admin#105: şirket adı `company.approve` varken ve kimlik geldiyse şirket sayfasına bağlı. */
+describe("the company link — koala-admin#105", () => {
+  const COMPANY = "c0000000-0000-4000-8000-0000000000c1";
+
+  it("links the company name for a company.approve holder and not otherwise", async () => {
+    stubMe([...OFFICER, "company.approve"]);
+    watch();
+    expect(await render()).toContain(`href="/companies/${COMPANY}"`);
+
+    stubMe(OFFICER);
+    watch();
+    const html = await render();
+    expect(html).toContain("Koala Kafe");
+    expect(html).not.toContain(`href="/companies/${COMPANY}"`);
+  });
+
+  it("writes the name as text when an older backend sends no companyId", async () => {
+    stubMe([...OFFICER, "company.approve"]);
+    const { companyId: _dropped, ...legacy } = adminPayoutDetailFixture();
+    watch(legacy);
+
+    const html = await render();
+
+    expect(html).toContain("Koala Kafe");
+    expect(html).not.toContain("/companies/");
+  });
+});

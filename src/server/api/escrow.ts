@@ -129,6 +129,12 @@ export const escrowSummarySchema = z.object({
   id: z.string(),
   jobId: z.string(),
   jobTitle: nullableString,
+  /**
+   * koala-backend#301: şirket kimliği adın yanında; bireysel ilanda ikisi de
+   * `null`. Eski sunucu alanı göndermez — `null` kalır, şirket adı düz
+   * metin çizilir, sayfa düşmez (koala-admin#105).
+   */
+  companyId: nullableString,
   companyName: nullableString,
   worker: safeUserSchema,
   employer: safeUserSchema,
@@ -360,6 +366,14 @@ export interface AssignmentQueueQuery {
   readonly workerId?: string | null;
   /** koala-backend#283: yalnız bu işverenin (ilan sahibinin) atamaları. */
   readonly employerId?: string | null;
+  /**
+   * koala-backend#301: atama durumları; boş/`null` her durum. Virgülle tek
+   * parametre gider (`status=A,B`), hakediş listesiyle aynı kalıp.
+   */
+  readonly status?: readonly AssignmentStatus[] | null;
+  /** koala-backend#301: `createdAt` aralığı, dilimli ISO, iki sınır dahil. */
+  readonly from?: string | null;
+  readonly to?: string | null;
 }
 
 export function getAdminAssignments(
@@ -373,6 +387,12 @@ export function getAdminAssignments(
       query: searchQueryParam(query.query),
       workerId: query.workerId ?? undefined,
       employerId: query.employerId ?? undefined,
+      status:
+        query.status === null || query.status === undefined || query.status.length === 0
+          ? undefined
+          : query.status.join(","),
+      from: query.from ?? undefined,
+      to: query.to ?? undefined,
       ...pagingQuery(query.paging),
     },
     accessToken,

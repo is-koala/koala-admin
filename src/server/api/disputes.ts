@@ -216,6 +216,9 @@ export interface DisputeQuery {
   query?: string | null;
   /** koala-backend#283: işçi, ilan sahibi ya da açan olarak bu kullanıcının uyuşmazlıkları. */
   userId?: string | null;
+  /** koala-backend#301: `createdAt` aralığı, dilimli ISO, iki sınır dahil. */
+  from?: string | null;
+  to?: string | null;
 }
 
 /**
@@ -237,6 +240,8 @@ export function getDisputes(
       ...(query.status ? { status: query.status } : {}),
       query: searchQueryParam(query.query),
       userId: query.userId ?? undefined,
+      from: query.from ?? undefined,
+      to: query.to ?? undefined,
     },
     accessToken,
     cache: "no-store",

@@ -87,6 +87,20 @@ bunu "personel kaydı yok" sanmak yanlış teşhis. Tek çıkış `/giris/parola
 bilerek izinsiz bırakır). Bayrağı çerezden `false` yazmak yetmez: 403
 yine gelir, `staff-context.ts` hangisi olduğunu backend'e sorar.
 
+## CSV dışa aktarma rotaları (koala-admin#110)
+
+`/api/export/{assignments,payouts,reports,disputes}` liste sayfasının o anki
+süzgeciyle ilk 1000 satırı CSV verir. Gövde tek yerde,
+`src/server/export/csv-export.ts`; rota dosyası yalnız liste, izin ve
+sütunları söyler. Kapı sayfayla **aynı izin**, `getStaffContext().has(...)`
+ile rotanın kendisinde — `<RequirePermission>` bir rotayı koruyamaz. Adres
+okuma `src/server/lists/*` ile sayfayla ortak: CSV, ekrandaki listeyi verir,
+başka bir listeyi değil. Ad-soyad sütunları yalnız `user.read_pii` ile;
+kimlikler herkese. Backend'de "export" eylemi yok; rota
+`[koala-admin] audit action=export …` günlük satırı yazar (kim, liste,
+süzgeç, satır sayısı, PII). Yeni bir liste eklerken `routes.ts`'e
+`ROUTE_HANDLERS` girdisi şart — `routes.test.ts` dosya sistemini tarar.
+
 ## `ADMIN_PUBLIC_ORIGIN`
 
 Çerezin `Secure` işaretini ve adını bu belirler

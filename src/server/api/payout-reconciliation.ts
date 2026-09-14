@@ -143,6 +143,8 @@ export const payoutDetailSchema = z.object({
   jobAssignmentId: z.string(),
   jobId: nullableString,
   jobTitle: nullableString,
+  /** koala-backend#301; eski sunucuda yok → `null`, ad düz metin kalır (koala-admin#105). */
+  companyId: nullableString,
   companyName: nullableString,
   worker: staffPartySchema.nullish().transform((value) => value ?? null),
   employer: staffPartySchema.nullish().transform((value) => value ?? null),
@@ -208,6 +210,9 @@ export interface PayoutQueueQuery {
   readonly query?: string | null;
   /** koala-backend#283: yalnız bu işçinin hakedişleri; durum ve arama ile kesişir. */
   readonly workerId?: string | null;
+  /** koala-backend#301: `createdAt` aralığı, dilimli ISO, iki sınır dahil. */
+  readonly from?: string | null;
+  readonly to?: string | null;
 }
 
 export function getPayouts(accessToken: string, query: PayoutQueueQuery): Promise<PageDto<Payout>> {
@@ -218,6 +223,8 @@ export function getPayouts(accessToken: string, query: PayoutQueueQuery): Promis
       status: payoutStatusParam(query.status),
       query: searchQueryParam(query.query),
       workerId: query.workerId ?? undefined,
+      from: query.from ?? undefined,
+      to: query.to ?? undefined,
       ...pagingQuery(query.paging),
     },
     accessToken,

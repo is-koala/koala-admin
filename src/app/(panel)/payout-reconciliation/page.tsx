@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  CsvExportLink,
+  DateRangeFilter,
   FilterId,
   FilterNotice,
   ListSearchForm,
@@ -16,22 +18,19 @@ import {
 import { PayoutReconciliationForm } from "@/components/payout-reconciliation/payout-reconciliation-form";
 import { EmptyState } from "@/components/ui";
 import { objectQueryFor } from "@/lib/breadcrumb";
-import { ALL_STATUSES_PARAM, isUuid, payoutsHref } from "@/lib/panel-href";
-import { PAYOUT_PAGING, PAYOUT_STATUSES, getPayouts } from "@/server/api/payout-reconciliation";
-import {
-  pageWindow,
-  readPaging,
-  readParam,
-  readUuidParam,
-  type SearchParams,
-} from "@/server/api/paging";
-import {
-  SEARCH_QUERY_TOO_LONG_MESSAGE,
-  isSearchQueryTooLong,
-  readSearchQuery,
-} from "@/server/api/search-query";
+import { hasDateRange } from "@/lib/date-range";
+import { isUuid, payoutsHref } from "@/lib/panel-href";
+import { getPayouts } from "@/server/api/payout-reconciliation";
+import { pageWindow, readParam, type SearchParams } from "@/server/api/paging";
+import { SEARCH_QUERY_TOO_LONG_MESSAGE, isSearchQueryTooLong } from "@/server/api/search-query";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
+import {
+  payoutFilterState,
+  payoutListQuery,
+  payoutViewState,
+  readPayoutView,
+} from "@/server/lists/payouts";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { submitPayoutReconciliation } from "./actions";
@@ -52,6 +51,8 @@ export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
  * O görünümde satırlar PENDING/COMPLETED/FAILED de olabilir; rozet
  * `row.status`tan gelir ve "Onayla" yalnız PROCESSING satırında durur —
  * reconcile ucu başka durumu zaten reddeder (koala-admin#106).
+ * `?baslangic=&bitis=` `createdAt` aralığı (koala-admin#110, koala-backend#301);
+ * adres okuma `src/server/lists/payouts.ts`'te, CSV rotası aynı okuyucu.
  */
 export default async function PayoutReconciliationPage({
   searchParams,
@@ -80,20 +81,16 @@ export default async function PayoutReconciliationPage({
 }
 
 async function PayoutQueue({ params }: { params: SearchParams }) {
-  const paging = readPaging(params, PAYOUT_PAGING);
+  const view = readPayoutView(params);
+  const { paging, query, workerId, allStatuses, range } = view;
   const selected = readParam(params, "hakedis");
   const selectedId = selected !== null && isUuid(selected) ? selected : null;
-  const query = readSearchQuery(readParam(params, SEARCH_PARAM));
   const search = activeSearch(query);
-  const workerId = readUuidParam(params, "isci");
-  const allStatuses = readParam(params, "durum") === ALL_STATUSES_PARAM;
 
+  const listState = payoutViewState(view);
   const viewState = {
-    boyut: String(paging.size),
+    ...listState,
     ...(selectedId === null ? {} : { hakedis: selectedId }),
-    ...(query === null ? {} : { [SEARCH_PARAM]: query }),
-    ...(workerId === null ? {} : { isci: workerId }),
-    ...(allStatuses ? { durum: ALL_STATUSES_PARAM } : {}),
   };
   const objectQuery = objectQueryFor(viewState, paging.page);
 
@@ -104,6 +101,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
         clearHref={payoutsHref({
           boyut: String(paging.size),
           ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+          ...payoutFilterState(view),
         })}
       >
         Bu görünüm işçisi <FilterId value={workerId} /> olan{" "}
@@ -124,21 +122,26 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
     />
   );
 
+  const dateFilter = (
+    <DateRangeFilter
+      id="hakedis-tarih"
+      pathname="/payout-reconciliation"
+      range={range}
+      state={viewState}
+    />
+  );
+
   const accessToken = await getKoalaAccessToken();
 
   let page;
   try {
-    page = await getPayouts(accessToken, {
-      paging,
-      query,
-      workerId,
-      status: allStatuses ? PAYOUT_STATUSES : null,
-    });
+    page = await getPayouts(accessToken, payoutListQuery(view));
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return (
         <div className="flex flex-col gap-6">
           {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
+          {dateFilter}
           <ConfirmSection payoutId={selectedId} />
         </div>
       );
@@ -146,6 +149,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
     return (
       <div className="flex flex-col gap-6">
         {searchForm()}
+        {dateFilter}
         <QueueLoadFailure
           subject="Bekleyen hakedişler"
           permission="payout.reconcile"
@@ -173,11 +177,19 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
 
         {workerNotice}
         {searchForm()}
+        {dateFilter}
         <SearchResultSummary search={search} total={page.totalElements} unit="hakediş" />
+        <CsvExportLink list="payouts" state={listState} unit="hakediş" />
 
         {rows.length === 0 ? (
           <EmptyState
-            title={search === null ? "Bekleyen hakediş yok." : searchEmptyTitle(search)}
+            title={
+              search !== null
+                ? searchEmptyTitle(search)
+                : hasDateRange(range)
+                  ? "Bu tarih aralığında hakediş yok."
+                  : "Bekleyen hakediş yok."
+            }
             description="Kuyruk boşsa aşağıdaki forma hakediş kimliğini yazabilirsiniz."
           />
         ) : (

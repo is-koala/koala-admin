@@ -3,6 +3,7 @@ import type { Route } from "next";
 import type { ReactNode } from "react";
 
 import { EscrowOperationForm } from "@/components/escrow/escrow-operation-form";
+import { CompanyLink } from "@/components/panel/company-link";
 import { ObjectTimeline } from "@/components/panel/object-timeline";
 import { ProfilePicture } from "@/components/panel/profile-picture";
 import {
@@ -134,7 +135,12 @@ export function AssignmentDetail({ assignment, payments, permissions }: DetailPr
                   <Party user={assignment.employer} />
                 ) : (
                   <span>
-                    <Party user={assignment.employer} /> · {assignment.companyName}
+                    <Party user={assignment.employer} /> ·{" "}
+                    <CompanyLink
+                      companyId={assignment.companyId}
+                      companyName={assignment.companyName}
+                      canOpen={held.has("company.approve")}
+                    />
                   </span>
                 )
               }

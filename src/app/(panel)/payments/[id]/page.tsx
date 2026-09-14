@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
+import { CompanyLink } from "@/components/panel/company-link";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { SafeUserLink } from "@/components/panel/safe-user-link";
@@ -141,6 +142,7 @@ async function PaymentObject({ id }: { id: string }) {
 
   const currency = paymentCurrency(payment);
   const canOpenJob = context.has("job.read");
+  const canOpenCompany = context.has("company.approve");
   const canOpenPayout = context.has("payout.reconcile");
   const canOpenDispute = context.has("dispute.resolve");
 
@@ -195,7 +197,12 @@ async function PaymentObject({ id }: { id: string }) {
                   <SafeUserLink user={payment.employer} />
                 ) : (
                   <span>
-                    <SafeUserLink user={payment.employer} /> · {payment.companyName}
+                    <SafeUserLink user={payment.employer} /> ·{" "}
+                    <CompanyLink
+                      companyId={payment.companyId}
+                      companyName={payment.companyName}
+                      canOpen={canOpenCompany}
+                    />
                   </span>
                 )
               }

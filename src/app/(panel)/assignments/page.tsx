@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  CsvExportLink,
+  DateRangeFilter,
   FilterId,
   FilterNotice,
   ListSearchForm,
@@ -16,6 +18,7 @@ import {
 } from "@/components/panel/queue";
 import { Badge, EmptyState, FormField, TextInput } from "@/components/ui";
 import { objectQueryFor } from "@/lib/breadcrumb";
+import { dateRangeState, hasDateRange } from "@/lib/date-range";
 import {
   EMPTY_VALUE,
   formatCurrency,
@@ -25,26 +28,25 @@ import {
 } from "@/lib/format";
 import { assignmentHref, assignmentsHref, userHrefOrNull } from "@/lib/panel-href";
 import {
-  ASSIGNMENT_PAGING,
+  ASSIGNMENT_STATUSES,
   getAdminAssignments,
   getEscrowSummary,
   type EscrowSummary,
 } from "@/server/api/escrow";
-import {
-  pageWindow,
-  readPaging,
-  readParam,
-  readUuidParam,
-  type SearchParams,
-} from "@/server/api/paging";
-import {
-  SEARCH_QUERY_TOO_LONG_MESSAGE,
-  isSearchQueryTooLong,
-  readSearchQuery,
-} from "@/server/api/search-query";
+import { pageWindow, readParam, type SearchParams } from "@/server/api/paging";
+import { SEARCH_QUERY_TOO_LONG_MESSAGE, isSearchQueryTooLong } from "@/server/api/search-query";
 import { safeUserName, type SafeUser } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
+import { getStaffContext } from "@/server/authz/staff-context";
+import {
+  ASSIGNMENT_STATUS_PARAM,
+  assignmentFilterState,
+  assignmentListQuery,
+  assignmentPartyState,
+  assignmentViewState,
+  readAssignmentView,
+} from "@/server/lists/assignments";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { AssignmentTable } from "./assignment-table";
@@ -69,6 +71,12 @@ export const metadata: Metadata = { title: "Atama özeti" };
  * `?isci=` ve `?isveren=` (koala-admin#100) kuyruğu bir kullanıcıya süzer:
  * backend'in `workerId` / `employerId` parametreleri (koala-backend#283).
  * Kullanıcı sayfasındaki sayaçlar buraya gelir. UUID olmayan değer düşer.
+ *
+ * `?durum=` (çoklu) ve `?baslangic=&bitis=` (koala-admin#110) backend'in
+ * `status` / `from` / `to` parametreleri (koala-backend#301); adres okuma
+ * `src/server/lists/assignments.ts`'te, CSV rotası aynı okuyucuyu kullanır.
+ * Satırdaki adlar tıklanır (koala-admin#105): işçi/işveren her zaman, ilan
+ * `job.read`, şirket `company.approve` varken.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -100,24 +108,19 @@ export default async function AssignmentsPage({
 }
 
 async function AssignmentWorkspace({ params }: { params: SearchParams }) {
-  const paging = readPaging(params, ASSIGNMENT_PAGING);
+  const view = readAssignmentView(params);
+  const { paging, query, workerId, employerId, statuses, range } = view;
   const raw = readParam(params, "atama")?.trim() ?? "";
   const candidate = raw.length === 0 ? null : raw;
   const invalid = candidate !== null && !UUID.test(candidate);
-  const query = readSearchQuery(readParam(params, SEARCH_PARAM));
   const search = activeSearch(query);
-  const workerId = readUuidParam(params, "isci");
-  const employerId = readUuidParam(params, "isveren");
-  const partyFilter = {
-    ...(workerId === null ? {} : { isci: workerId }),
-    ...(employerId === null ? {} : { isveren: employerId }),
-  };
+  const partyFilter = assignmentPartyState(view);
+  const filterState = assignmentFilterState(view);
 
+  const listState = assignmentViewState(view);
   const viewState = {
-    boyut: String(paging.size),
+    ...listState,
     ...(candidate === null ? {} : { atama: candidate }),
-    ...(query === null ? {} : { [SEARCH_PARAM]: query }),
-    ...partyFilter,
   };
   const objectQuery = objectQueryFor(viewState, paging.page);
 
@@ -125,7 +128,11 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
     <LookupForm
       value={candidate ?? ""}
       error={invalid ? "Geçerli bir atama kimliği girin." : null}
-      carry={{ ...(query === null ? {} : { [SEARCH_PARAM]: query }), ...partyFilter }}
+      carry={{
+        ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+        ...partyFilter,
+        ...filterState,
+      }}
     />
   );
 
@@ -136,6 +143,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
         clearHref={assignmentsHref({
           boyut: String(paging.size),
           ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+          ...filterState,
         })}
       >
         Bu görünüm{" "}
@@ -167,11 +175,27 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
     />
   );
 
+  const filters = (
+    <div className="flex flex-col gap-3">
+      <StatusFilter
+        selected={statuses}
+        carry={{
+          boyut: String(paging.size),
+          ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+          ...partyFilter,
+          ...dateRangeState(range),
+        }}
+      />
+      <DateRangeFilter id="atama-tarih" pathname="/assignments" range={range} state={listState} />
+    </div>
+  );
+
+  const context = await getStaffContext();
   const accessToken = await getKoalaAccessToken();
 
   let list;
   try {
-    list = await getAdminAssignments(accessToken, { paging, query, workerId, employerId });
+    list = await getAdminAssignments(accessToken, assignmentListQuery(view));
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return (
@@ -179,6 +203,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
           {form}
           {partyNotice}
           {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
+          {filters}
         </div>
       );
     }
@@ -187,6 +212,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
         {form}
         {partyNotice}
         {searchForm()}
+        {filters}
         <QueueLoadFailure
           subject="Atama kuyruğu"
           permission="payment.read"
@@ -216,6 +242,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
       {form}
       {partyNotice}
       {searchForm()}
+      {filters}
 
       <section className="flex flex-col gap-3" aria-labelledby="assignment-queue-heading">
         <div className="flex flex-col gap-1">
@@ -229,6 +256,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
         </div>
 
         <SearchResultSummary search={search} total={list.totalElements} unit="atama" />
+        <CsvExportLink list="assignments" state={listState} unit="atama" />
 
         {list.content.length === 0 ? (
           <EmptyState
@@ -237,7 +265,9 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
                 ? searchEmptyTitle(search)
                 : partyNotice !== null
                   ? "Bu kullanıcının bu roldeki ataması yok."
-                  : "Atama yok."
+                  : statuses.length > 0 || hasDateRange(range)
+                    ? "Bu süzgeçlere uyan atama yok."
+                    : "Atama yok."
             }
             description={
               search === null
@@ -246,7 +276,12 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
             }
           />
         ) : (
-          <AssignmentTable rows={list.content} objectQuery={objectQuery} />
+          <AssignmentTable
+            rows={list.content}
+            objectQuery={objectQuery}
+            canOpenJob={context.has("job.read")}
+            canOpenCompany={context.has("company.approve")}
+          />
         )}
 
         {list.totalElements > 0 ? (
@@ -264,6 +299,68 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
 
       {selected === null ? null : <AssignmentSummary summary={selected} />}
     </div>
+  );
+}
+
+/**
+ * Durum süzgeci: altı onay kutusu, `name="durum"` tekrarlı gider ve
+ * `readEnumListParam` okur. Hiçbiri işaretli değilse backend'e `status`
+ * gitmez — her durum. GET formu: seçim adreste yaşar, sayfa `0`'a döner.
+ */
+function StatusFilter({
+  selected,
+  carry,
+}: {
+  selected: readonly (typeof ASSIGNMENT_STATUSES)[number][];
+  carry: Readonly<Record<string, string>>;
+}) {
+  const chosen = new Set<string>(selected);
+  return (
+    <form
+      method="get"
+      action="/assignments"
+      aria-label="Atama durumu süzgeci"
+      data-testid="assignment-status-filter"
+      className="flex flex-col gap-2 rounded-xl border border-border-subtle bg-surface px-4 py-3 shadow-sm"
+    >
+      <input type="hidden" name="sayfa" value="0" />
+      {Object.entries(carry).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
+      <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <legend className="mb-1 text-xs font-medium text-ink-muted">Atama durumu</legend>
+        {ASSIGNMENT_STATUSES.map((status) => (
+          <label key={status} className="flex items-center gap-1.5 text-sm text-ink">
+            <input
+              type="checkbox"
+              name={ASSIGNMENT_STATUS_PARAM}
+              value={status}
+              defaultChecked={chosen.has(status)}
+              className="h-4 w-4 rounded border-border-strong"
+            />
+            {ASSIGNMENT_STATUS_LABELS[status]}
+          </label>
+        ))}
+        <button
+          type="submit"
+          className="rounded-lg border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-muted"
+        >
+          Duruma göre süz
+        </button>
+        {selected.length > 0 ? (
+          <Link
+            href={assignmentsHref(carry)}
+            className="text-sm text-brand hover:underline"
+            data-testid="assignment-status-clear"
+          >
+            Durum süzgecini kaldır
+          </Link>
+        ) : null}
+      </fieldset>
+      <p className="text-xs text-ink-muted">
+        İşaret yoksa her durum listelenir; birden çok durum birlikte seçilebilir.
+      </p>
+    </form>
   );
 }
 

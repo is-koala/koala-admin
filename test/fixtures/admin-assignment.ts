@@ -8,6 +8,7 @@ const DEFAULT_ADMIN_ASSIGNMENT = {
   id: "9a1c0f10-0001-4c00-8000-0000000000aa",
   jobId: "9a1c0f10-0001-4c00-8000-0000000000bb",
   jobTitle: "Garsonluk",
+  companyId: "c0000000-0000-4000-8000-0000000000c1",
   companyName: "Koala Kafe",
   worker: {
     id: "w-1",

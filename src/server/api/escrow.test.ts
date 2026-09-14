@@ -432,3 +432,53 @@ describe("the party filters and the #283 detail fields", () => {
     expect(legacy.payments).toEqual([]);
   });
 });
+
+/** koala-backend#301: durum listesi ve `createdAt` aralığı; `companyId` eski sunucuda yok. */
+describe("the koala-backend#301 list parameters and companyId", () => {
+  function watchList(content: unknown[] = [SUMMARY]) {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(ASSIGNMENTS_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json({
+          ...searchEnvelope(ASSIGNMENTS_PATH),
+          data: { ...searchEnvelope(ASSIGNMENTS_PATH).data, content },
+        });
+      }),
+    );
+    return seen;
+  }
+
+  it("sends statuses as one comma list and the range as from/to, and omits them when empty", async () => {
+    const seen = watchList();
+    const paging = { page: 0, size: 20, sort: ASSIGNMENT_PAGING.defaultSort };
+
+    await getAdminAssignments("ACCESS-TOKEN", {
+      paging,
+      status: ["CONFIRMED", "IN_PROGRESS"],
+      from: "2026-08-31T21:00:00.000Z",
+      to: "2026-09-14T20:59:59.999Z",
+    });
+    expect(seen.url?.searchParams.get("status")).toBe("CONFIRMED,IN_PROGRESS");
+    expect(seen.url?.searchParams.get("from")).toBe("2026-08-31T21:00:00.000Z");
+    expect(seen.url?.searchParams.get("to")).toBe("2026-09-14T20:59:59.999Z");
+
+    await getAdminAssignments("ACCESS-TOKEN", { paging, status: [], from: null, to: null });
+    expect(seen.url?.searchParams.has("status")).toBe(false);
+    expect(seen.url?.searchParams.has("from")).toBe(false);
+    expect(seen.url?.searchParams.has("to")).toBe(false);
+  });
+
+  it("reads companyId when present and settles on null when an older backend omits it", async () => {
+    const { companyId: _dropped, ...legacy } = SUMMARY;
+    watchList([SUMMARY, legacy]);
+
+    const page = await getAdminAssignments("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: ASSIGNMENT_PAGING.defaultSort },
+    });
+
+    expect(page.content[0]?.companyId).toBe("c0000000-0000-4000-8000-0000000000c1");
+    expect(page.content[1]?.companyId).toBeNull();
+    expect(page.content[1]?.companyName).toBe("Koala Kafe");
+  });
+});

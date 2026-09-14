@@ -279,3 +279,33 @@ describe("the worker filter — koala-admin#100", () => {
     expect(html).not.toContain('data-testid="payout-worker-filter"');
   });
 });
+
+/** koala-admin#110: tarih aralığı `createdAt` üzerinde backend'e gider; CSV bağlantısı görünümü taşır. */
+describe("the date range and the CSV link — koala-admin#110", () => {
+  it("turns baslangic/bitis into Istanbul day boundaries, keeps the PROCESSING default, names the range", async () => {
+    stubMe(OFFICER);
+    const queue = watchQueue([]);
+
+    const html = await render({ baslangic: "2026-09-01", bitis: "2026-09-14" });
+
+    expect(queue.url?.searchParams.get("from")).toBe("2026-08-31T21:00:00.000Z");
+    expect(queue.url?.searchParams.get("to")).toBe("2026-09-14T20:59:59.999Z");
+    expect(queue.url?.searchParams.has("status")).toBe(false);
+    expect(html).toContain('data-testid="hakedis-tarih-summary"');
+    expect(html).toContain("01.09.2026 – 14.09.2026");
+    expect(html).toContain("Bu tarih aralığında hakediş yok.");
+    expect(html).toContain('data-testid="payouts-export"');
+    expect(html).toContain('href="/api/export/payouts?baslangic=2026-09-01&amp;bitis=2026-09-14"');
+  });
+
+  it("carries durum=hepsi and the worker filter into the export link and drops a malformed day", async () => {
+    stubMe(OFFICER);
+    const queue = watchQueue([]);
+    const WORKER_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+
+    const html = await render({ isci: WORKER_ID, durum: "hepsi", baslangic: "dün", sayfa: "2" });
+
+    expect(queue.url?.searchParams.has("from")).toBe(false);
+    expect(html).toContain(`href="/api/export/payouts?isci=${WORKER_ID}&amp;durum=hepsi"`);
+  });
+});

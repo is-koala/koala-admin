@@ -472,6 +472,35 @@ export const ROUTE_HANDLERS = [
     access: "permission",
     permission: "company.approve",
   },
+  /**
+   * koala-admin#110 CSV rotaları. Her biri listesinin sayfasıyla aynı izni
+   * ister; rota gövdesi (`src/server/export/csv-export.ts`) izni
+   * `/admin/me`'den kendi çözer, backend'e izinsiz istek çıkmaz.
+   */
+  {
+    path: "/api/export/assignments",
+    title: "Atama listesi CSV",
+    access: "permission",
+    permission: "payment.read",
+  },
+  {
+    path: "/api/export/payouts",
+    title: "Hakediş listesi CSV",
+    access: "permission",
+    permission: "payout.reconcile",
+  },
+  {
+    path: "/api/export/reports",
+    title: "Şikayet listesi CSV",
+    access: "permission",
+    permission: "content.moderate",
+  },
+  {
+    path: "/api/export/disputes",
+    title: "Uyuşmazlık listesi CSV",
+    access: "permission",
+    permission: "dispute.resolve",
+  },
 ] as const satisfies readonly (RouteIdentity & RouteGate)[];
 
 export type RouteHandlerEntry = (typeof ROUTE_HANDLERS)[number];

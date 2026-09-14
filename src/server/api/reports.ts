@@ -190,6 +190,9 @@ export interface ReportQueueQuery {
   readonly paging: Paging;
   /** koala-backend#263: şikayet eden/edilenin ad-soyadı ve e-postası, ilan başlığı. */
   readonly query?: string | null;
+  /** koala-backend#301: `createdAt` aralığı, dilimli ISO, iki sınır dahil. */
+  readonly from?: string | null;
+  readonly to?: string | null;
 }
 
 /**
@@ -209,6 +212,8 @@ export function getReports(accessToken: string, query: ReportQueueQuery): Promis
       reportedUserId: query.reportedUserId?.trim() || undefined,
       reporterId: query.reporterId?.trim() || undefined,
       query: searchQueryParam(query.query),
+      from: query.from ?? undefined,
+      to: query.to ?? undefined,
       ...pagingQuery(query.paging),
     },
     accessToken,

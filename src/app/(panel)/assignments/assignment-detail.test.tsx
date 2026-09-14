@@ -643,3 +643,31 @@ describe("the timeline's audit half", () => {
     expect(html).not.toContain("/audit-log?");
   });
 });
+
+/** koala-admin#105: şirket adı `company.approve` varken ve kimlik geldiyse şirket sayfasına bağlı. */
+describe("the company link — koala-admin#105", () => {
+  const COMPANY = "c0000000-0000-4000-8000-0000000000c1";
+
+  it("links the company name for a company.approve holder", async () => {
+    stubMe([...ANALYST, "company.approve"]);
+    watch();
+
+    const html = await render();
+
+    expect(html).toContain(`href="/companies/${COMPANY}"`);
+    expect(html).toContain("Koala Kafe");
+  });
+
+  it("writes the name as text without company.approve, and when an older backend sends no companyId", async () => {
+    stubMe(ANALYST);
+    watch();
+    expect(await render()).not.toContain(`href="/companies/${COMPANY}"`);
+
+    stubMe([...ANALYST, "company.approve"]);
+    const { companyId: _dropped, ...legacy } = adminAssignmentDetailFixture();
+    watch(legacy);
+    const html = await render();
+    expect(html).toContain("Koala Kafe");
+    expect(html).not.toContain("/companies/");
+  });
+});
