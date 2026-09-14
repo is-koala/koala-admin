@@ -4,6 +4,7 @@ import type { Metadata, Route } from "next";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
+import { ProfilePicture } from "@/components/panel/profile-picture";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { EMPTY_VALUE } from "@/lib/format";
 import { isUuid, reportHref, reportsForUserHref } from "@/lib/panel-href";
@@ -93,6 +94,10 @@ async function UserObject({ id }: { id: string }) {
         <dd className="text-sm">{safeUserName(user)}</dd>
         <dt className="text-sm text-ink-muted">Kullanıcı adı</dt>
         <dd className="text-sm">{user.username ?? EMPTY_VALUE}</dd>
+        <dt className="text-sm text-ink-muted">Profil fotoğrafı</dt>
+        <dd className="text-sm">
+          <ProfilePicture url={user.profilePictureUrl} name={safeUserName(user)} />
+        </dd>
       </dl>
 
       {canModerate ? <OpenReports userId={user.id} reports={openReports} /> : null}

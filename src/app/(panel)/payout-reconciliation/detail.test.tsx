@@ -155,6 +155,29 @@ describe("who can open a payout", () => {
     expect(both).toContain(`href="/payments/${PAYMENT_ID}"`);
   });
 
+  /** koala-admin#99: `paymentId` hakedişin kendi alanıdır, deneme listesine bağlı değil. */
+  it("links the payout's own paymentId even when the attempt list is empty", async () => {
+    stubMe(OFFICER);
+    watch(adminPayoutDetailFixture({ paymentAttempts: [] }));
+    const alone = await render();
+    expect(alone).toMatch(/Ödeme<\/dt><dd[^>]*><span[^>]*>7b000000-0000-4000-8000-000000000071</);
+    expect(alone).not.toContain(`href="/payments/${PAYMENT_ID}"`);
+
+    stubMe(["payout.reconcile", "payment.read"]);
+    watch(adminPayoutDetailFixture({ paymentAttempts: [] }));
+    const both = await render();
+    expect(both).toContain(`href="/payments/${PAYMENT_ID}"`);
+  });
+
+  it("writes the empty value when the payout has no paymentId", async () => {
+    stubMe(OFFICER);
+    watch(adminPayoutDetailFixture({ paymentId: null, paymentAttempts: [] }));
+
+    const html = await render();
+
+    expect(html).toMatch(/Ödeme<\/dt><dd[^>]*>—</);
+  });
+
   it("says when there is no settlement task", async () => {
     stubMe(OFFICER);
     watch(adminPayoutDetailFixture({ settlementTasks: [], paymentAttempts: [] }));

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure, SEARCH_PARAM } from "@/components/panel/queue";
 import { accountDeletionsHref, isUuid } from "@/lib/panel-href";
@@ -92,6 +93,10 @@ async function DeletionObject({ id }: { id: string }) {
         <DeletionStatusBadge status={row.status} />
       </div>
       <DeletionReviewBody row={row} canReject={canReject} />
+      <ObjectAuditPointer resourceId={row.id} linkLabel="Bu talebin denetim kayıtlarını aç">
+        Ret backend tarafından bu talep kimliğiyle denetim kaydına yazılır; personelin bu kaydı
+        açması da kayda düşer.
+      </ObjectAuditPointer>
     </section>
   );
 }

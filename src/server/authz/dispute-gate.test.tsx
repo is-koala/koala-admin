@@ -447,6 +447,25 @@ describe("the selected dispute", () => {
     expect(html).not.toContain("İmzalı indirme kaynakları tanımlı değil");
   });
 
+  /** koala-admin#99: nesne sayfası denetim kaydına bu uyuşmazlık kimliğiyle bağlanır. */
+  it("points at the audit log filtered to this dispute, only for an audit.read holder", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    watchDispute();
+    watchSummary();
+    watchEvidence();
+    const alone = await renderDetail();
+    expect(alone).not.toContain("Her değişiklik denetim kaydında");
+    expect(alone).not.toContain("/audit-log?");
+
+    stubMe([...OWNER_REVIEW_PERMISSIONS, "audit.read"], ["OWNER"]);
+    watchDispute();
+    watchSummary();
+    watchEvidence();
+    const html = await renderDetail();
+    expect(html).toContain("Her değişiklik denetim kaydında");
+    expect(html).toContain(`href="/audit-log?resourceId=${DISPUTE}"`);
+  });
+
   it("keeps decision controls usable when no evidence was attached", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDispute();

@@ -146,6 +146,71 @@ describe("who can open an assignment", () => {
   });
 });
 
+/** koala-admin#99: tarafların profil fotoğrafı ve denetim izi bağlantısı. */
+describe("party pictures and the audit pointer", () => {
+  it("draws the worker's and employer's profile pictures when the DTO carries them", async () => {
+    stubMe(ANALYST);
+    const detail = adminAssignmentDetailFixture();
+    watch({
+      ...detail,
+      worker: { ...detail.worker, profilePictureUrl: "https://storage.koala.test/users/w1.jpg" },
+      employer: {
+        ...detail.employer,
+        profilePictureUrl: "https://storage.koala.test/users/e1.jpg",
+      },
+    });
+
+    const html = await render();
+
+    expect(html).toMatch(
+      /<img src="https:\/\/storage\.koala\.test\/users\/w1\.jpg" alt="Ayşe Yılmaz profil fotoğrafı"/,
+    );
+    expect(html).toMatch(
+      /<img src="https:\/\/storage\.koala\.test\/users\/e1\.jpg" alt="Mehmet Demir profil fotoğrafı"/,
+    );
+  });
+
+  it("draws no picture element when the parties have none", async () => {
+    stubMe(ANALYST);
+    watch();
+
+    const html = await render();
+
+    expect(html).not.toContain("profil fotoğrafı");
+    expect(html).toContain("Ayşe Yılmaz");
+  });
+
+  it("points at the audit log filtered to this assignment, only for an audit.read holder", async () => {
+    stubMe(ANALYST);
+    watch();
+    const alone = await render();
+    expect(alone).not.toContain("Her değişiklik denetim kaydında");
+    expect(alone).not.toContain("/audit-log?");
+
+    stubMe([...ANALYST, "audit.read"]);
+    watch();
+    const html = await render();
+    expect(html).toContain("Her değişiklik denetim kaydında");
+    expect(html).toContain(`href="/audit-log?resourceId=${ASSIGNMENT_ID}"`);
+  });
+
+  it("refuses a non-http profile picture address without drawing an img", async () => {
+    stubMe(ANALYST);
+    const detail = adminAssignmentDetailFixture();
+    watch({
+      ...detail,
+      worker: { ...detail.worker, profilePictureUrl: "javascript:alert(1)" },
+      employer: { ...detail.employer, profilePictureUrl: "data:image/png;base64,AAAA" },
+    });
+
+    const html = await render();
+
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("javascript:alert(1)");
+    expect(html).not.toContain("data:image/png");
+  });
+});
+
 describe("links follow the reader's permissions", () => {
   it("shows linked ids as text when the reader cannot open them", async () => {
     stubMe(ANALYST);

@@ -367,6 +367,62 @@ describe("a review that does not exist", () => {
   });
 });
 
+/** koala-admin#99: karar zamanı ve kararı veren zod'da vardı, çizilmiyordu. */
+describe("the decision's time and author on the object page", () => {
+  it("draws verifiedAt, rejectedAt and reviewedByStaffId for a decided review", async () => {
+    stubMe(REVIEWER);
+    watchDetail({
+      ...PENDING_REVIEW,
+      status: "APPROVED",
+      verifiedAt: "2026-09-12T09:30:00Z",
+      rejectedAt: null,
+      reviewedByStaffId: "5f000000-0000-4000-8000-000000000055",
+    });
+
+    const html = await renderDetail();
+
+    expect(html).toMatch(/Onay zamanı<\/dt><dd[^>]*>12\.09\.2026 12:30</);
+    expect(html).toMatch(/Ret zamanı<\/dt><dd[^>]*>—</);
+    expect(html).toMatch(
+      /Kararı veren personel<\/dt><dd[^>]*><span[^>]*>5f000000-0000-4000-8000-000000000055</,
+    );
+  });
+
+  it("draws rejectedAt for a rejected review and empty values while pending", async () => {
+    stubMe(REVIEWER);
+    watchDetail({
+      ...PENDING_REVIEW,
+      status: "REJECTED",
+      rejectionReason: "Fotoğraf bulanık",
+      rejectedAt: "2026-09-12T10:00:00Z",
+      reviewedByStaffId: "5f000000-0000-4000-8000-000000000055",
+    });
+    const rejected = await renderDetail();
+    expect(rejected).toMatch(/Ret zamanı<\/dt><dd[^>]*>12\.09\.2026 13:00</);
+    expect(rejected).toMatch(/Onay zamanı<\/dt><dd[^>]*>—</);
+
+    watchDetail(PENDING_REVIEW);
+    const pending = await renderDetail();
+    expect(pending).toMatch(/Onay zamanı<\/dt><dd[^>]*>—</);
+    expect(pending).toMatch(/Ret zamanı<\/dt><dd[^>]*>—</);
+    expect(pending).toMatch(/Kararı veren personel<\/dt><dd[^>]*><span[^>]*>—</);
+  });
+
+  it("points at the audit log filtered to this review, only for an audit.read holder", async () => {
+    stubMe(REVIEWER);
+    watchDetail(PENDING_REVIEW);
+    const alone = await renderDetail();
+    expect(alone).not.toContain("Her değişiklik denetim kaydında");
+    expect(alone).not.toContain("/audit-log?");
+
+    stubMe([...REVIEWER, "audit.read"]);
+    watchDetail(PENDING_REVIEW);
+    const html = await renderDetail();
+    expect(html).toContain("Her değişiklik denetim kaydında");
+    expect(html).toContain(`href="/audit-log?resourceId=${REVIEW_ID}"`);
+  });
+});
+
 describe("the search box — koala-admin#94", () => {
   it("sends ara to the backend as query, next to the status, and names it in the result line", async () => {
     stubMe(REVIEWER);

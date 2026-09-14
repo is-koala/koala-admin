@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 import type { ReactNode } from "react";
 
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
+import { httpUrlOrNull } from "@/lib/external-url";
 import {
   EMPTY_VALUE,
   formatCurrency,
@@ -15,6 +17,7 @@ import {
   formatWallClock,
 } from "@/lib/format";
 import { companyHref, isUuid, userHrefOrNull } from "@/lib/panel-href";
+import { companyTypeLabel } from "@/server/api/companies";
 import {
   JOB_EMPLOYER_TYPE_LABELS,
   JOB_STATUS_LABELS,
@@ -210,8 +213,13 @@ async function JobObject({ id }: { id: string }) {
               />
               {job.company === null ? null : (
                 <>
+                  <Row
+                    label="Şirket türü"
+                    value={companyTypeLabel(job.company.type) ?? EMPTY_VALUE}
+                  />
                   <Row label="Şirket e-postası" value={job.company.email ?? EMPTY_VALUE} />
                   <Row label="Telefon" value={job.company.phoneNumber ?? EMPTY_VALUE} />
+                  <Row label="Web sitesi" value={<Website url={job.company.website} />} />
                   <Row label="Vergi no" value={job.company.taxNumber ?? EMPTY_VALUE} />
                 </>
               )}
@@ -278,7 +286,32 @@ async function JobObject({ id }: { id: string }) {
       </section>
 
       <Gallery job={job} />
+
+      <ObjectAuditPointer resourceId={job.id} linkLabel="Bu ilanın denetim kayıtlarını aç">
+        Panel ilana yazmaz; backend bu ilan kimliğiyle yapılan her personel okumasını ve işlemini
+        denetim kaydına düşer.
+      </ObjectAuditPointer>
     </div>
+  );
+}
+
+/**
+ * Şirketin beyan ettiği adres; dış bağlantı yeni sekmede ve yönlendiren
+ * bilgisi olmadan açılır. `http(s)` dışı bir şema bağlantı olmaz, metin kalır.
+ */
+function Website({ url }: { url: string | null }) {
+  if (url === null || url.trim().length === 0) return <>{EMPTY_VALUE}</>;
+  const href = httpUrlOrNull(url);
+  if (href === null) return <span className="break-all">{url.trim()}</span>;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-brand break-all hover:underline"
+    >
+      {href}
+    </a>
   );
 }
 

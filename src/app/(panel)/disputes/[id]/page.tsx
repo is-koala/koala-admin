@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { ErrorState } from "@/components/ui";
@@ -106,6 +107,13 @@ async function DisputeObject({ id }: { id: string }) {
         evidence={evidence}
         permissions={context.staff?.permissions ?? []}
       />
+      <ObjectAuditPointer
+        resourceId={dispute.id}
+        linkLabel="Bu uyuşmazlığın denetim kayıtlarını aç"
+      >
+        Karar ve emanet hareketleri backend tarafından bu uyuşmazlık kimliğiyle denetim kaydına
+        yazılır; personelin bu kaydı açması da kayda düşer.
+      </ObjectAuditPointer>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import type { Route } from "next";
 import type { ReactNode } from "react";
 
 import { EscrowOperationForm } from "@/components/escrow/escrow-operation-form";
+import { ProfilePicture } from "@/components/panel/profile-picture";
 import {
   Badge,
   EmptyState,
@@ -180,11 +181,20 @@ export function AssignmentDetail({ assignment, payments, permissions }: DetailPr
 
 function Party({ user }: { user: SafeUser }) {
   const href = userHrefOrNull(user.id);
-  if (href === null) return <>{safeUserName(user)}</>;
+  const name = safeUserName(user);
   return (
-    <Link href={href} className="text-brand hover:underline">
-      {safeUserName(user)}
-    </Link>
+    <span className="inline-flex items-center gap-2">
+      {user.profilePictureUrl === null ? null : (
+        <ProfilePicture url={user.profilePictureUrl} name={name} size="sm" />
+      )}
+      {href === null ? (
+        <span>{name}</span>
+      ) : (
+        <Link href={href} className="text-brand hover:underline">
+          {name}
+        </Link>
+      )}
+    </span>
   );
 }
 

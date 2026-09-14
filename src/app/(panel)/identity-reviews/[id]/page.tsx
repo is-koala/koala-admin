@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure, SEARCH_PARAM } from "@/components/panel/queue";
 import { identityReviewsHref, isUuid } from "@/lib/panel-href";
@@ -111,6 +112,10 @@ async function IdentityObject({
         <IdentityStatusBadge status={review.status} />
       </div>
       <IdentityReviewBody review={review} returnTo={returnTo} />
+      <ObjectAuditPointer resourceId={review.id} linkLabel="Bu incelemenin denetim kayıtlarını aç">
+        Onay ve ret backend tarafından bu inceleme kimliğiyle denetim kaydına yazılır; personelin bu
+        kaydı açması da kayda düşer.
+      </ObjectAuditPointer>
     </section>
   );
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import {
@@ -191,6 +192,38 @@ async function PaymentObject({ id }: { id: string }) {
           </div>
 
           <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
+            <h2 className="text-sm font-semibold">Fiyat dökümü</h2>
+            <p className="max-w-prose text-xs text-ink-muted">
+              Atamanın fiyat anlık görüntüsü; yukarıdaki tutarlar bu denemede gerçekleşen
+              hareketlerdir, ikisi ayrı ayrı okunur.
+            </p>
+            {payment.pricing === null ? (
+              <p className="text-sm text-ink-muted" data-testid="payment-pricing-missing">
+                Bu deneme için fiyat dökümü yok.
+              </p>
+            ) : (
+              <dl className="flex flex-col gap-2 text-sm" data-testid="payment-pricing">
+                <Row
+                  label="İşçiye ödenecek"
+                  value={formatCurrency(payment.pricing.workerPayout, payment.pricing.currency)}
+                />
+                <Row
+                  label="Komisyon oranı"
+                  value={formatPercent(Number(payment.pricing.serviceFeeRate))}
+                />
+                <Row
+                  label="Komisyon tutarı"
+                  value={formatCurrency(payment.pricing.serviceFeeAmount, payment.pricing.currency)}
+                />
+                <Row
+                  label="İşverenden tahsil edilecek"
+                  value={formatCurrency(payment.pricing.employerTotal, payment.pricing.currency)}
+                />
+              </dl>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
             <h2 className="text-sm font-semibold">Sağlayıcı referansları</h2>
             <dl className="flex flex-col gap-2 text-sm">
               <Row label="conversationId" value={<Mono value={payment.conversationId} />} />
@@ -214,6 +247,11 @@ async function PaymentObject({ id }: { id: string }) {
       </section>
 
       <Refunds payment={payment} currency={currency} />
+
+      <ObjectAuditPointer resourceId={payment.id} linkLabel="Bu ödemenin denetim kayıtlarını aç">
+        İade atama sayfasından yapılır ve backend tarafından denetim kaydına yazılır; bu ödeme
+        kimliğiyle yapılan personel okumaları da kayda düşer.
+      </ObjectAuditPointer>
     </div>
   );
 }
@@ -239,6 +277,7 @@ function Refunds({ payment, currency }: { payment: AdminPayment; currency: strin
               <TableHeaderCell>Gerekçe</TableHeaderCell>
               <TableHeaderCell>Sağlayıcı iade no</TableHeaderCell>
               <TableHeaderCell>Tamamlanma</TableHeaderCell>
+              <TableHeaderCell>Güncelleme</TableHeaderCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -256,6 +295,7 @@ function Refunds({ payment, currency }: { payment: AdminPayment; currency: strin
                   <Mono value={refund.providerRefundId} />
                 </TableCell>
                 <TableCell>{formatDateTime(refund.completedAt)}</TableCell>
+                <TableCell>{formatDateTime(refund.updatedAt)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

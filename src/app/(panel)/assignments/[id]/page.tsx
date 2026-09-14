@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { isUuid } from "@/lib/panel-href";
@@ -77,11 +78,17 @@ async function AssignmentObject({ id }: { id: string }) {
   const payments = await loadPayments(accessToken, assignment.id);
 
   return (
-    <AssignmentDetail
-      assignment={assignment}
-      payments={payments}
-      permissions={context.staff?.permissions ?? []}
-    />
+    <div className="flex flex-col gap-6">
+      <AssignmentDetail
+        assignment={assignment}
+        payments={payments}
+        permissions={context.staff?.permissions ?? []}
+      />
+      <ObjectAuditPointer resourceId={assignment.id} linkLabel="Bu atamanın denetim kayıtlarını aç">
+        Serbest bırakma ve iade backend tarafından bu atama kimliğiyle denetim kaydına yazılır;
+        personelin bu kaydı açması da kayda düşer.
+      </ObjectAuditPointer>
+    </div>
   );
 }
 

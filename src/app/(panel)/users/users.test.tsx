@@ -394,6 +394,46 @@ describe("a bookmarked marketplace user", () => {
     expect(html).toContain("ROLE_ADMIN");
   });
 
+  /** koala-admin#99: `profilePictureUrl` zod'da vardı, çizilmiyordu. */
+  it("draws the profile picture from the DTO and the empty value without one", async () => {
+    stubMe(READER);
+    const user = row({ profilePictureUrl: "https://storage.koala.test/users/ada.jpg" });
+    stubUser(user);
+
+    const withPicture = (
+      await renderServerComponent(<UserDetailPage params={Promise.resolve({ id: user.id })} />)
+    ).replaceAll("<!-- -->", "");
+
+    expect(withPicture).toMatch(
+      /<img src="https:\/\/storage\.koala\.test\/users\/ada\.jpg" alt="Ada Yılmaz profil fotoğrafı"/,
+    );
+
+    const bare = row();
+    stubUser(bare);
+    const withoutPicture = (
+      await renderServerComponent(<UserDetailPage params={Promise.resolve({ id: bare.id })} />)
+    ).replaceAll("<!-- -->", "");
+
+    expect(withoutPicture).toMatch(/Profil fotoğrafı<\/dt><dd[^>]*>—</);
+    expect(withoutPicture).not.toContain("<img");
+  });
+
+  it("draws no img for a profile picture address that is not http(s)", async () => {
+    stubMe(READER);
+    for (const url of ["javascript:alert(1)", "data:image/png;base64,AAAA", "s3://bucket/a.jpg"]) {
+      const user = row({ profilePictureUrl: url });
+      stubUser(user);
+
+      const html = (
+        await renderServerComponent(<UserDetailPage params={Promise.resolve({ id: user.id })} />)
+      ).replaceAll("<!-- -->", "");
+
+      expect(html).not.toContain("<img");
+      expect(html).not.toContain(url);
+      expect(html).toMatch(/Profil fotoğrafı<\/dt><dd[^>]*>—</);
+    }
+  });
+
   it("loads open reports only when content.moderate is held", async () => {
     stubMe(["user.read", "content.moderate"]);
     const user = row();
