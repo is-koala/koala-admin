@@ -17,6 +17,7 @@ import {
 import { PayoutReconciliationForm } from "@/components/payout-reconciliation/payout-reconciliation-form";
 import {
   Badge,
+  type BadgeTone,
   EmptyState,
   Table,
   TableBody,
@@ -25,19 +26,22 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { EMPTY_VALUE, formatCurrency, formatDateTime } from "@/lib/format";
 import {
   ALL_STATUSES_PARAM,
   assignmentHref,
   isUuid,
   payoutHref,
   payoutsHref,
+  userHrefOrNull,
 } from "@/lib/panel-href";
 import {
   PAYOUT_PAGING,
   PAYOUT_STATUSES,
+  PAYOUT_STATUS_LABELS,
   getPayouts,
   type Payout,
+  type PayoutStatus,
 } from "@/server/api/payout-reconciliation";
 import {
   pageWindow,
@@ -51,6 +55,7 @@ import {
   isSearchQueryTooLong,
   readSearchQuery,
 } from "@/server/api/search-query";
+import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
@@ -58,6 +63,14 @@ import { classifyQueueFailure } from "@/server/queue/decisions";
 import { submitPayoutReconciliation } from "./actions";
 
 export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
+
+/** Nesne sayfasıyla aynı renkler (`[id]/page.tsx`); liste rozeti artık satırın durumundan okunur. */
+const PAYOUT_TONES: Record<PayoutStatus, BadgeTone> = {
+  PENDING: "neutral",
+  PROCESSING: "warning",
+  COMPLETED: "success",
+  FAILED: "danger",
+};
 
 /**
  * PROCESSING kuyruğu + UUID yedek. Liste `GET /admin/payouts` (`payout.reconcile`);
@@ -69,6 +82,9 @@ export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
  * kullanıcı sayfasındaki hakediş sayacı buraya gelir (koala-admin#100).
  * Sayaç her durumu saydığı için o bağlantı `?durum=hepsi` taşır: dört durum
  * birden gönderilir, backend'in PROCESSING varsayılanı devre dışı kalır.
+ * O görünümde satırlar PENDING/COMPLETED/FAILED de olabilir; rozet
+ * `row.status`tan gelir ve "Onayla" yalnız PROCESSING satırında durur —
+ * reconcile ucu başka durumu zaten reddeder (koala-admin#106).
  */
 export default async function PayoutReconciliationPage({
   searchParams,
@@ -201,6 +217,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
             <TableHead>
               <TableRow>
                 <TableHeaderCell>Tarih</TableHeaderCell>
+                <TableHeaderCell>İşçi</TableHeaderCell>
                 <TableHeaderCell>Tutar</TableHeaderCell>
                 <TableHeaderCell>Durum</TableHeaderCell>
                 <TableHeaderCell>Atama</TableHeaderCell>
@@ -243,6 +260,7 @@ function PayoutRow({
   /** Satırdan onaya geçmek aramayı silmesin. */
   query: string | null;
 }) {
+  const reconcilable = row.status === "PROCESSING";
   return (
     <TableRow>
       <TableCell>
@@ -250,9 +268,12 @@ function PayoutRow({
           {formatDateTime(row.createdAt)}
         </Link>
       </TableCell>
+      <TableCell>
+        <Recipient user={row.recipient} />
+      </TableCell>
       <TableCell>{formatCurrency(row.amount, row.currency)}</TableCell>
       <TableCell>
-        <Badge tone="warning">İşleniyor</Badge>
+        <Badge tone={PAYOUT_TONES[row.status]}>{PAYOUT_STATUS_LABELS[row.status]}</Badge>
       </TableCell>
       <TableCell>
         <Link
@@ -263,7 +284,9 @@ function PayoutRow({
         </Link>
       </TableCell>
       <TableCell>
-        {selected ? (
+        {!reconcilable ? (
+          <span className="text-ink-muted">{EMPTY_VALUE}</span>
+        ) : selected ? (
           <Badge tone="brand">Seçili</Badge>
         ) : (
           <Link
@@ -282,6 +305,23 @@ function PayoutRow({
         )}
       </TableCell>
     </TableRow>
+  );
+}
+
+/**
+ * Alıcı işçi; ad yoksa kullanıcı adı, o da yoksa kimlik (`safeUserName`).
+ * Kimlik UUID ise kullanıcı sayfasına gider; eski sunucu `recipient`
+ * göndermiyorsa hücre "—" kalır.
+ */
+function Recipient({ user }: { user: Payout["recipient"] }) {
+  if (user === null) return <>{EMPTY_VALUE}</>;
+  const href = userHrefOrNull(user.id);
+  const name = safeUserName(user);
+  if (href === null) return <span>{name}</span>;
+  return (
+    <Link href={href} className="text-brand hover:underline">
+      {name}
+    </Link>
   );
 }
 

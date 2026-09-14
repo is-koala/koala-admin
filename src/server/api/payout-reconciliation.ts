@@ -9,16 +9,23 @@ import { searchQueryParam } from "./search-query";
 import { linkedRecordSchema } from "./shared/linked-record";
 import { staffPartySchema } from "./shared/staff-party";
 import type { PageDto } from "./types";
+import { safeUserSchema, type SafeUser } from "./users";
 
 /** `PayoutStatus.java`, verbatim. */
 export const PAYOUT_STATUSES = ["PENDING", "PROCESSING", "COMPLETED", "FAILED"] as const;
 
 export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
 
-/** `core/dtos/payout/response/PayoutDto.java`. Money stays decimal text. */
+/**
+ * `core/dtos/payout/response/StaffPayoutDto.java` (koala-backend#211). Money
+ * stays decimal text. `recipient` alıcı işçidir (`SafeUserDto`); kullanıcı
+ * silinmişse ya da eski sunucu `PayoutDto` dönüyorsa `null` — liste sütunu
+ * "—" yazar, satırı düşürmez (koala-admin#106).
+ */
 export interface Payout {
   readonly id: string;
   readonly jobAssignmentId: string;
+  readonly recipient: SafeUser | null;
   readonly amount: string;
   readonly currency: string;
   readonly status: PayoutStatus;
@@ -41,6 +48,7 @@ export const PAYOUT_PAGING: PagingContract = {
 const payoutSchema = z.object({
   id: z.uuid(),
   jobAssignmentId: z.uuid(),
+  recipient: safeUserSchema.nullish().transform((value) => value ?? null),
   amount: z.string().regex(/^\d+(?:\.\d+)?$/),
   currency: z.string().length(3),
   status: z.enum(PAYOUT_STATUSES),

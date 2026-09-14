@@ -217,6 +217,56 @@ describe("the worker filter — koala-admin#100", () => {
     expect(html).toContain("tüm durumlardaki hakedişleri");
   });
 
+  it("badges each row from its own status and offers Onayla only on PROCESSING", async () => {
+    stubMe(OFFICER);
+    const recipient = {
+      id: WORKER_ID,
+      firstName: "Ayşe",
+      lastName: "Yılmaz",
+      username: "ayse",
+      profilePictureUrl: null,
+    };
+    const COMPLETED_ID = "9c000000-0000-4000-8000-000000000041";
+    const PENDING_ID = "9c000000-0000-4000-8000-000000000042";
+    watchQueue([
+      {
+        ...PROCESSING_ROW,
+        id: COMPLETED_ID,
+        status: "COMPLETED",
+        completedAt: "2026-09-02T08:00:00Z",
+        recipient,
+      },
+      { ...PROCESSING_ROW, id: PENDING_ID, status: "PENDING", recipient },
+      { ...PROCESSING_ROW, recipient },
+    ]);
+
+    const html = await render({ isci: WORKER_ID, durum: "hepsi" });
+
+    expect(html).toContain("Tamamlandı");
+    expect(html).toContain("Bekliyor");
+    expect(html).toContain("İşleniyor");
+    expect(html).toContain(`href="/users/${WORKER_ID}"`);
+    expect(html).toContain("Ayşe Yılmaz");
+
+    const onayla = html.match(/hakedis=([0-9a-f-]{36})[^>]*>Onayla</g) ?? [];
+    expect(onayla).toHaveLength(1);
+    expect(onayla[0]).toContain(`hakedis=${PAYOUT_ID}`);
+    expect(html).not.toContain(`hakedis=${COMPLETED_ID}`);
+    expect(html).not.toContain(`hakedis=${PENDING_ID}`);
+  });
+
+  it("writes — for the worker when an older backend sends no recipient", async () => {
+    stubMe(OFFICER);
+    watchQueue([PROCESSING_ROW]);
+
+    const html = await render();
+
+    expect(html).toContain("İşçi");
+    expect(html).toContain("İşleniyor");
+    expect(html).toContain("Onayla");
+    expect(html).not.toContain('href="/users/');
+  });
+
   it("drops a worker id that is not a UUID before it reaches the backend", async () => {
     stubMe(OFFICER);
     const queue = watchQueue([]);
