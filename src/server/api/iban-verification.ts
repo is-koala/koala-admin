@@ -99,6 +99,8 @@ export interface IbanPendingQuery {
   readonly paging: Paging;
   /** koala-backend#263: hesap sahibinin ad-soyadı, e-postası ve doğrulama referansı. */
   readonly query?: string | null;
+  /** koala-backend#301: yalnız bu kullanıcının bekleyen doğrulamaları; UUID, sayfa `?kullanici=` ile okur. */
+  readonly userId?: string | null;
 }
 
 export function getPendingIbanVerifications(
@@ -111,6 +113,7 @@ export function getPendingIbanVerifications(
     query: {
       status: "PENDING",
       query: searchQueryParam(query.query),
+      userId: query.userId ?? undefined,
       ...pagingQuery(query.paging),
     },
     accessToken,

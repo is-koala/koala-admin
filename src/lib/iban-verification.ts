@@ -21,6 +21,18 @@ export const BANK_ACCOUNT_VERIFICATION_STATUSES = [
 
 export type BankAccountVerificationStatus = (typeof BANK_ACCOUNT_VERIFICATION_STATUSES)[number];
 
+const BANK_ACCOUNT_VERIFICATION_STATUS_LABELS: Readonly<Record<string, string>> = {
+  UNVERIFIED: "Doğrulanmadı",
+  PENDING: "Bekliyor",
+  VERIFIED: "Doğrulandı",
+  EXPIRED: "Süresi doldu",
+} satisfies Record<BankAccountVerificationStatus, string>;
+
+/** Yalnız gösterim: bilinmeyen kod olduğu gibi yazılır, kullanıcı sayfası yeni bir durum yüzünden düşmez. */
+export function bankAccountVerificationStatusLabel(status: string): string {
+  return BANK_ACCOUNT_VERIFICATION_STATUS_LABELS[status] ?? status;
+}
+
 export interface VerifiedBankAccountSummary {
   readonly id: string;
   readonly maskedIban: string;

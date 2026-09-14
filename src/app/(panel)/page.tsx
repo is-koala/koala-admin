@@ -2,20 +2,25 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/panel/page-header";
 import { Badge } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { formatCurrency, formatDate, formatDateTime, formatInteger } from "@/lib/format";
-import { loadOpsHome } from "@/server/api/ops-snapshot";
+import { SLA_HOURS, overdueCountText } from "@/lib/queue-sla";
+import { loadOpsHome, type OpsAlertTile, type OpsQueueTile } from "@/server/api/ops-snapshot";
 import { getKoalaAccessToken, requireStaffSession } from "@/server/auth/session";
-import { navigationFor } from "@/server/authz/routes";
 import { getStaffContext } from "@/server/authz/staff-context";
 
+const TILE_CLASS =
+  "flex flex-col gap-1 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm";
+
 /**
- * Operatör evi. Bekleyen kuyruklar, dönem finansı ve son denetim —
- * izin listesi değil. Doğrulama sayfası reklam edilmez.
+ * Operatör evi. Bekleyen kuyruklar, SLA eşiğini aşanlar, takılı ödeme ve
+ * vadesi geçmiş hakediş alarmları, dönem finansı ve son denetim — izin
+ * listesi değil. "Ekranlar" bölümü menüyle aynı listeyi yazdığı için
+ * kaldırıldı (koala-admin#111). Doğrulama sayfası reklam edilmez.
  */
 export default async function PanelHomePage() {
   await requireStaffSession();
   const context = await getStaffContext();
-  const reachable = navigationFor(context.permissions);
   const home = await loadOpsHome(await getKoalaAccessToken(), context.permissions);
 
   return (
@@ -25,39 +30,13 @@ export default async function PanelHomePage() {
         description="Bugün sizin açabileceğiniz kuyruklar, dönem tahsilatı ve son işlemler."
       />
 
-      {home.queues.length > 0 ? (
+      {home.queues.length > 0 || home.alerts.length > 0 ? (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {home.queues.map((tile) => (
-            <Link
-              key={tile.href}
-              href={tile.href}
-              className="flex flex-col gap-1 rounded-2xl border border-border-subtle bg-surface p-5 shadow-sm hover:bg-surface-muted"
-            >
-              <span className="text-xs font-medium text-ink-muted">{tile.label}</span>
-              {tile.loadError !== null ? (
-                <>
-                  <span className="text-sm font-semibold tracking-tight text-ink">
-                    {tile.loadError}
-                  </span>
-                  <span className="text-xs text-ink-subtle">
-                    Sayfayı yenileyerek yeniden deneyin.
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="text-2xl font-semibold tracking-tight text-ink">
-                    {tile.count === null ? "—" : formatInteger(tile.count)}
-                  </span>
-                  {tile.oldestAt !== null ? (
-                    <span className="text-xs text-ink-subtle">
-                      En eski {formatDate(tile.oldestAt)}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-ink-subtle">Kuyruğu aç</span>
-                  )}
-                </>
-              )}
-            </Link>
+            <QueueTile key={tile.href} tile={tile} />
+          ))}
+          {home.alerts.map((tile) => (
+            <AlertTile key={tile.key} tile={tile} />
           ))}
         </section>
       ) : null}
@@ -135,28 +114,93 @@ export default async function PanelHomePage() {
         </ul>
         <p className="mt-3 text-xs text-ink-subtle">Menü bu rollere göre çizilir.</p>
       </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold">Ekranlar</h2>
-        {reachable.length === 0 ? (
-          <p className="max-w-prose text-sm text-ink-muted">
-            Şu an açık bir ekran yok. Menü de bu yüzden boş.
-          </p>
-        ) : (
-          <ul className="divide-y divide-border-subtle overflow-hidden rounded-2xl border border-border-subtle bg-surface shadow-sm">
-            {reachable.map((entry) => (
-              <li key={entry.href}>
-                <Link
-                  href={entry.href}
-                  className="flex px-4 py-2.5 text-sm font-medium text-ink hover:bg-surface-muted"
-                >
-                  {entry.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
+  );
+}
+
+/**
+ * Bir kuyruk karosu. Karo bağlantı değil kart: başlık kuyruğu, eşik satırı
+ * yaşa göre sıralı listeyi açar — iç içe iki `<a>` geçersiz HTML olurdu.
+ * Eşiği aşan sayı sıfırken de yazılır (sessiz yeşil), sıfırdan büyükken
+ * kırmızı; "50+" örneklemin tükendiğini söyler, sayı uydurmaz.
+ */
+function QueueTile({ tile }: { tile: OpsQueueTile }) {
+  return (
+    <article className={TILE_CLASS} data-testid={`queue-tile-${tile.href.slice(1)}`}>
+      <Link href={tile.href} className="text-xs font-medium text-ink-muted hover:underline">
+        {tile.label}
+      </Link>
+      {tile.loadError !== null ? (
+        <>
+          <span className="text-sm font-semibold tracking-tight text-ink">{tile.loadError}</span>
+          <span className="text-xs text-ink-subtle">Sayfayı yenileyerek yeniden deneyin.</span>
+        </>
+      ) : (
+        <>
+          <Link href={tile.href} className="text-2xl font-semibold tracking-tight text-ink">
+            {tile.count === null ? "—" : formatInteger(tile.count)}
+          </Link>
+          {tile.oldestAt !== null ? (
+            <span className="text-xs text-ink-subtle">En eski {formatDate(tile.oldestAt)}</span>
+          ) : (
+            <span className="text-xs text-ink-subtle">Kuyruğu aç</span>
+          )}
+          {tile.overdue !== null ? (
+            <Link
+              href={tile.overdue.href}
+              data-testid="queue-tile-overdue"
+              className={cn(
+                "text-xs font-medium hover:underline",
+                tile.overdue.count > 0 ? "text-danger" : "text-success",
+              )}
+            >
+              {overdueCountText(tile.overdue, formatInteger)} kayıt {SLA_HOURS} saati aştı
+            </Link>
+          ) : null}
+        </>
+      )}
+    </article>
+  );
+}
+
+/** Finans özetinden gelen alarm: sıfır sessiz, sıfırdan büyük kırmızı; bağlantı yalnız liste izniyle. */
+function AlertTile({ tile }: { tile: OpsAlertTile }) {
+  const body =
+    tile.loadError !== null ? (
+      <>
+        <span className="text-sm font-semibold tracking-tight text-ink">{tile.loadError}</span>
+        <span className="text-xs text-ink-subtle">Sayfayı yenileyerek yeniden deneyin.</span>
+      </>
+    ) : (
+      <>
+        <span
+          className={cn(
+            "text-2xl font-semibold tracking-tight",
+            tile.count !== null && tile.count > 0 ? "text-danger" : "text-ink",
+          )}
+        >
+          {tile.count === null ? "—" : formatInteger(tile.count)}
+        </span>
+        <span className="text-xs text-ink-subtle">{tile.description}</span>
+      </>
+    );
+  const label = <span className="text-xs font-medium text-ink-muted">{tile.label}</span>;
+  if (tile.href === null) {
+    return (
+      <article className={TILE_CLASS} data-testid={`alert-tile-${tile.key}`}>
+        {label}
+        {body}
+      </article>
+    );
+  }
+  return (
+    <Link
+      href={tile.href}
+      className={cn(TILE_CLASS, "hover:bg-surface-muted")}
+      data-testid={`alert-tile-${tile.key}`}
+    >
+      {label}
+      {body}
+    </Link>
   );
 }

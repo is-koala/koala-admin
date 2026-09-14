@@ -109,16 +109,25 @@ export function assignmentHref(
 }
 
 /**
- * Ödemenin liste sayfası yok; atama detayından açılır. `?atama=` ile atama
- * kimliği taşınırsa kırıntı "Atamalar › atama › ödeme" olur.
+ * Ödeme nesnesi iki yerden açılır: atama detayından `?atama=` ile (kırıntı
+ * "Atama özeti › atama › ödeme") ve ödeme listesinden (koala-admin#111)
+ * `queueState` ile ("Ödemeler › ödeme", liste süzgeci korunur).
  */
 export const PAYMENT_ASSIGNMENT_PARAM = "atama";
 
-export function paymentHref(paymentId: string, assignmentId: string | null = null): Route {
-  return withQuery(
-    `/payments/${paymentId}`,
-    assignmentId === null ? {} : { [PAYMENT_ASSIGNMENT_PARAM]: assignmentId },
-  );
+export function paymentHref(
+  paymentId: string,
+  assignmentId: string | null = null,
+  queueState: Readonly<Record<string, string>> = {},
+): Route {
+  return withQuery(`/payments/${paymentId}`, {
+    ...queueState,
+    ...(assignmentId === null ? {} : { [PAYMENT_ASSIGNMENT_PARAM]: assignmentId }),
+  });
+}
+
+export function paymentsHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/payments", state);
 }
 
 export function payoutHref(
@@ -143,6 +152,15 @@ export function jobsHref(state: Readonly<Record<string, string>> = {}): Route {
  */
 export function ibanVerificationHref(reference: string): Route {
   return asRoute(`/iban-verifications/${encodeURIComponent(reference)}`);
+}
+
+export function ibanVerificationsHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/iban-verifications", state);
+}
+
+/** Kullanıcı sayfasının banka sekmesinden (koala-admin#108); backend `userId`. */
+export function ibanVerificationsForUserHref(userId: string): Route {
+  return ibanVerificationsHref({ kullanici: userId });
 }
 
 export function reportsForUserHref(userId: string): Route {

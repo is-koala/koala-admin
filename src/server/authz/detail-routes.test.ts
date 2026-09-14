@@ -50,7 +50,10 @@ describe("the job list is gated on job.read", () => {
   });
 
   it("does not add a menu entry for payment.read or payout.reconcile holders", () => {
-    expect(navigationFor(["payment.read"]).map((entry) => entry.href)).toEqual(["/assignments"]);
+    expect(navigationFor(["payment.read"]).map((entry) => entry.href)).toEqual([
+      "/assignments",
+      "/payments",
+    ]);
     expect(navigationFor(["payout.reconcile"]).map((entry) => entry.href)).toEqual([
       "/payout-reconciliation",
     ]);

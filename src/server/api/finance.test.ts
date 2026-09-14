@@ -68,3 +68,27 @@ describe("finance summary transport", () => {
     });
   });
 });
+
+/** koala-backend#301 sayaçları isteğe bağlı: 0.9.26 öncesi sunucu göndermez, `null`. */
+describe("stuck payment and overdue payout counts", () => {
+  it("reads them when present and nulls them for an older server", async () => {
+    server.use(
+      http.get(SUMMARY, () => success({ ...DATA, stuckPaymentCount: 2, overduePayoutCount: 0 })),
+    );
+    const fresh = await getFinanceSummary("ACCESS-TOKEN");
+    expect(fresh.stuckPaymentCount).toBe(2);
+    expect(fresh.overduePayoutCount).toBe(0);
+
+    server.use(http.get(SUMMARY, () => success()));
+    const legacy = await getFinanceSummary("ACCESS-TOKEN");
+    expect(legacy.stuckPaymentCount).toBeNull();
+    expect(legacy.overduePayoutCount).toBeNull();
+  });
+
+  it("rejects a negative count at the boundary", async () => {
+    server.use(http.get(SUMMARY, () => success({ ...DATA, stuckPaymentCount: -1 })));
+    await expect(getFinanceSummary("ACCESS-TOKEN")).rejects.toMatchObject({
+      errorCode: "RESPONSE_SCHEMA_MISMATCH",
+    });
+  });
+});

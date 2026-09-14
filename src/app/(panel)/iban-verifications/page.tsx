@@ -5,6 +5,8 @@ import { IbanVerificationForm } from "@/components/iban-verification/iban-verifi
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  FilterId,
+  FilterNotice,
   ListSearchForm,
   QueueLoadFailure,
   QueuePager,
@@ -24,14 +26,20 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
-import { ibanVerificationHref, userHrefOrNull } from "@/lib/panel-href";
+import { ibanVerificationHref, ibanVerificationsHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   getPendingIbanVerifications,
   IBAN_PENDING_PAGING,
   ibanPendingAmountText,
   type IbanPending,
 } from "@/server/api/iban-verification";
-import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
+import {
+  pageWindow,
+  readPaging,
+  readParam,
+  readUuidParam,
+  type SearchParams,
+} from "@/server/api/paging";
 import {
   SEARCH_QUERY_TOO_LONG_MESSAGE,
   isSearchQueryTooLong,
@@ -54,6 +62,9 @@ export const metadata: Metadata = { title: "IBAN doğrulama" };
  * `?referans=` / `?tutar=` ile mevcut confirm formuna düşer. Gönderen IBAN
  * hâlâ ekstreden yazılır — kuyruk onu taşımaz. Satırdaki referans nesne
  * sayfasına gider (`/iban-verifications/{referans}`, koala-admin#95).
+ * `?kullanici=` kuyruğu bir kullanıcıya süzer — backend `userId`
+ * (koala-backend#301); kullanıcı sayfasının banka sekmesi buraya gelir
+ * (koala-admin#108). UUID değilse süzgeç düşer, kuyruk süzgeçsiz açılır.
  */
 export default async function IbanVerificationsPage({
   searchParams,
@@ -87,13 +98,28 @@ async function IbanQueue({ params }: { params: SearchParams }) {
   const selectedAmount = readParam(params, "tutar") ?? "";
   const query = readSearchQuery(readParam(params, SEARCH_PARAM));
   const search = activeSearch(query);
+  const userId = readUuidParam(params, "kullanici");
 
   const viewState = {
     boyut: String(paging.size),
     ...(selectedReference === null ? {} : { referans: selectedReference }),
     ...(selectedAmount.length === 0 ? {} : { tutar: selectedAmount }),
     ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+    ...(userId === null ? {} : { kullanici: userId }),
   };
+
+  const userNotice =
+    userId === null ? null : (
+      <FilterNotice
+        testId="iban-user-filter"
+        clearHref={ibanVerificationsHref({
+          boyut: String(paging.size),
+          ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+        })}
+      >
+        Bu görünüm kullanıcısı <FilterId value={userId} /> olan bekleyen doğrulamaları süzüyor.
+      </FilterNotice>
+    );
 
   const searchForm = (error: string | null = null) => (
     <ListSearchForm
@@ -112,7 +138,7 @@ async function IbanQueue({ params }: { params: SearchParams }) {
 
   let page;
   try {
-    page = await getPendingIbanVerifications(accessToken, { paging, query });
+    page = await getPendingIbanVerifications(accessToken, { paging, query, userId });
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return <div className="flex flex-col gap-6">{searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}</div>;
@@ -151,6 +177,7 @@ async function IbanQueue({ params }: { params: SearchParams }) {
           </p>
         </div>
 
+        {userNotice}
         {searchForm()}
         <SearchResultSummary search={search} total={page.totalElements} unit="doğrulama" />
 
@@ -181,6 +208,7 @@ async function IbanQueue({ params }: { params: SearchParams }) {
                   selected={row.reference === selectedReference}
                   page={paging.page}
                   query={query}
+                  userId={userId}
                 />
               ))}
             </TableBody>
@@ -220,12 +248,14 @@ function PendingRow({
   selected,
   page,
   query,
+  userId,
 }: {
   row: IbanPending;
   selected: boolean;
   page: number;
-  /** Satırdan onaya geçmek aramayı silmesin. */
+  /** Satırdan onaya geçmek aramayı ve kullanıcı süzgecini silmesin. */
   query: string | null;
+  userId: string | null;
 }) {
   const amountText = ibanPendingAmountText(row.amount);
   const personHref = userHrefOrNull(row.user.id);
@@ -270,6 +300,7 @@ function PendingRow({
                 ...(amountText.length === 0 ? {} : { tutar: amountText }),
                 ...(page > 0 ? { sayfa: String(page) } : {}),
                 ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+                ...(userId === null ? {} : { kullanici: userId }),
               },
             }}
             className="text-sm font-medium text-brand hover:underline"

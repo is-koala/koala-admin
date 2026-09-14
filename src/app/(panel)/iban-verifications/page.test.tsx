@@ -200,3 +200,36 @@ describe("the attempts-left column", () => {
     expect(legacy).toMatch(/<td[^>]*>—<\/td>/);
   });
 });
+
+/** koala-admin#108 / koala-backend#301: kullanıcı sayfasının banka sekmesi kuyruğu `?kullanici=` ile açar. */
+describe("the user filter", () => {
+  const USER_ID = PENDING_ROW.user.id;
+
+  it("sends kullanici as userId, says so above the queue and keeps it on Onayla and clear", async () => {
+    stubMe(VERIFIER);
+    const queue = watchQueue([PENDING_ROW]);
+
+    const html = await render({ kullanici: USER_ID, ara: "9F3A" });
+
+    expect(queue.url?.searchParams.get("userId")).toBe(USER_ID);
+    expect(queue.url?.searchParams.get("status")).toBe("PENDING");
+    expect(html).toContain('data-testid="iban-user-filter"');
+    expect(html).toContain(USER_ID);
+    // "Süzgeci kaldır" kullanıcıyı düşürür, arama ve boyut kalır.
+    expect(html).toContain('href="/iban-verifications?boyut=20&amp;ara=9F3A"');
+    expect(html).toContain(
+      `/iban-verifications?referans=${REFERENCE}&amp;tutar=0.17&amp;ara=9F3A&amp;kullanici=${USER_ID}`,
+    );
+  });
+
+  it("drops a kullanici that is not a UUID instead of sending it", async () => {
+    stubMe(VERIFIER);
+    const queue = watchQueue([PENDING_ROW]);
+
+    const html = await render({ kullanici: "javascript:alert(1)" });
+
+    expect(queue.url?.searchParams.has("userId")).toBe(false);
+    expect(html).not.toContain('data-testid="iban-user-filter"');
+    expect(html).not.toContain("kullanici=");
+  });
+});
