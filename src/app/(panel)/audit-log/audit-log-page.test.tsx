@@ -217,6 +217,40 @@ describe("what the table shows", () => {
     expect(html).toContain("İzin verildi");
   });
 
+  /** koala-admin#107: kaynak ve aktör bağlantıları okuyanın izinleriyle açılır. */
+  it("links the resource and the actor according to the reader's permissions", async () => {
+    const USER_ID = "aaaaaaaa-1111-4111-8111-111111111111";
+    const row = {
+      ...categoryCreatedEntry,
+      permission: "user.role.manage",
+      action: "user.role.grant",
+      resourceType: "users",
+      resourceId: USER_ID,
+    };
+
+    watchAuditLog(auditPageBody({ content: [row] }));
+    const alone = await renderPage({});
+    expect(alone).not.toContain(`href="/users/${USER_ID}"`);
+    expect(alone).not.toContain("/staff#personel-");
+
+    server.use(
+      http.get(ADMIN_ME, () =>
+        HttpResponse.json({
+          ...adminMeSuccessBody,
+          data: {
+            ...adminMeSuccessBody.data,
+            roles: ["OWNER"],
+            permissions: ["audit.read", "user.read", "staff.read"],
+          },
+        }),
+      ),
+    );
+    watchAuditLog(auditPageBody({ content: [row] }));
+    const linked = await renderPage({});
+    expect(linked).toContain(`href="/users/${USER_ID}"`);
+    expect(linked).toContain(`href="/staff#personel-${categoryCreatedEntry.actorStaffId}"`);
+  });
+
   it("prints absolute Istanbul timestamps, never a relative one", async () => {
     watchAuditLog(auditPageBody({ content: [categoryCreatedEntry, erasedDetailEntry] }));
 

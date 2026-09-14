@@ -190,3 +190,15 @@ export function payoutReconcileHref(payoutId: string): Route {
 export function auditLogForResourceHref(resourceId: string): Route {
   return withQuery("/audit-log", { resourceId });
 }
+
+/**
+ * Personel sayfası üyeye `id="personel-<id>"` verir; satır içi bağlantı ve
+ * denetim/çizelge aktör bağlantısı aynı çapayı kullanır (koala-admin#107).
+ */
+export function staffMemberAnchor(staffId: string): string {
+  return `personel-${staffId}`;
+}
+
+export function staffMemberHref(staffId: string): Route {
+  return asRoute(`/staff#${staffMemberAnchor(staffId)}`);
+}

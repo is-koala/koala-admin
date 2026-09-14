@@ -17,7 +17,9 @@ import { isKoalaApiError } from "@/server/api/errors";
 import type { PageDto } from "@/server/api/types";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { permissionLabelsFor } from "@/server/authz/audit-permission-labels";
+import type { Permission } from "@/server/authz/permissions";
 import { RequirePermission } from "@/server/authz/require-permission";
+import { getStaffContext } from "@/server/authz/staff-context";
 
 export const metadata: Metadata = { title: "Denetim kaydı" };
 
@@ -75,14 +77,17 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
 }
 
 async function AuditLogView({ request }: { request: AuditLogRequest }) {
-  const result = await loadAuditLog(request);
+  // Kaynak ve aktör bağlantıları okuyanın izinlerine göre açılır (koala-admin#107);
+  // `getStaffContext` istek kapsamında memo'lu, kapının çağrısıyla aynı cevap.
+  const [result, context] = await Promise.all([loadAuditLog(request), getStaffContext()]);
+  const permissions = context.staff?.permissions ?? [];
 
   return (
     <div className="flex flex-col gap-4">
       <AuditLogFilterForm filters={request.filters} page={request.page} />
 
       {result.ok ? (
-        <AuditLogResults request={request} page={result.page} />
+        <AuditLogResults request={request} page={result.page} permissions={permissions} />
       ) : (
         <ErrorState
           title={result.title}
@@ -98,9 +103,11 @@ async function AuditLogView({ request }: { request: AuditLogRequest }) {
 function AuditLogResults({
   request,
   page,
+  permissions,
 }: {
   request: AuditLogRequest;
   page: PageDto<AuditEntry>;
+  permissions: readonly Permission[];
 }) {
   if (page.content.length === 0) {
     /**
@@ -126,7 +133,11 @@ function AuditLogResults({
   return (
     <div className="flex flex-col gap-4">
       {/* The page the server returned, rendered whole. */}
-      <AuditLogTable entries={page.content} permissionLabels={permissionLabelsFor(page.content)} />
+      <AuditLogTable
+        entries={page.content}
+        permissionLabels={permissionLabelsFor(page.content)}
+        permissions={permissions}
+      />
 
       <AuditLogPager
         filters={request.filters}

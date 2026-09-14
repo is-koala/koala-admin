@@ -224,3 +224,62 @@ describe("nothing happens on its own", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * koala-admin#107: kaynak nesneye, aktör `/staff`e bağlanır — yalnız hedefin
+ * izni verilmişse. İzin listesi gelmezse hiçbir hücre bağlanmaz; satır aynı.
+ */
+describe("the resource and the actor link out when the reader may open them", () => {
+  const USER_ID = "aaaaaaaa-1111-4111-8111-111111111111";
+  const userRow: AuditEntry = toEntry({
+    ...categoryCreatedEntry,
+    id: "aa000000-0000-4c00-8000-0000000000u1",
+    permission: "user.role.manage",
+    action: "user.role.grant",
+    resourceType: "users",
+    resourceId: USER_ID,
+  });
+
+  it("links both when user.read and staff.read are held", () => {
+    render(
+      <AuditLogTable
+        entries={[userRow]}
+        permissionLabels={LABELS}
+        permissions={["audit.read", "user.read", "staff.read"]}
+      />,
+    );
+
+    expect(screen.getByTestId("audit-resource-link")).toHaveAttribute("href", `/users/${USER_ID}`);
+    expect(screen.getByTestId("audit-actor-link")).toHaveAttribute(
+      "href",
+      `/staff#personel-${categoryCreatedEntry.actorStaffId}`,
+    );
+  });
+
+  it("prints plain text when the reader lacks the target's permission or no list is given", () => {
+    const { unmount } = render(
+      <AuditLogTable entries={[userRow]} permissionLabels={LABELS} permissions={["audit.read"]} />,
+    );
+    expect(screen.queryByTestId("audit-resource-link")).toBeNull();
+    expect(screen.queryByTestId("audit-actor-link")).toBeNull();
+    expect(screen.getByText(`users · ${USER_ID}`)).toBeInTheDocument();
+    unmount();
+
+    renderTable([userRow]);
+    expect(screen.queryByTestId("audit-resource-link")).toBeNull();
+    expect(screen.queryByTestId("audit-actor-link")).toBeNull();
+  });
+
+  it("leaves an unknown resource type and a missing staff id unlinked", () => {
+    render(
+      <AuditLogTable
+        entries={[toEntry({ ...categoryCreatedEntry, actorStaffId: null })]}
+        permissionLabels={LABELS}
+        permissions={["audit.read", "user.read", "staff.read", "category.manage"]}
+      />,
+    );
+    // Fixture'ın `job-category` türü backend'in `job-categories` parçası değil; bağlantısız.
+    expect(screen.queryByTestId("audit-resource-link")).toBeNull();
+    expect(screen.queryByTestId("audit-actor-link")).toBeNull();
+  });
+});

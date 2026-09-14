@@ -3,6 +3,7 @@ import type { Route } from "next";
 import type { ReactNode } from "react";
 
 import { EscrowOperationForm } from "@/components/escrow/escrow-operation-form";
+import { ObjectTimeline } from "@/components/panel/object-timeline";
 import { ProfilePicture } from "@/components/panel/profile-picture";
 import {
   Badge,
@@ -54,14 +55,17 @@ import { submitEscrowOperation } from "@/server/escrow/actions";
 import { escrowMovement, refundAvailability, releaseAvailability } from "@/server/escrow/figures";
 
 import { ASSIGNMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONES } from "./labels";
+import { assignmentTimelineEvents } from "./timeline";
 
 /**
  * Atama nesne sayfasının gövdesi (koala-admin#95).
  *
- * Sunucu bileşeni; ağ yok. Sayfa iki okumayı yapar — `AdminAssignmentDetailDto`
+ * Sunucu bileşeni. Sayfa iki okumayı yapar — `AdminAssignmentDetailDto`
  * ve atamanın ödeme denemeleri — ve sonucu buraya verir. Denemeler ayrı
  * yüklendiği için ayrı düşebilir: tablo yerine hata kutusu çizilir, sayfanın
- * kalanı durur.
+ * kalanı durur. Tek ağ isteği zaman çizelgesinindir: `ObjectTimeline`
+ * (koala-admin#107) `audit.read` varken bu atamanın denetim satırlarını
+ * kendi ister; DTO olayları `./timeline`'da türetilir.
  *
  * Bağlantılar izne bakar. `LinkedRecordDto` yalnız kimlik taşır; kimliği
  * göstermek serbest, ama `dispute.resolve` olmayan birine uyuşmazlık sayfasına
@@ -191,7 +195,14 @@ export function AssignmentDetail({ assignment, payments, permissions }: DetailPr
         </div>
       </section>
 
-      <Timeline assignment={assignment} payments={payments.ok ? payments.payments : []} />
+      <ObjectTimeline
+        resourceId={assignment.id}
+        subject="Bu atama"
+        events={assignmentTimelineEvents(assignment, payments.ok ? payments.payments : [])}
+      >
+        Kaydın kendi anları DTO&apos;dan; serbest bırakma ve iade gibi personel kararları denetim
+        izinden, bu atama kimliğiyle.
+      </ObjectTimeline>
 
       {assignment.application === null && assignment.cancellation === null ? null : (
         <section className="grid gap-4 md:grid-cols-2">
@@ -248,125 +259,6 @@ function Party({ user }: { user: SafeUser }) {
         </Link>
       )}
     </span>
-  );
-}
-
-interface TimelineEntry {
-  readonly at: string;
-  readonly label: string;
-  readonly detail: string | null;
-}
-
-/**
- * Zaman çizelgesi, elde olan anlardan: başvuru → kabul → atama → ödeme →
- * mesai (giriş/çıkış) → iptal ya da tamamlanma → değerlendirme → hakediş
- * (koala-admin#100). Eski sunucu başvuru, mesai, iptal ve değerlendirmeyi
- * göndermez; o satırlar yalnız yoklukla eksilir. Tarihi çözülemeyen kayıt
- * düşer — sıralanamayan bir satır çizelgede yanlış yere oturur, hiç
- * oturmamasından kötü.
- */
-function timelineEntries(
-  assignment: AssignmentRecord,
-  payments: readonly AdminPayment[],
-): readonly TimelineEntry[] {
-  const entries: TimelineEntry[] = [];
-  const push = (at: string | null, label: string, detail: string | null = null) => {
-    if (at === null || Number.isNaN(new Date(at).getTime())) return;
-    entries.push({ at, label, detail });
-  };
-
-  if (assignment.application !== null) {
-    push(assignment.application.applicationDateTime, "Başvuru yapıldı");
-    push(
-      assignment.application.answeredDateTime,
-      "Başvuru yanıtlandı",
-      assignment.application.status === null
-        ? null
-        : applicationStatusLabel(assignment.application.status),
-    );
-  }
-  push(assignment.createdAt, "Atama oluşturuldu");
-  push(assignment.assignmentDateTime, "Atama zamanı");
-  for (const session of assignment.workSessions ?? []) {
-    push(session.checkInAt, "Mesai girişi", flagSummary(session.checkInPlausibilityFlags));
-    push(session.checkOutAt, "Mesai çıkışı", flagSummary(session.checkOutPlausibilityFlags));
-  }
-  if (assignment.cancellation !== null) {
-    push(
-      assignment.cancellation.cancelledAt,
-      "Atama iptal edildi",
-      assignment.cancellation.cancelledByParty === null
-        ? null
-        : cancellationPartyLabel(assignment.cancellation.cancelledByParty),
-    );
-  }
-  push(assignment.actualCompletionDateTime, "İş tamamlandı");
-  for (const review of assignment.reviews ?? []) {
-    push(
-      review.createdAt,
-      "Değerlendirme yazıldı",
-      review.rating === null ? null : `${formatInteger(review.rating)}/5`,
-    );
-  }
-  for (const payment of payments) {
-    push(
-      payment.createdAt,
-      "Ödeme denemesi başlatıldı",
-      PAYMENT_ATTEMPT_STATUS_LABELS[payment.status],
-    );
-    push(payment.completedAt, "Ödeme denemesi tamamlandı", shortId(payment.id));
-  }
-  if (assignment.payout !== null) {
-    push(assignment.payout.createdAt, "Hakediş oluşturuldu", assignment.payout.status);
-  }
-  for (const dispute of assignment.disputes) {
-    push(dispute.createdAt, "Uyuşmazlık açıldı", dispute.status);
-  }
-  for (const report of assignment.reports) {
-    push(report.createdAt, "Şikayet açıldı", report.status);
-  }
-
-  return entries.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-}
-
-function flagSummary(flags: readonly string[]): string | null {
-  if (flags.length === 0) return null;
-  return flags.map(timesheetFlagLabel).join(", ");
-}
-
-function Timeline({
-  assignment,
-  payments,
-}: {
-  assignment: AssignmentRecord;
-  payments: readonly AdminPayment[];
-}) {
-  const entries = timelineEntries(assignment, payments);
-
-  return (
-    <section
-      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4"
-      aria-labelledby="assignment-timeline-heading"
-    >
-      <h2 id="assignment-timeline-heading" className="text-sm font-semibold">
-        Zaman çizelgesi
-      </h2>
-      {entries.length === 0 ? (
-        <p className="text-sm text-ink-muted">Bu atama için zamanı bilinen bir olay yok.</p>
-      ) : (
-        <ol className="flex flex-col gap-1 text-sm">
-          {entries.map((entry, index) => (
-            <li key={`${entry.at}-${index}`} className="flex flex-wrap gap-x-3">
-              <span className="font-mono text-xs text-ink-muted">{formatDateTime(entry.at)}</span>
-              <span>{entry.label}</span>
-              {entry.detail === null ? null : (
-                <span className="text-ink-muted">· {entry.detail}</span>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
   );
 }
 
@@ -980,10 +872,6 @@ function EscrowActions({
       </div>
     </section>
   );
-}
-
-function shortId(id: string): string {
-  return id.length > 8 ? id.slice(0, 8) : id;
 }
 
 function Row({ label, value }: { label: string; value: ReactNode }) {

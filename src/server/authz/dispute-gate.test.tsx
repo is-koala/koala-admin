@@ -7,8 +7,10 @@ import {
   searchQueryTooLongBody,
 } from "../../../test/fixtures/envelopes";
 import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment";
+import { categoryCreatedEntry } from "../../../test/fixtures/audit-log";
 import { apiUrl, server } from "../../../test/msw";
 import { renderServerComponent } from "../../../test/render-server";
+import { detailValuesOf, watchAudit } from "../../../test/support/watch-audit";
 
 /**
  * koala-admin#6's acceptance criteria, rendered.
@@ -48,6 +50,7 @@ const DISPUTES = apiUrl("/admin/disputes");
 const SUMMARY = apiUrl(`/admin/job-assignments/${ASSIGNMENT}`);
 const EVIDENCE = apiUrl(`/admin/disputes/${DISPUTE}/evidence`);
 const EVIDENCE_ID = "e1000000-0000-4c00-8000-000000000001";
+const STAFF_ID = "b7f4a2c1-0000-4c00-8000-000000000009";
 
 const OWNER_REVIEW_PERMISSIONS = [
   "dispute.resolve",
@@ -461,9 +464,90 @@ describe("the selected dispute", () => {
     watchDispute();
     watchSummary();
     watchEvidence();
+    watchAudit();
     const html = await renderDetail();
     expect(html).toContain("Her değişiklik denetim kaydında");
     expect(html).toContain(`href="/audit-log?resourceId=${DISPUTE}"`);
+  });
+
+  /**
+   * koala-admin#107: açılış, kanıt ve kayıtlı karar DTO'dan; personel
+   * kararı denetim izinden; tek çizelge, zamana göre. Çözen personel DTO'da
+   * yalnız kimlik: kısa kimlik, `/staff` bağlantısı `staff.read` ile.
+   */
+  it("merges the dispute's own events with the staff decision in one timeline", async () => {
+    stubMe([...OWNER_REVIEW_PERMISSIONS, "audit.read", "staff.read"], ["OWNER"]);
+    watchDispute(() =>
+      HttpResponse.json({
+        success: true,
+        message: "Uyuşmazlık getirildi.",
+        httpStatus: "200 OK",
+        path: `/admin/disputes/${DISPUTE}`,
+        requestId: "rid-dispute",
+        timeStamp: "2026-09-06T09:00:00.000000000Z",
+        data: {
+          ...DISPUTE_ROW,
+          status: "RESOLVED",
+          resolution: "RELEASE_TO_WORKER",
+          resolutionNote: "Vardiya kanıtlandı.",
+          resolvedByStaffId: STAFF_ID,
+          resolvedAt: "2026-09-06T08:00:00.000000000Z",
+        },
+      }),
+    );
+    watchSummary();
+    watchEvidence();
+    const RESOLVE_ROW = {
+      ...categoryCreatedEntry,
+      id: "aa000000-0000-4c00-8000-0000000000d1",
+      occurredAt: "2026-09-06T08:00:00.000Z",
+      actorStaffId: STAFF_ID,
+      actorDisplayName: "Uyuşmazlık Hakemi",
+      permission: "dispute.resolve",
+      action: "disputes.resolve",
+      resourceType: "disputes",
+      resourceId: DISPUTE,
+      sensitivity: "FINANCIAL" as const,
+    };
+    const audit = watchAudit({ rows: [RESOLVE_ROW], totalElements: 1 });
+
+    const html = await renderDetail();
+
+    expect(audit.urls).toHaveLength(1);
+    expect(audit.urls[0]?.searchParams.get("resourceId")).toBe(DISPUTE);
+
+    const timeline = html.slice(html.indexOf('data-testid="object-timeline"'));
+    const positions = [
+      "Uyuşmazlık açıldı",
+      "Kanıt yüklendi",
+      "Karar verildi",
+      "disputes.resolve",
+    ].map((label) => timeline.indexOf(label));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(timeline).toContain("vardiya kanıtı.png");
+    expect(timeline).toContain("Vardiya kanıtlandı.");
+    expect(timeline).toContain("Uyuşmazlık Hakemi");
+    expect(timeline).toContain("Denetim izinden 1 kayıt.");
+    expect(html.match(new RegExp(`href="/staff#personel-${STAFF_ID}"`, "g"))).toHaveLength(2);
+    for (const value of detailValuesOf(RESOLVE_ROW)) expect(html).not.toContain(value);
+    expect(html.match(/href="\/audit-log\?resourceId=/g)).toHaveLength(1);
+  });
+
+  it("draws only the dispute's own events without audit.read and sends no audit request", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    watchDispute();
+    watchSummary();
+    watchEvidence();
+    const audit = watchAudit({ rows: [categoryCreatedEntry] });
+
+    const html = await renderDetail();
+
+    expect(audit.urls).toHaveLength(0);
+    expect(html).toContain("Uyuşmazlık açıldı");
+    expect(html).toContain("Kanıt yüklendi");
+    expect(html).not.toContain("job.category.create");
+    expect(html).toContain('data-testid="object-timeline-audit-disabled"');
   });
 
   it("keeps decision controls usable when no evidence was attached", async () => {

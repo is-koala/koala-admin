@@ -3,12 +3,22 @@ import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
+import { ObjectTimeline } from "@/components/panel/object-timeline";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { ErrorState } from "@/components/ui";
-import { getDispute, getDisputeEvidence } from "@/server/api/disputes";
+import { TimelineBuilder, type TimelineEvent } from "@/lib/object-timeline";
+import {
+  disputeResolutionSpec,
+  disputeSideLabel,
+  getDispute,
+  getDisputeEvidence,
+  type Dispute,
+  type DisputeEvidence,
+} from "@/server/api/disputes";
 import { getEscrowSummary } from "@/server/api/escrow";
 import { isKoalaApiError } from "@/server/api/errors";
+import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
@@ -107,6 +117,14 @@ async function DisputeObject({ id }: { id: string }) {
         evidence={evidence}
         permissions={context.staff?.permissions ?? []}
       />
+      <ObjectTimeline
+        resourceId={dispute.id}
+        subject="Bu uyuşmazlık"
+        events={disputeTimelineEvents(dispute, evidence.ok ? evidence.evidence : [])}
+      >
+        Açılış, kanıtlar ve kayıtlı karar DTO&apos;dan; karar ve emanet hareketleri gibi personel
+        işlemleri denetim izinden, bu uyuşmazlık kimliğiyle.
+      </ObjectTimeline>
       <ObjectAuditPointer
         resourceId={dispute.id}
         linkLabel="Bu uyuşmazlığın denetim kayıtlarını aç"
@@ -154,4 +172,43 @@ async function loadEvidence(accessToken: string, disputeId: string): Promise<Evi
       },
     };
   }
+}
+
+/**
+ * Uyuşmazlığın DTO'dan türeyen anları (koala-admin#107): açılış, kanıt
+ * yüklemeleri ve kayıtlı karar. Çözen personel DTO'da yalnız kimlik; ad
+ * çözümü koala-admin#112 ile gelecek, o güne kadar kısa kimlik. Kanıt ucu
+ * ayrı düştüyse o satırlar yalnız yoklukla eksilir.
+ */
+function disputeTimelineEvents(
+  dispute: Dispute,
+  evidence: readonly DisputeEvidence[],
+): readonly TimelineEvent[] {
+  const timeline = new TimelineBuilder();
+  timeline.push(dispute.createdAt, "Uyuşmazlık açıldı", {
+    detail: dispute.openedBySide === null ? null : disputeSideLabel(dispute.openedBySide),
+    actor:
+      dispute.openedBy === null
+        ? null
+        : { kind: "user", userId: dispute.openedBy.id, name: safeUserName(dispute.openedBy) },
+  });
+  for (const file of evidence) {
+    timeline.push(file.createdAt, "Kanıt yüklendi", {
+      detail: file.fileName,
+      actor: { kind: "user", userId: file.uploadedBy.id, name: safeUserName(file.uploadedBy) },
+    });
+  }
+  const resolution =
+    dispute.resolution === null ? null : disputeResolutionSpec(dispute.resolution).label;
+  const decision = [resolution, dispute.resolutionNote]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+  timeline.push(dispute.resolvedAt, "Karar verildi", {
+    detail: decision.length === 0 ? null : decision,
+    actor:
+      dispute.resolvedByStaffId === null
+        ? null
+        : { kind: "staff", staffId: dispute.resolvedByStaffId, name: null },
+  });
+  return timeline.build();
 }

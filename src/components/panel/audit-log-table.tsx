@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import {
@@ -12,6 +13,11 @@ import {
   TableRow,
 } from "@/components/ui";
 import type { AuditEntry } from "@/lib/audit-log";
+import {
+  auditActorHref,
+  auditResourceHref,
+  type AuditLinkPermission as Permission,
+} from "@/lib/audit-links";
 import { formatDateTimeSeconds } from "@/lib/format";
 
 import { AuditEntryDetail } from "./audit-log-detail";
@@ -34,17 +40,26 @@ import { SENSITIVITY_PRESENTATION, outcomePresentation } from "./audit-log-prese
  *
  * And nothing in this component filters `entries`. It renders the page the
  * server returned, in the order the server returned it.
+ *
+ * Aktör ve kaynak bağlantılı (koala-admin#107): aktör `/staff` çapasına,
+ * kaynak `resourceType`'a göre nesne sayfasına. Bağlantı yalnız hedefin
+ * izni `permissions`'ta varken verilir — sunucu çözer, buraya liste gelir;
+ * izinsiz kişiye verilen bağlantı 403 ekranı olurdu. Liste boşsa hiçbir
+ * hücre bağlanmaz; satır yine çizilir.
  */
 
 export interface AuditLogTableProps {
   entries: readonly AuditEntry[];
   /** Permission name → Turkish label, resolved on the server. See the detail panel. */
   permissionLabels: Readonly<Record<string, string>>;
+  /** Okuyanın izinleri; kaynak ve aktör bağlantıları buna göre açılır. */
+  permissions?: readonly Permission[];
 }
 
-export function AuditLogTable({ entries, permissionLabels }: AuditLogTableProps) {
+export function AuditLogTable({ entries, permissionLabels, permissions = [] }: AuditLogTableProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = entries.find((entry) => entry.id === selectedId) ?? null;
+  const held = new Set<Permission>(permissions);
 
   return (
     <div className="flex flex-col items-start gap-4 lg:flex-row">
@@ -92,7 +107,9 @@ export function AuditLogTable({ entries, permissionLabels }: AuditLogTableProps)
                       {formatDateTimeSeconds(entry.occurredAt)}
                     </time>
                   </TableCell>
-                  <TableCell>{entry.actorDisplayName}</TableCell>
+                  <TableCell>
+                    <ActorCell entry={entry} held={held} />
+                  </TableCell>
                   <TableCell>
                     <span className="font-mono text-xs">{entry.action}</span>
                   </TableCell>
@@ -100,9 +117,7 @@ export function AuditLogTable({ entries, permissionLabels }: AuditLogTableProps)
                     <span className="font-mono text-xs">{entry.permission}</span>
                   </TableCell>
                   <TableCell>
-                    <span className="font-mono text-xs break-all text-ink-subtle">
-                      {entry.resourceType} · {entry.resourceId}
-                    </span>
+                    <ResourceCell entry={entry} held={held} />
                   </TableCell>
                   <TableCell>
                     <Badge tone={sensitivity.tone}>{sensitivity.label}</Badge>
@@ -137,5 +152,31 @@ export function AuditLogTable({ entries, permissionLabels }: AuditLogTableProps)
         />
       )}
     </div>
+  );
+}
+
+function ActorCell({ entry, held }: { entry: AuditEntry; held: ReadonlySet<Permission> }) {
+  const href = auditActorHref(entry.actorStaffId, held);
+  if (href === null) return <>{entry.actorDisplayName}</>;
+  return (
+    <Link href={href} className="text-brand hover:underline" data-testid="audit-actor-link">
+      {entry.actorDisplayName}
+    </Link>
+  );
+}
+
+function ResourceCell({ entry, held }: { entry: AuditEntry; held: ReadonlySet<Permission> }) {
+  const href = auditResourceHref(entry.resourceType, entry.resourceId, held);
+  return (
+    <span className="font-mono text-xs break-all text-ink-subtle">
+      {entry.resourceType} ·{" "}
+      {href === null ? (
+        entry.resourceId
+      ) : (
+        <Link href={href} className="text-brand hover:underline" data-testid="audit-resource-link">
+          {entry.resourceId}
+        </Link>
+      )}
+    </span>
   );
 }
