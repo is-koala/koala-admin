@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
+import { ProfilePicture } from "@/components/panel/profile-picture";
 import { Badge } from "@/components/ui";
 import { httpUrlOrNull } from "@/lib/external-url";
 import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
@@ -82,7 +83,11 @@ export function CompanyReviewBody({
 
         <dt className="text-sm text-ink-muted">Logo</dt>
         <dd className="text-sm">
-          <CompanyLogo url={company.logoUrl} name={company.name} />
+          <ProfilePicture
+            url={company.logoUrl}
+            name={company.name ?? "Şirket"}
+            alt={company.name === null ? "Şirket logosu" : `${company.name} logosu`}
+          />
         </dd>
 
         <dt className="text-sm text-ink-muted">Kayıtlı adres</dt>
@@ -202,20 +207,6 @@ function CompanyContacts({ contacts }: { contacts: readonly CompanyContact[] }) 
         );
       })}
     </ul>
-  );
-}
-
-/** Logo adresi profil fotoğrafıyla aynı `http(s)` kapısından geçer. */
-function CompanyLogo({ url, name }: { url: string | null; name: string | null }) {
-  const src = httpUrlOrNull(url);
-  if (src === null) return <>{EMPTY_VALUE}</>;
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={name === null ? "Şirket logosu" : `${name} logosu`}
-      className="h-16 w-16 rounded-lg border border-border-subtle object-cover"
-    />
   );
 }
 

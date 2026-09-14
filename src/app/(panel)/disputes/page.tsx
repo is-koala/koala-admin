@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { RecentOperationsList } from "@/components/escrow/recent-operations-list";
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  FilterId,
+  FilterNotice,
   ListSearchForm,
   QueuePager,
   SEARCH_PARAM,
@@ -23,18 +25,13 @@ import {
   TableRow,
 } from "@/components/ui";
 import { formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
-import {
-  assignmentHref,
-  disputeHref,
-  disputesHref,
-  isUuid,
-  userHrefOrNull,
-} from "@/lib/panel-href";
+import { assignmentHref, disputeHref, disputesHref, userHrefOrNull } from "@/lib/panel-href";
 import { DISPUTE_PAGING, getDisputes, type Dispute } from "@/server/api/disputes";
 import {
   pageWindow,
   readPaging,
   readParam,
+  readUuidParam,
   type PageWindow,
   type SearchParams,
 } from "@/server/api/paging";
@@ -98,7 +95,7 @@ export default async function DisputesPage({ searchParams }: PageProps) {
           filter={readFilter(params.durum)}
           paging={paging}
           query={readSearchQuery(readParam(params, SEARCH_PARAM))}
-          userId={readUserFilter(params)}
+          userId={readUuidParam(params, "kullanici")}
         />
       </RequirePermission>
     </div>
@@ -237,24 +234,17 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
 
   const userNotice =
     userId === null ? null : (
-      <p
-        className="rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 text-sm text-ink"
-        data-testid="dispute-user-filter"
+      <FilterNotice
+        testId="dispute-user-filter"
+        clearHref={disputesHref({
+          ...(filter !== "ALL" ? { durum: filter } : {}),
+          boyut: String(paging.size),
+          ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+        })}
       >
-        Bu görünüm <span className="font-mono text-xs">{userId}</span> kullanıcısının işçi, ilan
-        sahibi ya da açan taraf olduğu uyuşmazlıkları süzüyor.{" "}
-        <Link
-          href={disputesHref({
-            ...(filter !== "ALL" ? { durum: filter } : {}),
-            boyut: String(paging.size),
-            ...(query === null ? {} : { [SEARCH_PARAM]: query }),
-          })}
-          className="text-brand hover:underline"
-        >
-          Süzgeci kaldır
-        </Link>
-        .
-      </p>
+        Bu görünüm <FilterId value={userId} /> kullanıcısının işçi, ilan sahibi ya da açan taraf
+        olduğu uyuşmazlıkları süzüyor.
+      </FilterNotice>
     );
 
   const searchForm = (error: string | null = null) => (
@@ -473,12 +463,6 @@ function readSingle(value: string | string[] | undefined): string | null {
 function readFilter(value: string | string[] | undefined): StatusFilter {
   const candidate = readSingle(value);
   return STATUS_FILTERS.find((entry) => entry === candidate) ?? "ALL";
-}
-
-/** UUID olmayan kullanıcı süzgeci backend'e gitmez; kuyruk süzgeçsiz açılır. */
-function readUserFilter(params: SearchParams): string | null {
-  const raw = readParam(params, "kullanici")?.trim() ?? "";
-  return raw.length > 0 && isUuid(raw) ? raw : null;
 }
 
 /** Durum sekmesi aramayı ve kullanıcı süzgecini taşır: ikisi de başka durumda anlamlıdır. */

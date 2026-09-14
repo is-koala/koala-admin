@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  FilterId,
+  FilterNotice,
   ListSearchForm,
   QueueLoadFailure,
   QueuePager,
@@ -38,7 +40,13 @@ import {
   getEscrowSummary,
   type EscrowSummary,
 } from "@/server/api/escrow";
-import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
+import {
+  pageWindow,
+  readPaging,
+  readParam,
+  readUuidParam,
+  type SearchParams,
+} from "@/server/api/paging";
 import {
   SEARCH_QUERY_TOO_LONG_MESSAGE,
   isSearchQueryTooLong,
@@ -131,34 +139,27 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
 
   const partyNotice =
     workerId === null && employerId === null ? null : (
-      <p
-        className="rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 text-sm text-ink"
-        data-testid="assignment-party-filter"
+      <FilterNotice
+        testId="assignment-party-filter"
+        clearHref={assignmentsHref({
+          boyut: String(paging.size),
+          ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+        })}
       >
         Bu görünüm{" "}
         {workerId !== null ? (
           <>
-            işçisi <span className="font-mono text-xs">{workerId}</span>
+            işçisi <FilterId value={workerId} />
           </>
         ) : null}
         {workerId !== null && employerId !== null ? " ve " : null}
         {employerId !== null ? (
           <>
-            işvereni <span className="font-mono text-xs">{employerId}</span>
+            işvereni <FilterId value={employerId} />
           </>
         ) : null}{" "}
-        olan atamaları süzüyor.{" "}
-        <Link
-          href={assignmentsHref({
-            boyut: String(paging.size),
-            ...(query === null ? {} : { [SEARCH_PARAM]: query }),
-          })}
-          className="text-brand hover:underline"
-        >
-          Süzgeci kaldır
-        </Link>
-        .
-      </p>
+        olan atamaları süzüyor.
+      </FilterNotice>
     );
 
   const searchForm = (error: string | null = null) => (
@@ -318,12 +319,6 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
       {selected === null ? null : <AssignmentSummary summary={selected} />}
     </div>
   );
-}
-
-/** Süzgeç kimliği UUID değilse backend'e gitmez: yanlış biçim sessizce düşer, kuyruk süzgeçsiz açılır. */
-function readUuidParam(params: SearchParams, key: string): string | null {
-  const raw = readParam(params, key)?.trim() ?? "";
-  return raw.length > 0 && UUID.test(raw) ? raw : null;
 }
 
 function LookupForm({

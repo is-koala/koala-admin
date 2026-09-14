@@ -136,9 +136,9 @@ describe("helpers", () => {
   });
 });
 
-/** koala-admin#100 / koala-backend#283: `companyId` ve `employerId` süzgeçleri. */
-describe("the company and employer filters", () => {
-  it("sends companyId and employerId next to status, and omits them when null", async () => {
+/** koala-admin#100 / koala-backend#283: `companyId` süzgeci (backend `employerId` de alır; panelde tüketen yok). */
+describe("the company filter", () => {
+  it("sends companyId next to status and omits it when null", async () => {
     const seen: { url: URL | null } = { url: null };
     server.use(
       http.get(apiUrl(JOBS_PATH), ({ request }) => {
@@ -151,10 +151,8 @@ describe("the company and employer filters", () => {
       status: "OPEN",
       paging: readPaging({}, JOB_PAGING),
       companyId: "c1000000-0000-4000-8000-000000000001",
-      employerId: "e1000000-0000-4000-8000-000000000001",
     });
     expect(seen.url?.searchParams.get("companyId")).toBe("c1000000-0000-4000-8000-000000000001");
-    expect(seen.url?.searchParams.get("employerId")).toBe("e1000000-0000-4000-8000-000000000001");
     expect(seen.url?.searchParams.get("status")).toBe("OPEN");
 
     await getAdminJobs("TOKEN", {
@@ -163,6 +161,5 @@ describe("the company and employer filters", () => {
       companyId: null,
     });
     expect(seen.url?.searchParams.has("companyId")).toBe(false);
-    expect(seen.url?.searchParams.has("employerId")).toBe(false);
   });
 });

@@ -182,7 +182,8 @@ export function reportTargets(report: Report): ReportTarget[] {
 }
 
 export interface ReportQueueQuery {
-  readonly status: ReportStatus;
+  /** `null` her durum demektir — backend'e `status` gitmez (`ReportDao.search`: `:status is null`). */
+  readonly status: ReportStatus | null;
   readonly reportedUserId?: string | null;
   /** koala-backend#283: şikayet eden; `reportedUserId` ile birlikte gönderilebilir. */
   readonly reporterId?: string | null;
@@ -204,7 +205,7 @@ export function getReports(accessToken: string, query: ReportQueueQuery): Promis
     path: REPORTS_PATH,
     schema: pageDtoSchema(reportSchema),
     query: {
-      status: query.status,
+      status: query.status ?? undefined,
       reportedUserId: query.reportedUserId?.trim() || undefined,
       reporterId: query.reporterId?.trim() || undefined,
       query: searchQueryParam(query.query),

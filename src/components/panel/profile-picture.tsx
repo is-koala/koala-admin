@@ -14,11 +14,14 @@ export function ProfilePicture({
   url,
   name,
   size = "md",
+  alt,
 }: {
   url: string | null;
   /** Alt metin için; görsel kime ait. */
   name: string;
   size?: "sm" | "md";
+  /** Şirket logosu gibi "profil fotoğrafı" olmayan bir görsel için alt metin. */
+  alt?: string;
 }) {
   const src = httpUrlOrNull(url);
   if (src === null) return <>{EMPTY_VALUE}</>;
@@ -27,7 +30,7 @@ export function ProfilePicture({
     // eslint-disable-next-line @next/next/no-img-element -- backend'in verdiği depo adresi; şikayet sayfasıyla aynı kalıp.
     <img
       src={src}
-      alt={`${name} profil fotoğrafı`}
+      alt={alt ?? `${name} profil fotoğrafı`}
       className={`${dimension} inline-block rounded-full border border-border-subtle object-cover align-middle`}
     />
   );

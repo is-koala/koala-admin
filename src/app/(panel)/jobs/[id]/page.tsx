@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui";
 import { httpUrlOrNull } from "@/lib/external-url";
 import {
   EMPTY_VALUE,
+  formatBoolean,
   formatCurrency,
   formatDateTime,
   formatInteger,
@@ -280,8 +281,14 @@ async function JobObject({ id }: { id: string }) {
             }
           />
           <Row label="Kıyafet" value={job.dressCode ?? EMPTY_VALUE} />
-          <Row label="Sigorta" value={yesNo(job.insuranceRequired)} />
-          <Row label="Deneyim" value={yesNo(job.experienceRequired)} />
+          <Row
+            label="Sigorta"
+            value={formatBoolean(job.insuranceRequired, "Gerekli", "Gerekmiyor")}
+          />
+          <Row
+            label="Deneyim"
+            value={formatBoolean(job.experienceRequired, "Gerekli", "Gerekmiyor")}
+          />
         </dl>
       </section>
 
@@ -375,11 +382,6 @@ function joinOrEmpty(parts: readonly (string | null)[], separator: string): stri
 
 function countOrEmpty(value: number | null): string {
   return value === null ? EMPTY_VALUE : formatInteger(value);
-}
-
-function yesNo(value: boolean | null): string {
-  if (value === null) return EMPTY_VALUE;
-  return value ? "Gerekli" : "Gerekmiyor";
 }
 
 function Row({ label, value }: { label: string; value: ReactNode }) {

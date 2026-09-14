@@ -154,49 +154,56 @@ export function getEscrowSummary(
   });
 }
 
-/**
- * `AdminAssignmentDetailDto` (koala-backend#265) — `AdminAssignmentDto`'nun
- * üst kümesi. Bağlı kayıtlar `LinkedRecordDto`; ödeme denemelerinin gövdesi
- * ayrı uçtan (`getAssignmentPayments`, `payments.ts`) okunur.
- *
- * Eski `escrowSummarySchema` aynı uca karşı çalışmaya devam eder: zod
- * bilinmeyen alanları düşürür, uyuşmazlık sayfası ve emanet kapısı tek bir
- * alan bile değiştirmeden aynı özeti alır.
+/*
+ * koala-backend#283 zaman çizelgesi sözlükleri. Hepsi yalnız gösterim:
+ * şema serbest dize okur, etiket bilinmeyen kodu olduğu gibi yazar. Bu
+ * dosyada `z.enum` yalnız para kararı taşıyan `status` / `paymentStatus`ta —
+ * bir başvuru durumu yüzünden atama sayfası düşmez.
  */
+
 /** `entities/ApplicationStatus.java`. */
 export const APPLICATION_STATUSES = ["APPLIED", "ACCEPTED", "REJECTED", "WITHDRAWN"] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
-export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
+const APPLICATION_STATUS_LABELS: Readonly<Record<string, string>> = {
   APPLIED: "Başvurdu",
   ACCEPTED: "Kabul edildi",
   REJECTED: "Reddedildi",
   WITHDRAWN: "Geri çekildi",
-};
+} satisfies Record<ApplicationStatus, string>;
+
+export function applicationStatusLabel(status: string): string {
+  return APPLICATION_STATUS_LABELS[status] ?? status;
+}
 
 /** `entities/CancellationParty.java`. */
 export const CANCELLATION_PARTIES = ["WORKER", "EMPLOYER", "ADMIN"] as const;
 export type CancellationParty = (typeof CANCELLATION_PARTIES)[number];
 
-export const CANCELLATION_PARTY_LABELS: Record<CancellationParty, string> = {
+const CANCELLATION_PARTY_LABELS: Readonly<Record<string, string>> = {
   WORKER: "İşçi",
   EMPLOYER: "İşveren",
   ADMIN: "Personel",
-};
+} satisfies Record<CancellationParty, string>;
+
+export function cancellationPartyLabel(party: string): string {
+  return CANCELLATION_PARTY_LABELS[party] ?? party;
+}
 
 /** `entities/JobEmployerType.java`. */
 export const ASSIGNMENT_EMPLOYER_TYPES = ["COMPANY", "INDIVIDUAL"] as const;
 export type AssignmentEmployerType = (typeof ASSIGNMENT_EMPLOYER_TYPES)[number];
 
-export const ASSIGNMENT_EMPLOYER_TYPE_LABELS: Record<AssignmentEmployerType, string> = {
+const ASSIGNMENT_EMPLOYER_TYPE_LABELS: Readonly<Record<string, string>> = {
   COMPANY: "Şirket",
   INDIVIDUAL: "Bireysel",
-};
+} satisfies Record<AssignmentEmployerType, string>;
 
-/**
- * `entities/TimesheetPlausibilityFlag.java`. Serbest metin okunur: backend
- * yeni bir bayrak eklerse mesai satırı düşmesin, kod olduğu gibi yazılsın.
- */
+export function assignmentEmployerTypeLabel(type: string): string {
+  return ASSIGNMENT_EMPLOYER_TYPE_LABELS[type] ?? type;
+}
+
+/** `entities/TimesheetPlausibilityFlag.java`. */
 export const TIMESHEET_PLAUSIBILITY_FLAG_LABELS: Readonly<Record<string, string>> = {
   DEVICE_TIME_IMPLAUSIBLE: "Cihaz saati şüpheli",
   OUTSIDE_JOB_WINDOW: "İş penceresi dışında",
@@ -222,10 +229,7 @@ const nullableDecimal = z
 /** `AdminApplicationDto` — atamayı doğuran başvuru. */
 export const adminApplicationSchema = z.object({
   id: z.string(),
-  status: z
-    .enum(APPLICATION_STATUSES)
-    .nullish()
-    .transform((value) => value ?? null),
+  status: nullableString,
   applicationDateTime: nullableString,
   answeredDateTime: nullableString,
   rejectionReason: nullableString,
@@ -265,10 +269,7 @@ export type WorkSession = z.infer<typeof workSessionSchema>;
 /** `AdminCancellationDto`. Para alanları backend metni; `refundId` iade kaydının kimliğidir. */
 export const adminCancellationSchema = z.object({
   id: z.string(),
-  cancelledByParty: z
-    .enum(CANCELLATION_PARTIES)
-    .nullish()
-    .transform((value) => value ?? null),
+  cancelledByParty: nullableString,
   cancelledBy: safeUserSchema.nullish().transform((value) => value ?? null),
   reason: nullableString,
   noticeMinutes: nullableInt,
@@ -298,19 +299,24 @@ export const adminReviewSchema = z.object({
 export type AdminReview = z.infer<typeof adminReviewSchema>;
 
 /**
- * koala-backend#283 zaman çizelgesi alanları. Hepsi isteğe bağlı: #265
- * sunucusu bunları göndermez ve sayfa o sunucuda da açılmalı — çizelge
- * yalnız elde olan anlardan kurulur, eksik kart çizilmez.
+ * `AdminAssignmentDetailDto` (koala-backend#265) — `AdminAssignmentDto`'nun
+ * üst kümesi. Bağlı kayıtlar `LinkedRecordDto`; ödeme denemelerinin gövdesi
+ * ayrı uçtan (`getAssignmentPayments`, `payments.ts`) okunur.
+ *
+ * Eski `escrowSummarySchema` aynı uca karşı çalışmaya devam eder: zod
+ * bilinmeyen alanları düşürür, uyuşmazlık sayfası ve emanet kapısı tek bir
+ * alan bile değiştirmeden aynı özeti alır.
+ *
+ * koala-backend#283 zaman çizelgesi alanları isteğe bağlı: #265 sunucusu
+ * bunları göndermez ve sayfa o sunucuda da açılmalı — çizelge yalnız elde
+ * olan anlardan kurulur, eksik kart çizilmez.
  */
 export const assignmentDetailSchema = escrowSummarySchema.extend({
   payments: z.array(linkedRecordSchema).default([]),
   payout: linkedRecordSchema.nullish().transform((value) => value ?? null),
   disputes: z.array(linkedRecordSchema).default([]),
   reports: z.array(linkedRecordSchema).default([]),
-  employerType: z
-    .enum(ASSIGNMENT_EMPLOYER_TYPES)
-    .nullish()
-    .transform((value) => value ?? null),
+  employerType: nullableString,
   expectedCompletionDateTime: nullableString,
   notes: nullableString,
   application: adminApplicationSchema.nullish().transform((value) => value ?? null),

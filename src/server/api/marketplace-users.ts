@@ -10,6 +10,8 @@ import { pageDtoSchema } from "./schemas";
 import type { PageDto } from "./types";
 import { safeUserSchema, type SafeUser } from "./users";
 
+export { companyContactRoleLabel } from "./shared/company-contact-role";
+
 /**
  * Pazaryeri kullanıcı dizini — `webAPI/AdminController.users`.
  *
@@ -50,33 +52,29 @@ const nullableBoolean = z
   .nullish()
   .transform((value) => value ?? null);
 
-/** `CompanyContactRole.java`. */
-export const COMPANY_CONTACT_ROLES = ["ADMIN", "STAFF"] as const;
-export type CompanyContactRole = (typeof COMPANY_CONTACT_ROLES)[number];
-
-export const COMPANY_CONTACT_ROLE_LABELS: Record<CompanyContactRole, string> = {
-  ADMIN: "Yetkili",
-  STAFF: "Personel",
-};
-
-/** `IdentityReviewStatus.java`. */
+/**
+ * `IdentityReviewStatus.java`. Yalnız gösterim: şema serbest dize okur,
+ * etiket bilinmeyen kodu olduğu gibi yazar — bir kullanıcı sayfası yeni bir
+ * inceleme durumu yüzünden düşmez.
+ */
 export const IDENTITY_REVIEW_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
 export type IdentityReviewStatus = (typeof IDENTITY_REVIEW_STATUSES)[number];
 
-export const IDENTITY_REVIEW_STATUS_LABELS: Record<IdentityReviewStatus, string> = {
+const IDENTITY_REVIEW_STATUS_LABELS: Readonly<Record<string, string>> = {
   PENDING: "Bekliyor",
   APPROVED: "Onaylı",
   REJECTED: "Reddedildi",
-};
+} satisfies Record<IdentityReviewStatus, string>;
 
-/** `AdminUserCompanyDto` — üyelik: şirket ve o şirketteki rol. */
+export function identityReviewStatusLabel(status: string): string {
+  return IDENTITY_REVIEW_STATUS_LABELS[status] ?? status;
+}
+
+/** `AdminUserCompanyDto` — üyelik: şirket ve o şirketteki rol (`CompanyContactRole`, serbest dize). */
 export const adminUserCompanySchema = z.object({
   id: z.string(),
   name: nullableString,
-  role: z
-    .enum(COMPANY_CONTACT_ROLES)
-    .nullish()
-    .transform((value) => value ?? null),
+  role: nullableString,
 });
 
 export type AdminUserCompany = z.infer<typeof adminUserCompanySchema>;
@@ -133,10 +131,7 @@ export const adminUserDetailSchema = safeUserSchema.extend({
     .nullish()
     .transform((value) => value ?? null),
   counts: adminUserCountsSchema.nullish().transform((value) => value ?? null),
-  identityReviewStatus: z
-    .enum(IDENTITY_REVIEW_STATUSES)
-    .nullish()
-    .transform((value) => value ?? null),
+  identityReviewStatus: nullableString,
   pendingDeletionRequestId: nullableString,
 });
 

@@ -3,6 +3,7 @@ import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  FilterNotice,
   ListSearchForm,
   QueueFilters,
   QueueLoadFailure,
@@ -23,12 +24,13 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
-import { reportHref, userHref, userHrefOrNull } from "@/lib/panel-href";
+import { ALL_STATUSES_PARAM, reportHref, userHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   pageWindow,
   readEnumParam,
   readPaging,
   readParam,
+  readUuidParam,
   sortParam,
   type SearchParams,
 } from "@/server/api/paging";
@@ -56,8 +58,6 @@ import { REPORT_STATUS_TONES } from "./report-decision";
 
 export const metadata: Metadata = { title: "Şikayetler" };
 
-const REPORT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * Şikayet kuyruğu — koala-backend#199.
  *
@@ -66,7 +66,9 @@ const REPORT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
  * hiç çıkmaz.
  *
  * `?kullanici=` şikayet edilene (`reportedUserId`), `?sikayetci=` şikayet
- * edene (`reporterId`, koala-backend#283) süzer; ikisi birlikte de gider.
+ * edene (`reporterId`, koala-backend#283) süzer; ikisi birlikte de gider ve
+ * aynı kişiyi göstermek zorunda değildir. `?durum=hepsi` backend'e `status`
+ * göndermez (her durum); kullanıcı sayfasındaki sayaçlar buraya gelir.
  */
 export default async function ReportsPage({
   searchParams,
@@ -100,11 +102,6 @@ const SORT_OPTIONS = [
   { value: "status,asc", label: "Duruma göre (A-Z)" },
 ];
 
-function readUuidParam(params: SearchParams, key: string): string | null {
-  const raw = readParam(params, key);
-  return raw !== null && REPORT_ID.test(raw) ? raw : null;
-}
-
 function reportsHref(
   state: Record<string, string>,
   extras: Record<string, string | null> = {},
@@ -118,7 +115,10 @@ function reportsHref(
 }
 
 async function ReportQueue({ params }: { params: SearchParams }) {
-  const status = readEnumParam<ReportStatus>(params, "durum", REPORT_STATUSES, "OPEN");
+  const status: ReportStatus | null =
+    readParam(params, "durum") === ALL_STATUSES_PARAM
+      ? null
+      : readEnumParam<ReportStatus>(params, "durum", REPORT_STATUSES, "OPEN");
   const paging = readPaging(params, REPORT_PAGING);
   const reportedUserId = readUuidParam(params, "kullanici");
   const reporterId = readUuidParam(params, "sikayetci");
@@ -126,7 +126,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
   const search = activeSearch(query);
 
   const viewState: Record<string, string> = {
-    durum: status,
+    durum: status ?? ALL_STATUSES_PARAM,
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
   };
@@ -141,11 +141,11 @@ async function ReportQueue({ params }: { params: SearchParams }) {
         {
           name: "durum",
           label: "Durum",
-          value: status,
-          options: REPORT_STATUSES.map((value) => ({
-            value,
-            label: reportStatusLabel(value),
-          })),
+          value: status ?? ALL_STATUSES_PARAM,
+          options: [
+            { value: ALL_STATUSES_PARAM, label: "Tümü" },
+            ...REPORT_STATUSES.map((value) => ({ value, label: reportStatusLabel(value) })),
+          ],
         },
         {
           name: "sirala",
@@ -162,24 +162,22 @@ async function ReportQueue({ params }: { params: SearchParams }) {
       }}
       notice={
         userFiltered ? (
-          <>
+          <FilterNotice
+            inline
+            testId="report-user-filter"
+            clearHref={reportsHref({
+              durum: status ?? ALL_STATUSES_PARAM,
+              sirala: sortParam(paging.sort),
+              boyut: String(paging.size),
+              ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
+            })}
+          >
             {reportedUserId !== null && reporterId !== null
-              ? "Bu görünüm bir kullanıcının hem hakkındaki hem açtığı şikayetleri süzüyor."
+              ? "Bu görünüm şikayet edilene ve şikayet edene göre süzüyor; ikisi ayrı kişiler olabilir."
               : reporterId !== null
                 ? "Bu görünüm bir kullanıcının açtığı şikayetleri süzüyor."
-                : "Bu görünüm bir kullanıcı hakkındaki şikayetleri süzüyor."}{" "}
-            <Link
-              href={reportsHref({
-                durum: status,
-                sirala: sortParam(paging.sort),
-                boyut: String(paging.size),
-                ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
-              })}
-            >
-              Süzgeci kaldır
-            </Link>
-            .
-          </>
+                : "Bu görünüm bir kullanıcı hakkındaki şikayetleri süzüyor."}
+          </FilterNotice>
         ) : (
           "Durum ve sıralama kuyruğu süzer. Gelen sayfa panelde yeniden süzülmez."
         )
@@ -240,14 +238,18 @@ async function ReportQueue({ params }: { params: SearchParams }) {
       {page.content.length === 0 ? (
         <EmptyState
           title={
-            search === null
-              ? `"${reportStatusLabel(status)}" durumunda şikayet yok.`
-              : searchEmptyTitle(search)
+            search !== null
+              ? searchEmptyTitle(search)
+              : status === null
+                ? "Şikayet yok."
+                : `"${reportStatusLabel(status)}" durumunda şikayet yok.`
           }
           description={
             search === null
               ? "Bu, bu durumdaki kuyruğun boş olduğu anlamına gelir — başka durumdaki şikayetler için yukarıdaki süzgeci değiştirin."
-              : `Arama "${reportStatusLabel(status)}" durumuyla kesişir; başka bir durum seçebilir ya da aramayı temizleyebilirsiniz.`
+              : status === null
+                ? "Arama her durumda çalıştı; metni değiştirebilir ya da aramayı temizleyebilirsiniz."
+                : `Arama "${reportStatusLabel(status)}" durumuyla kesişir; başka bir durum seçebilir ya da aramayı temizleyebilirsiniz.`
           }
         />
       ) : (

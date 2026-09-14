@@ -118,8 +118,23 @@ export function reportsForUserHref(userId: string): Route {
  * okur ve backend'in `reporterId` / `workerId` / `employerId` / `companyId`
  * / `userId` parametresine çevirir; kimlik UUID değilse süzgeç düşer.
  */
+export function reportsHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/reports", state);
+}
+
+/**
+ * Kullanıcı sayfasındaki sayaçlar için: backend sayaçları her durumu sayar,
+ * bağlantı da her durumu listelesin (`durum=hepsi`); `reportsForUserHref`
+ * moderasyon bağlamı için açık kuyruğa gitmeye devam eder.
+ */
+export const ALL_STATUSES_PARAM = "hepsi";
+
+export function reportsAboutUserHref(userId: string): Route {
+  return reportsHref({ kullanici: userId, durum: ALL_STATUSES_PARAM });
+}
+
 export function reportsByReporterHref(userId: string): Route {
-  return asRoute(`/reports?sikayetci=${encodeURIComponent(userId)}`);
+  return reportsHref({ sikayetci: userId, durum: ALL_STATUSES_PARAM });
 }
 
 export function assignmentsHref(state: Readonly<Record<string, string>> = {}): Route {
@@ -138,8 +153,9 @@ export function payoutsHref(state: Readonly<Record<string, string>> = {}): Route
   return withQuery("/payout-reconciliation", state);
 }
 
+/** Kuyruk varsayılanı PROCESSING; sayaç her durumu saydığı için `durum=hepsi`. */
 export function payoutsForWorkerHref(userId: string): Route {
-  return payoutsHref({ isci: userId });
+  return payoutsHref({ isci: userId, durum: ALL_STATUSES_PARAM });
 }
 
 export function disputesHref(state: Readonly<Record<string, string>> = {}): Route {

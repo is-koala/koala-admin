@@ -69,15 +69,23 @@ export const SETTLEMENT_TASK_STATUS_LABELS: Record<SettlementTaskStatus, string>
   FAILED: "Başarısız",
 };
 
-/** `entities/PayoutReleaseOrigin.java` — hakedişi kim serbest bıraktı (koala-backend#283). */
+/**
+ * `entities/PayoutReleaseOrigin.java` — hakedişi kim serbest bıraktı
+ * (koala-backend#283). Yalnız gösterim: serbest dize, bilinmeyen kod olduğu
+ * gibi yazılır; `z.enum` bu dosyada yalnız `status`ta.
+ */
 export const PAYOUT_RELEASE_ORIGINS = ["AUTO_COMPLETION", "DISPUTE", "STAFF"] as const;
 export type PayoutReleaseOrigin = (typeof PAYOUT_RELEASE_ORIGINS)[number];
 
-export const PAYOUT_RELEASE_ORIGIN_LABELS: Record<PayoutReleaseOrigin, string> = {
+const PAYOUT_RELEASE_ORIGIN_LABELS: Readonly<Record<string, string>> = {
   AUTO_COMPLETION: "Otomatik tamamlanma",
   DISPUTE: "Uyuşmazlık kararı",
   STAFF: "Personel",
-};
+} satisfies Record<PayoutReleaseOrigin, string>;
+
+export function payoutReleaseOriginLabel(origin: string): string {
+  return PAYOUT_RELEASE_ORIGIN_LABELS[origin] ?? origin;
+}
 
 export const PAYOUT_STATUS_LABELS: Record<PayoutStatus, string> = {
   PENDING: "Bekliyor",
@@ -140,10 +148,7 @@ export const payoutDetailSchema = z.object({
    * koala-backend#283: sütun; geçmiş satırlarda yalnız uyuşmazlıkla açılanlar
    * dolduruldu, kalanı `null` — panel "—" yazar, uydurmaz.
    */
-  releaseOrigin: z
-    .enum(PAYOUT_RELEASE_ORIGINS)
-    .nullish()
-    .transform((value) => value ?? null),
+  releaseOrigin: nullableString,
   providerReference: nullableString,
   settlementReference: nullableString,
   failureReason: nullableString,
@@ -185,7 +190,12 @@ export interface PayoutSettlementEvidence {
 
 export interface PayoutQueueQuery {
   readonly paging: Paging;
-  readonly status?: PayoutStatus | null;
+  /**
+   * Tek durum ya da liste; boş/`null` ise backend PROCESSING'e düşer.
+   * Liste virgülle tek parametre gider (`status=A,B`): Spring `List<Enum>`
+   * bağlamasında ikisi eşdeğer ve `koalaApi` dizi değer taşımaz.
+   */
+  readonly status?: PayoutStatus | readonly PayoutStatus[] | null;
   /** koala-backend#263: hakediş id'si, atama id'si, alıcının ad-soyadı ve e-postası. */
   readonly query?: string | null;
   /** koala-backend#283: yalnız bu işçinin hakedişleri; durum ve arama ile kesişir. */
@@ -197,7 +207,7 @@ export function getPayouts(accessToken: string, query: PayoutQueueQuery): Promis
     path: PAYOUTS_PATH,
     schema: pageDtoSchema(payoutSchema),
     query: {
-      ...(query.status ? { status: query.status } : {}),
+      status: payoutStatusParam(query.status),
       query: searchQueryParam(query.query),
       workerId: query.workerId ?? undefined,
       ...pagingQuery(query.paging),
@@ -205,6 +215,14 @@ export function getPayouts(accessToken: string, query: PayoutQueueQuery): Promis
     accessToken,
     cache: "no-store",
   });
+}
+
+function payoutStatusParam(
+  status: PayoutStatus | readonly PayoutStatus[] | null | undefined,
+): string | undefined {
+  if (status === null || status === undefined) return undefined;
+  if (typeof status === "string") return status;
+  return status.length === 0 ? undefined : status.join(",");
 }
 
 export async function reconcilePayout(

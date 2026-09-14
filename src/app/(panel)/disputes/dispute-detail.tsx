@@ -16,7 +16,7 @@ import {
 import { assignmentHref, userHref } from "@/lib/panel-href";
 import {
   DISPUTE_RESOLUTION_SPECS,
-  DISPUTE_SIDE_LABELS,
+  disputeSideLabel,
   type Dispute,
   type DisputeEvidence,
   type DisputeStatus,
@@ -153,7 +153,7 @@ export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailP
                   </Link>
                 )}
                 {dispute.openedBySide === null ? null : (
-                  <Badge>{DISPUTE_SIDE_LABELS[dispute.openedBySide]}</Badge>
+                  <Badge>{disputeSideLabel(dispute.openedBySide)}</Badge>
                 )}
               </span>
             }

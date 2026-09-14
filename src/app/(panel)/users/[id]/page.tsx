@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/panel/page-header";
 import { ProfilePicture } from "@/components/panel/profile-picture";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
-import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
+import { EMPTY_VALUE, formatBoolean, formatDateTime, formatInteger } from "@/lib/format";
 import {
   accountDeletionHref,
   assignmentsForEmployerHref,
@@ -18,16 +18,17 @@ import {
   isUuid,
   payoutsForWorkerHref,
   reportHref,
+  reportsAboutUserHref,
   reportsByReporterHref,
   reportsForUserHref,
 } from "@/lib/panel-href";
 import { getReports, REPORT_PAGING, reportReasonLabel, type Report } from "@/server/api/reports";
 import {
-  COMPANY_CONTACT_ROLE_LABELS,
-  IDENTITY_REVIEW_STATUS_LABELS,
   badgeFamilyLabel,
   badgeTierLabel,
+  companyContactRoleLabel,
   getMarketplaceUser,
+  identityReviewStatusLabel,
   type AdminUserBadge,
   type AdminUserCompany,
   type AdminUserCounts,
@@ -136,7 +137,7 @@ async function UserObject({ id }: { id: string }) {
           <dt className="text-sm text-ink-muted">Kayıt</dt>
           <dd className="text-sm">{formatDateTime(user.createdAt)}</dd>
           <dt className="text-sm text-ink-muted">İşveren</dt>
-          <dd className="text-sm">{yesNo(user.isEmployer)}</dd>
+          <dd className="text-sm">{formatBoolean(user.isEmployer)}</dd>
         </dl>
 
         <div className="flex flex-col gap-4">
@@ -233,15 +234,15 @@ function VerificationCard({
         Doğrulama
       </h2>
       <dl className="flex flex-col gap-2 text-sm">
-        <Row label="E-posta doğrulandı" value={yesNo(user.emailVerified)} />
-        <Row label="Telefon doğrulandı" value={yesNo(user.phoneVerified)} />
-        <Row label="Kimlik doğrulandı" value={yesNo(user.identityVerified)} />
+        <Row label="E-posta doğrulandı" value={formatBoolean(user.emailVerified)} />
+        <Row label="Telefon doğrulandı" value={formatBoolean(user.phoneVerified)} />
+        <Row label="Kimlik doğrulandı" value={formatBoolean(user.identityVerified)} />
         <Row
           label="Kimlik incelemesi"
           value={
             user.identityReviewStatus === null
               ? EMPTY_VALUE
-              : IDENTITY_REVIEW_STATUS_LABELS[user.identityReviewStatus]
+              : identityReviewStatusLabel(user.identityReviewStatus)
           }
         />
         <Row
@@ -279,6 +280,12 @@ interface CountEntry {
  * Sekiz sayaç, süzgeçli listelere bağlantıyla. Ödemeler için ayrı bir liste
  * ucu yok; `/admin/payments` açılmadı, sayaç işveren olarak atamalara iner
  * (koala-backend PR 286). Başvuruların da listesi yok, yalnız sayı.
+ *
+ * Backend sayaçları her durumu sayar; hakediş ve şikayet bağlantıları bu
+ * yüzden `durum=hepsi` taşır (kuyruk varsayılanları PROCESSING ve OPEN
+ * olurdu, sayı ile liste tutmazdı). Uyuşmazlık ucu tek `status` alır ve
+ * verilmezse yalnız bekleyenleri döner — orada "hepsi" yok, bağlantı
+ * bekleyen kuyruğa gider; çözülmüşler durum sekmesinden.
  */
 function countEntries(userId: string): readonly CountEntry[] {
   return [
@@ -316,7 +323,7 @@ function countEntries(userId: string): readonly CountEntry[] {
     {
       key: "reportsReceived",
       label: "Hakkındaki şikayetler",
-      href: reportsForUserHref(userId),
+      href: reportsAboutUserHref(userId),
       permission: "content.moderate",
     },
     {
@@ -405,9 +412,7 @@ function Memberships({
               ) : (
                 <span>{company.name ?? company.id}</span>
               )}
-              <span className="text-ink-muted">
-                {company.role === null ? EMPTY_VALUE : COMPANY_CONTACT_ROLE_LABELS[company.role]}
-              </span>
+              <span className="text-ink-muted">{companyContactRoleLabel(company.role)}</span>
             </li>
           ))}
         </ul>
@@ -463,11 +468,6 @@ function VerifiedBadge({ verified }: { verified: boolean | null }) {
   ) : (
     <Badge tone="warning">Doğrulanmadı</Badge>
   );
-}
-
-function yesNo(value: boolean | null): string {
-  if (value === null) return EMPTY_VALUE;
-  return value ? "Evet" : "Hayır";
 }
 
 function Row({ label, value }: { label: string; value: ReactNode }) {

@@ -33,10 +33,10 @@ import {
 } from "@/lib/panel-href";
 import {
   PAYMENT_ATTEMPT_STATUS_LABELS,
-  REFUND_ORIGIN_LABELS,
   REFUND_STATUS_LABELS,
   getPayment,
   paymentCurrency,
+  refundOriginLabel,
   type AdminPayment,
   type AdminRefund,
   type RefundStatus,
@@ -363,7 +363,7 @@ function RefundOrigin({
   canOpenDispute: boolean;
 }) {
   if (refund.origin === null) return <>{EMPTY_VALUE}</>;
-  const label = REFUND_ORIGIN_LABELS[refund.origin];
+  const label = refundOriginLabel(refund.origin);
   if (refund.originId === null) return <>{label}</>;
   const href = refund.origin === "DISPUTE" && canOpenDispute ? disputeHref(refund.originId) : null;
   return (

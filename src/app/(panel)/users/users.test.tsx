@@ -626,6 +626,7 @@ describe("the user detail's contact, verification, memberships, badges and histo
     }
     expect(alone).not.toContain(`href="/assignments?isci=`);
     expect(alone).not.toContain(`href="/payout-reconciliation?isci=`);
+    expect(alone).not.toContain(`href="/reports?kullanici=${row().id}&amp;durum=hepsi"`);
     expect(alone).not.toContain(`href="/disputes?kullanici=`);
     expect(alone).not.toContain(`href="/reports?sikayetci=`);
 
@@ -641,10 +642,11 @@ describe("the user detail's contact, verification, memberships, badges and histo
     const id = row().id;
     expect(linked).toContain(`href="/assignments?isci=${id}"`);
     expect(linked).toContain(`href="/assignments?isveren=${id}"`);
-    expect(linked).toContain(`href="/payout-reconciliation?isci=${id}"`);
+    // Sayaç her durumu sayar; hakediş ve şikayet listeleri de her durumu açar.
+    expect(linked).toContain(`href="/payout-reconciliation?isci=${id}&amp;durum=hepsi"`);
     expect(linked).toContain(`href="/disputes?kullanici=${id}"`);
-    expect(linked).toContain(`href="/reports?kullanici=${id}"`);
-    expect(linked).toContain(`href="/reports?sikayetci=${id}"`);
+    expect(linked).toContain(`href="/reports?kullanici=${id}&amp;durum=hepsi"`);
+    expect(linked).toContain(`href="/reports?sikayetci=${id}&amp;durum=hepsi"`);
     // Başvuruların listesi yok: sayı bağlantısız kalır.
     expect(linked).toMatch(/Başvurular<\/dt><dd[^>]*>3</);
   });

@@ -758,7 +758,22 @@ describe("the reporter filter, the assignment link and the deciding staff member
     const bothHtml = await render({ sikayetci: REPORTER.id, kullanici: REPORTED.id });
     expect(both.url?.searchParams.get("reporterId")).toBe(REPORTER.id);
     expect(both.url?.searchParams.get("reportedUserId")).toBe(REPORTED.id);
-    expect(bothHtml).toContain("hem hakkındaki hem açtığı");
+    // İki süzgeç iki ayrı kişiyi gösterebilir; cümle "bir kullanıcının" demez.
+    expect(bothHtml).toContain("şikayet edilene ve şikayet edene göre");
+    expect(bothHtml).toContain("ikisi ayrı kişiler olabilir");
+    expect(bothHtml).not.toContain("bir kullanıcının hem");
+  });
+
+  it("sends no status for durum=hepsi and offers Tümü in the filter", async () => {
+    stubMe(MODERATOR);
+    const queue = watchQueue([row()]);
+
+    const html = await render({ durum: "hepsi", kullanici: REPORTED.id });
+
+    expect(queue.url?.searchParams.has("status")).toBe(false);
+    expect(queue.url?.searchParams.get("reportedUserId")).toBe(REPORTED.id);
+    expect(html).toContain('<option value="hepsi" selected="">Tümü</option>');
+    expect(html).toContain('data-testid="report-user-filter"');
   });
 
   it("drops a reporter id that is not a UUID before it reaches the backend", async () => {

@@ -16,6 +16,7 @@ import {
   getPayment,
   paymentCurrency,
   paymentPath,
+  refundOriginLabel,
 } from "./payments";
 
 /**
@@ -165,7 +166,8 @@ describe("payout id and refund origin", () => {
     expect(legacy.refunds[0]?.originId).toBeNull();
   });
 
-  it("rejects a refund origin the panel cannot name", async () => {
+  /** Kaynak yalnız gösterim: bilinmeyen kod sayfayı düşürmez, etiket kodu yazar. */
+  it("keeps a refund origin the panel cannot name and labels it by its code", async () => {
     const refunds = adminPaymentFixture().refunds as Array<Record<string, unknown>>;
     server.use(
       http.get(apiUrl(paymentPath(PAYMENT_ID)), () =>
@@ -178,6 +180,9 @@ describe("payout id and refund origin", () => {
       ),
     );
 
-    await expect(getPayment("TOKEN", PAYMENT_ID)).rejects.toThrow();
+    const payment = await getPayment("TOKEN", PAYMENT_ID);
+    expect(payment.refunds[0]?.origin).toBe("CHARGEBACK");
+    expect(refundOriginLabel("CHARGEBACK")).toBe("CHARGEBACK");
+    expect(refundOriginLabel("DISPUTE")).toBe("Uyuşmazlık");
   });
 });

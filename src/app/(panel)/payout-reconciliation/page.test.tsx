@@ -206,6 +206,17 @@ describe("the worker filter — koala-admin#100", () => {
     expect(html).toContain('href="/payout-reconciliation?boyut=10"');
   });
 
+  it("sends all four statuses for durum=hepsi so the count on the user page matches the list", async () => {
+    stubMe(OFFICER);
+    const queue = watchQueue([]);
+
+    const html = await render({ isci: WORKER_ID, durum: "hepsi" });
+
+    expect(queue.url?.searchParams.get("status")).toBe("PENDING,PROCESSING,COMPLETED,FAILED");
+    expect(queue.url?.searchParams.get("workerId")).toBe(WORKER_ID);
+    expect(html).toContain("tüm durumlardaki hakedişleri");
+  });
+
   it("drops a worker id that is not a UUID before it reaches the backend", async () => {
     stubMe(OFFICER);
     const queue = watchQueue([]);

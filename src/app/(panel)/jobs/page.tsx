@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  FilterId,
+  FilterNotice,
   ListSearchForm,
   QueueFilters,
   QueueLoadFailure,
@@ -23,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger, formatWallClock } from "@/lib/format";
-import { isUuid, jobHref, jobsHref, userHrefOrNull } from "@/lib/panel-href";
+import { jobHref, jobsHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   JOB_PAGING,
   JOB_STATUSES,
@@ -36,6 +38,7 @@ import {
   pageWindow,
   readPaging,
   readParam,
+  readUuidParam,
   sortParam,
   type SearchParams,
 } from "@/server/api/paging";
@@ -102,17 +105,12 @@ function readStatus(params: SearchParams): JobStatus | null {
     : null;
 }
 
-function readCompanyFilter(params: SearchParams): string | null {
-  const raw = readParam(params, "sirket")?.trim() ?? "";
-  return raw.length > 0 && isUuid(raw) ? raw : null;
-}
-
 async function JobQueue({ params }: { params: SearchParams }) {
   const status = readStatus(params);
   const paging = readPaging(params, JOB_PAGING);
   const query = readSearchQuery(readParam(params, SEARCH_PARAM));
   const search = activeSearch(query);
-  const companyId = readCompanyFilter(params);
+  const companyId = readUuidParam(params, "sirket");
 
   const viewState: Record<string, string> = {
     durum: status ?? ALL_STATUSES,
@@ -150,21 +148,18 @@ async function JobQueue({ params }: { params: SearchParams }) {
         companyId === null ? (
           "Durum ve sıralama backend'de uygulanır. Gelen sayfa panelde yeniden süzülmez."
         ) : (
-          <span data-testid="job-company-filter">
-            Bu görünüm <span className="font-mono text-xs">{companyId}</span> şirketinin ilanlarını
-            süzüyor.{" "}
-            <Link
-              href={jobsHref({
-                durum: status ?? ALL_STATUSES,
-                sirala: sortParam(paging.sort),
-                boyut: String(paging.size),
-                ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
-              })}
-            >
-              Süzgeci kaldır
-            </Link>
-            .
-          </span>
+          <FilterNotice
+            inline
+            testId="job-company-filter"
+            clearHref={jobsHref({
+              durum: status ?? ALL_STATUSES,
+              sirala: sortParam(paging.sort),
+              boyut: String(paging.size),
+              ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
+            })}
+          >
+            Bu görünüm <FilterId value={companyId} /> şirketinin ilanlarını süzüyor.
+          </FilterNotice>
         )
       }
     />

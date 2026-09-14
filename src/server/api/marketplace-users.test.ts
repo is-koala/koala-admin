@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 
 import { apiUrl, server } from "../../../test/msw";
 
-import { getMarketplaceUser, MARKETPLACE_USERS_PATH } from "./marketplace-users";
+import {
+  companyContactRoleLabel,
+  getMarketplaceUser,
+  identityReviewStatusLabel,
+  MARKETPLACE_USERS_PATH,
+} from "./marketplace-users";
 
 const USER_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 
@@ -119,7 +124,8 @@ describe("the marketplace user object GET", () => {
     expect(JSON.stringify(user)).not.toContain("must-be-stripped");
   });
 
-  it("refuses an identity review status the panel cannot label", async () => {
+  /** İnceleme durumu ve üyelik rolü yalnız gösterim: bilinmeyen kod sayfayı düşürmez, etiket kodu yazar. */
+  it("keeps an identity review status or membership role it cannot label and labels it by its code", async () => {
     server.use(
       http.get(apiUrl(`${MARKETPLACE_USERS_PATH}/${USER_ID}`), () =>
         HttpResponse.json({
@@ -129,12 +135,22 @@ describe("the marketplace user object GET", () => {
           path: `${MARKETPLACE_USERS_PATH}/${USER_ID}`,
           requestId: "rid-user",
           timeStamp: "2026-09-12T00:00:00.000000000Z",
-          data: { id: USER_ID, identityReviewStatus: "ESCALATED" },
+          data: {
+            id: USER_ID,
+            identityReviewStatus: "ESCALATED",
+            companies: [{ id: "c-1", name: "Koala Kafe", role: "OWNER" }],
+          },
         }),
       ),
     );
 
-    await expect(getMarketplaceUser("ACCESS-TOKEN", USER_ID)).rejects.toThrow();
+    const user = await getMarketplaceUser("ACCESS-TOKEN", USER_ID);
+    expect(user.identityReviewStatus).toBe("ESCALATED");
+    expect(identityReviewStatusLabel("ESCALATED")).toBe("ESCALATED");
+    expect(identityReviewStatusLabel("APPROVED")).toBe("Onaylı");
+    expect(user.companies?.[0]?.role).toBe("OWNER");
+    expect(companyContactRoleLabel("OWNER")).toBe("OWNER");
+    expect(companyContactRoleLabel("ADMIN")).toBe("Yetkili");
   });
 
   it("escapes the user id on the object path", async () => {

@@ -19,6 +19,7 @@ export {
   type QueueFiltersProps,
   type QueueFilterSpec,
 } from "./filters";
+export { FilterId, FilterNotice } from "./filter-notice";
 export { QueueLoadFailure, type QueueFailure, type QueueLoadFailureProps } from "./load-failure";
 export { QueuePager, type QueuePagerProps } from "./pager";
 export {

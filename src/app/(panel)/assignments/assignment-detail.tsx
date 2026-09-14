@@ -31,9 +31,9 @@ import {
   userHrefOrNull,
 } from "@/lib/panel-href";
 import {
-  APPLICATION_STATUS_LABELS,
-  ASSIGNMENT_EMPLOYER_TYPE_LABELS,
-  CANCELLATION_PARTY_LABELS,
+  applicationStatusLabel,
+  assignmentEmployerTypeLabel,
+  cancellationPartyLabel,
   timesheetFlagLabel,
   type AdminApplication,
   type AdminCancellation,
@@ -150,7 +150,7 @@ export function AssignmentDetail({ assignment, payments, permissions }: DetailPr
               value={
                 assignment.employerType === null
                   ? EMPTY_VALUE
-                  : ASSIGNMENT_EMPLOYER_TYPE_LABELS[assignment.employerType]
+                  : assignmentEmployerTypeLabel(assignment.employerType)
               }
             />
             <Row
@@ -265,7 +265,7 @@ interface TimelineEntry {
  * düşer — sıralanamayan bir satır çizelgede yanlış yere oturur, hiç
  * oturmamasından kötü.
  */
-export function timelineEntries(
+function timelineEntries(
   assignment: AssignmentRecord,
   payments: readonly AdminPayment[],
 ): readonly TimelineEntry[] {
@@ -282,7 +282,7 @@ export function timelineEntries(
       "Başvuru yanıtlandı",
       assignment.application.status === null
         ? null
-        : APPLICATION_STATUS_LABELS[assignment.application.status],
+        : applicationStatusLabel(assignment.application.status),
     );
   }
   push(assignment.createdAt, "Atama oluşturuldu");
@@ -297,7 +297,7 @@ export function timelineEntries(
       "Atama iptal edildi",
       assignment.cancellation.cancelledByParty === null
         ? null
-        : CANCELLATION_PARTY_LABELS[assignment.cancellation.cancelledByParty],
+        : cancellationPartyLabel(assignment.cancellation.cancelledByParty),
     );
   }
   push(assignment.actualCompletionDateTime, "İş tamamlandı");
@@ -474,9 +474,7 @@ function ApplicationCard({ application }: { application: AdminApplication }) {
         <Row
           label="Durum"
           value={
-            application.status === null
-              ? EMPTY_VALUE
-              : APPLICATION_STATUS_LABELS[application.status]
+            application.status === null ? EMPTY_VALUE : applicationStatusLabel(application.status)
           }
         />
         <Row label="Başvuru zamanı" value={formatDateTime(application.applicationDateTime)} />
@@ -522,7 +520,7 @@ function CancellationCard({
           value={
             cancellation.cancelledByParty === null
               ? EMPTY_VALUE
-              : CANCELLATION_PARTY_LABELS[cancellation.cancelledByParty]
+              : cancellationPartyLabel(cancellation.cancelledByParty)
           }
         />
         <Row

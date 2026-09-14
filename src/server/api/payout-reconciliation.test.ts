@@ -306,6 +306,25 @@ describe("the worker filter and the #283 payout fields", () => {
     expect(seen.url?.searchParams.has("workerId")).toBe(false);
   });
 
+  it("joins a status list into one comma-separated parameter Spring binds as List<PayoutStatus>", async () => {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(PAYOUTS_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return HttpResponse.json(searchEnvelope(PAYOUTS_PATH));
+      }),
+    );
+
+    await getPayouts("ACCESS-TOKEN", {
+      paging: readPaging({}, PAYOUT_PAGING),
+      status: ["PENDING", "COMPLETED"],
+    });
+    expect(seen.url?.searchParams.get("status")).toBe("PENDING,COMPLETED");
+
+    await getPayouts("ACCESS-TOKEN", { paging: readPaging({}, PAYOUT_PAGING), status: [] });
+    expect(seen.url?.searchParams.has("status")).toBe(false);
+  });
+
   it("reads releaseOrigin, settledAt, reconciledByStaffId and bankAccountId, nulling them otherwise", async () => {
     const id = "9c000000-0000-4000-8000-000000000033";
     let body: unknown = adminPayoutDetailFixture({

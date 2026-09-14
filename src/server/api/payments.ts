@@ -56,16 +56,24 @@ export const REFUND_STATUS_LABELS: Record<RefundStatus, string> = {
   FAILED: "Başarısız",
 };
 
-/** `entities/RefundOrigin.java` — iadeyi kim doğurdu (koala-backend#283, türetilir). */
+/**
+ * `entities/RefundOrigin.java` — iadeyi kim doğurdu (koala-backend#283,
+ * türetilir). Yalnız gösterim: serbest dize, bilinmeyen kod olduğu gibi
+ * yazılır. `z.enum` bu dosyada yalnız para durumu taşıyan `status`larda.
+ */
 export const REFUND_ORIGINS = ["CANCELLATION", "DISPUTE", "STAFF"] as const;
 
 export type RefundOrigin = (typeof REFUND_ORIGINS)[number];
 
-export const REFUND_ORIGIN_LABELS: Record<RefundOrigin, string> = {
+const REFUND_ORIGIN_LABELS: Readonly<Record<string, string>> = {
   CANCELLATION: "İptal",
   DISPUTE: "Uyuşmazlık",
   STAFF: "Personel",
-};
+} satisfies Record<RefundOrigin, string>;
+
+export function refundOriginLabel(origin: string): string {
+  return REFUND_ORIGIN_LABELS[origin] ?? origin;
+}
 
 const nullableString = z
   .string()
@@ -92,10 +100,7 @@ export const adminRefundSchema = z.object({
    * `DISPUTE` → uyuşmazlık kimliği, `STAFF` → panelden yapılan iade
    * (`originId` boş). Eski sunucuda ikisi de `null`, sütun "—".
    */
-  origin: z
-    .enum(REFUND_ORIGINS)
-    .nullish()
-    .transform((value) => value ?? null),
+  origin: nullableString,
   originId: nullableString,
   completedAt: nullableString,
   createdAt: nullableString,

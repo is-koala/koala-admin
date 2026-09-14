@@ -14,6 +14,16 @@ export const KOALA_TIME_ZONE = "Europe/Istanbul";
 /** Rendered in place of a missing or unparseable value. */
 export const EMPTY_VALUE = "—";
 
+/** `Evet` / `Hayır` — ya da sayfanın kendi çifti (`Gerekli` / `Gerekmiyor`); `null` boş değer. */
+export function formatBoolean(
+  value: boolean | null | undefined,
+  yes = "Evet",
+  no = "Hayır",
+): string {
+  if (value === null || value === undefined) return EMPTY_VALUE;
+  return value ? yes : no;
+}
+
 export type DateInput = Date | string | number | null | undefined;
 
 function toDate(value: DateInput): Date | null {

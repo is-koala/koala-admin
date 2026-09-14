@@ -7,6 +7,8 @@ import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import type { PageDto } from "./types";
 
+export { companyContactRoleLabel } from "./shared/company-contact-role";
+
 /**
  * The company approval queue's contract with `webAPI/AdminController.java`.
  *
@@ -62,21 +64,7 @@ const companyAddressSchema = z
   .nullish()
   .transform((value) => value ?? null);
 
-/** `CompanyContactRole.java`. */
-export const COMPANY_CONTACT_ROLES = ["ADMIN", "STAFF"] as const;
-export type CompanyContactRole = (typeof COMPANY_CONTACT_ROLES)[number];
-
-const CONTACT_ROLE_LABELS: Record<CompanyContactRole, string> = {
-  ADMIN: "Yetkili",
-  STAFF: "Personel",
-};
-
-export function companyContactRoleLabel(role: string | null): string {
-  if (role === null) return "—";
-  return (CONTACT_ROLE_LABELS as Readonly<Record<string, string>>)[role] ?? role;
-}
-
-/** `CompanyContactDto` — yetkili: kullanıcı (`SafeUserDto`) ve şirketteki rolü. */
+/** `CompanyContactDto` — yetkili: kullanıcı (`SafeUserDto`) ve şirketteki rolü (`shared/company-contact-role`). */
 export const companyContactSchema = z.object({
   id: z.string(),
   user: safeUserSchema.nullish().transform((value) => value ?? null),

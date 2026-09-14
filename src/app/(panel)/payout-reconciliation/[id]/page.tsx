@@ -21,11 +21,11 @@ import {
 import { EMPTY_VALUE, formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
 import { assignmentHref, isUuid, jobHref, paymentHref, userHrefOrNull } from "@/lib/panel-href";
 import {
-  PAYOUT_RELEASE_ORIGIN_LABELS,
   PAYOUT_STATUS_LABELS,
   SETTLEMENT_OPERATION_LABELS,
   SETTLEMENT_TASK_STATUS_LABELS,
   getPayoutDetail,
+  payoutReleaseOriginLabel,
   type PayoutDetail,
   type PayoutStatus,
   type SettlementTaskStatus,
@@ -159,7 +159,7 @@ async function PayoutObject({ id }: { id: string }) {
               value={
                 payout.releaseOrigin === null
                   ? EMPTY_VALUE
-                  : PAYOUT_RELEASE_ORIGIN_LABELS[payout.releaseOrigin]
+                  : payoutReleaseOriginLabel(payout.releaseOrigin)
               }
             />
             <Row

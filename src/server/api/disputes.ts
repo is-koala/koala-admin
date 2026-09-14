@@ -142,29 +142,35 @@ const nullableString = z
   .transform((value) => value ?? null);
 
 /**
+ * `entities/DisputeSide.java` — açan tarafın atamadaki rolü
+ * (koala-backend#283). Yalnız gösterim: şema serbest dize okur, etiket
+ * bilinmeyen kodu olduğu gibi yazar. Katılık (`z.enum`) bu dosyada yalnız
+ * para kararı taşıyan `status` ve `resolution`'da.
+ */
+export const DISPUTE_SIDES = ["WORKER", "EMPLOYER"] as const;
+export type DisputeSide = (typeof DISPUTE_SIDES)[number];
+
+const DISPUTE_SIDE_LABELS: Readonly<Record<string, string>> = {
+  WORKER: "İşçi",
+  EMPLOYER: "İşveren",
+} satisfies Record<DisputeSide, string>;
+
+export function disputeSideLabel(side: string): string {
+  return DISPUTE_SIDE_LABELS[side] ?? side;
+}
+
+/**
  * `core/dtos/dispute/response/DisputeDto.java`.
  *
  * `status` and `resolution` are `z.enum` rather than `z.string()` deliberately:
  * an unrecognised resolution on a screen that decides whether money moved would
  * be worse than a loud schema failure at the boundary.
  */
-/** `entities/DisputeSide.java` — açan tarafın atamadaki rolü (koala-backend#283). */
-export const DISPUTE_SIDES = ["WORKER", "EMPLOYER"] as const;
-export type DisputeSide = (typeof DISPUTE_SIDES)[number];
-
-export const DISPUTE_SIDE_LABELS: Record<DisputeSide, string> = {
-  WORKER: "İşçi",
-  EMPLOYER: "İşveren",
-};
-
 export const disputeSchema = z.object({
   id: z.string(),
   jobAssignmentId: z.string(),
   openedBy: safeUserSchema.nullish().transform((value) => value ?? null),
-  openedBySide: z
-    .enum(DISPUTE_SIDES)
-    .nullish()
-    .transform((value) => value ?? null),
+  openedBySide: nullableString,
   status: z.enum(DISPUTE_STATUSES),
   reason: z.string(),
   resolution: z
