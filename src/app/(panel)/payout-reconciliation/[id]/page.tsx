@@ -25,12 +25,11 @@ import {
   SETTLEMENT_OPERATION_LABELS,
   SETTLEMENT_TASK_STATUS_LABELS,
   getPayoutDetail,
-  payoutPartyName,
   type PayoutDetail,
-  type PayoutParty,
   type PayoutStatus,
   type SettlementTaskStatus,
 } from "@/server/api/payout-reconciliation";
+import { staffPartyName, type StaffParty } from "@/server/api/shared/staff-party";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
@@ -341,10 +340,10 @@ function SettlementHistory({ payout, currency }: { payout: PayoutDetail; currenc
   );
 }
 
-function Party({ party }: { party: PayoutParty | null }) {
+function Party({ party }: { party: StaffParty | null }) {
   if (party === null) return <>{EMPTY_VALUE}</>;
   const href = userHrefOrNull(party.id);
-  const name = payoutPartyName(party);
+  const name = staffPartyName(party);
   const email = party.email === null || party.email === name ? null : party.email;
   return (
     <span className="flex flex-wrap justify-end gap-x-2">

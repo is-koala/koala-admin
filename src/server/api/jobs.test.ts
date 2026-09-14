@@ -17,8 +17,8 @@ import {
   getAdminJob,
   getAdminJobs,
   jobPath,
-  staffPartyName,
 } from "./jobs";
+import { staffPartyName } from "./shared/staff-party";
 import { readPaging } from "./paging";
 
 /** `GET /admin/jobs` ve `GET /admin/jobs/{jobId}` (koala-backend#265). */

@@ -4,6 +4,8 @@ import { koalaApi, koalaRequestNoData } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import { searchQueryParam } from "./search-query";
+import { linkedRecordSchema } from "./shared/linked-record";
+import { pricingBreakdownSchema } from "./shared/pricing";
 import type { KoalaResultMeta, PageDto } from "./types";
 import { safeUserSchema } from "./users";
 
@@ -89,7 +91,6 @@ export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
  * here; `formatCurrency` takes either representation.
  */
 const moneySchema = z.union([z.number(), z.string()]);
-const decimalStringSchema = z.string();
 
 const nullableMoney = moneySchema.nullish().transform((value) => value ?? null);
 
@@ -115,16 +116,6 @@ export const ASSIGNMENT_PAGING: PagingContract = {
 export function escrowSummaryPath(assignmentId: string): string {
   return `${ASSIGNMENTS_PATH}/${encodeURIComponent(assignmentId)}`;
 }
-
-/** `PricingBreakdownDto`, kept nested exactly as the backend returns it. */
-const pricingBreakdownSchema = z.object({
-  pricingVersion: z.string(),
-  currency: z.string(),
-  workerPayout: decimalStringSchema,
-  serviceFeeRate: decimalStringSchema,
-  serviceFeeAmount: decimalStringSchema,
-  employerTotal: decimalStringSchema,
-});
 
 /**
  * `AdminAssignmentDto` from `GET /admin/job-assignments/{id}`.
@@ -164,19 +155,6 @@ export function getEscrowSummary(
 }
 
 /**
- * `core/dtos/common/LinkedRecordDto.java` — bağlı kaydın yalnız kimliği,
- * durumu ve zamanı. Durum serbest metin: ödeme, hakediş, uyuşmazlık ve
- * şikayet enum'ları farklı; panel onu olduğu gibi yazar, çevirmez.
- */
-export const linkedRecordSchema = z.object({
-  id: z.string(),
-  status: nullableString,
-  createdAt: nullableString,
-});
-
-export type LinkedRecord = z.infer<typeof linkedRecordSchema>;
-
-/**
  * `AdminAssignmentDetailDto` (koala-backend#265) — `AdminAssignmentDto`'nun
  * üst kümesi. Bağlı kayıtlar `LinkedRecordDto`; ödeme denemelerinin gövdesi
  * ayrı uçtan (`getAssignmentPayments`, `payments.ts`) okunur.
@@ -193,6 +171,8 @@ export const assignmentDetailSchema = escrowSummarySchema.extend({
 });
 
 export type AssignmentDetail = z.infer<typeof assignmentDetailSchema>;
+
+export type { LinkedRecord } from "./shared/linked-record";
 
 export function getAssignmentDetail(
   accessToken: string,

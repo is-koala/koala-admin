@@ -6,6 +6,8 @@ import { koalaApi } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import { searchQueryParam } from "./search-query";
+import { pricingBreakdownSchema } from "./shared/pricing";
+import { staffPartySchema } from "./shared/staff-party";
 import type { PageDto } from "./types";
 
 /**
@@ -94,25 +96,6 @@ const nullableMoney = z
   .union([z.number(), z.string()])
   .nullish()
   .transform((value) => value ?? null);
-
-/** `StaffPartyDto` — e-postalı taraf; yalnız personel yüzeyleri görür. */
-export const staffPartySchema = z.object({
-  id: z.string(),
-  firstName: nullableString,
-  lastName: nullableString,
-  email: nullableString,
-});
-
-export type StaffParty = z.infer<typeof staffPartySchema>;
-
-const pricingBreakdownSchema = z.object({
-  pricingVersion: z.string(),
-  currency: z.string(),
-  workerPayout: z.string(),
-  serviceFeeRate: z.string(),
-  serviceFeeAmount: z.string(),
-  employerTotal: z.string(),
-});
 
 /** `AdminJobDto` — liste satırı. */
 export const adminJobSchema = z.object({
@@ -257,18 +240,6 @@ export function getAdminJob(accessToken: string, jobId: string): Promise<AdminJo
     accessToken,
     cache: "no-store",
   });
-}
-
-/** İşverenin adı; ad yoksa e-posta, o da yoksa kimlik. */
-export function staffPartyName(party: StaffParty | null | undefined): string {
-  if (party === null || party === undefined) return "—";
-  const full = [party.firstName, party.lastName]
-    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
-    .join(" ")
-    .trim();
-  if (full.length > 0) return full;
-  if (party.email !== null && party.email.length > 0) return party.email;
-  return party.id;
 }
 
 /**

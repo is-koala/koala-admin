@@ -6,6 +6,8 @@ import { koalaApi } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import { searchQueryParam } from "./search-query";
+import { linkedRecordSchema } from "./shared/linked-record";
+import { staffPartySchema } from "./shared/staff-party";
 import type { PageDto } from "./types";
 
 /** `PayoutStatus.java`, verbatim. */
@@ -85,16 +87,6 @@ const nullableInt = z
   .nullish()
   .transform((value) => value ?? null);
 
-/** `StaffPartyDto` — hakedişin tarafları e-postayla; yalnız `payout.reconcile`. */
-const staffPartySchema = z.object({
-  id: z.string(),
-  firstName: nullableString,
-  lastName: nullableString,
-  email: nullableString,
-});
-
-export type PayoutParty = z.infer<typeof staffPartySchema>;
-
 /** `AdminSettlementTaskDto` — bir settlement denemesi. */
 export const settlementTaskSchema = z.object({
   id: z.string(),
@@ -112,12 +104,6 @@ export const settlementTaskSchema = z.object({
 });
 
 export type SettlementTask = z.infer<typeof settlementTaskSchema>;
-
-const linkedRecordSchema = z.object({
-  id: z.string(),
-  status: nullableString,
-  createdAt: nullableString,
-});
 
 /**
  * `AdminPayoutDetailDto` (koala-backend#265). #80'in kanıt alanları —
@@ -163,18 +149,6 @@ export function getPayoutDetail(accessToken: string, payoutId: string): Promise<
     accessToken,
     cache: "no-store",
   });
-}
-
-/** Tarafın adı; ad yoksa e-posta, o da yoksa kimlik. */
-export function payoutPartyName(party: PayoutParty | null): string {
-  if (party === null) return "—";
-  const full = [party.firstName, party.lastName]
-    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
-    .join(" ")
-    .trim();
-  if (full.length > 0) return full;
-  if (party.email !== null && party.email.length > 0) return party.email;
-  return party.id;
 }
 
 /** `ConfirmPayoutSettlementDto.java`. Amount is deliberately decimal text. */

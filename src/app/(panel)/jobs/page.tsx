@@ -29,7 +29,6 @@ import {
   JOB_STATUSES,
   JOB_STATUS_LABELS,
   getAdminJobs,
-  staffPartyName,
   type AdminJob,
   type JobStatus,
 } from "@/server/api/jobs";
@@ -45,6 +44,7 @@ import {
   isSearchQueryTooLong,
   readSearchQuery,
 } from "@/server/api/search-query";
+import { staffPartyName } from "@/server/api/shared/staff-party";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";

@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { koalaApi } from "./koala";
+import { pricingBreakdownSchema } from "./shared/pricing";
 import { safeUserSchema } from "./users";
 
 /**
@@ -65,16 +66,6 @@ const nullableInt = z
   .int()
   .nullish()
   .transform((value) => value ?? null);
-
-/** `PricingBreakdownDto`, ilan/atama ile aynı iç içe biçim. */
-const pricingBreakdownSchema = z.object({
-  pricingVersion: z.string(),
-  currency: z.string(),
-  workerPayout: z.string(),
-  serviceFeeRate: z.string(),
-  serviceFeeAmount: z.string(),
-  employerTotal: z.string(),
-});
 
 /** `AdminRefundDto`. */
 export const adminRefundSchema = z.object({

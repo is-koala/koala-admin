@@ -115,6 +115,8 @@ export function getPendingIbanVerifications(
  * "PENDING kuyruğunda böyle bir satır yok" demektir — onaylanmış ya da
  * süresi dolmuş bir doğrulama da buraya düşer; nesne sayfası bunu 404 sayar.
  */
+const REFERENCE_LOOKUP_PAGE_SIZE = 50;
+
 export async function findPendingIbanVerification(
   accessToken: string,
   reference: string,
@@ -126,7 +128,11 @@ export async function findPendingIbanVerification(
       status: "PENDING",
       query: searchQueryParam(reference),
       page: 0,
-      size: 50,
+      // Backend `LIKE %q%` ile arar; referans benzersiz, tam eşleşme en çok
+      // birdir ama önek komşuları da gelir (`KOALA-9F3A` → `KOALA-9F3A1`).
+      // İlk sayfa bunları taşısın diye tavan `PageableSanitizer.MAX_PAGE_SIZE`
+      // altında, varsayılan 20'nin üstünde tutuldu.
+      size: REFERENCE_LOOKUP_PAGE_SIZE,
       sort: "verificationStartedAt,desc",
     },
     accessToken,

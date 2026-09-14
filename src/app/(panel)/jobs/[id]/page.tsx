@@ -22,9 +22,9 @@ import {
   SALARY_TYPE_LABELS,
   formatJobAddress,
   getAdminJob,
-  staffPartyName,
   type AdminJobDetail,
 } from "@/server/api/jobs";
+import { staffPartyName } from "@/server/api/shared/staff-party";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";

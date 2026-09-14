@@ -3,8 +3,8 @@ import { adminAssignmentFixture } from "./admin-assignment";
 /**
  * koala-backend#265 detay DTO'ları — `AdminAssignmentDetailDto`,
  * `AdminPaymentDto`, `AdminPayoutDetailDto`, `AdminJobDto`/`AdminJobDetailDto`
- * — issue yorumundaki alan listesinden ve kaynak `record`lardan yazıldı;
- * canlı OpenAPI 0.9.18 sonrası güncellenince tekrar karşılaştırılır.
+ * — kaynak `record`lardan yazıldı ve 14.09.2026'da canlı OpenAPI (0.9.18)
+ * ile karşılaştırıldı: alan adları birebir.
  */
 
 export const ASSIGNMENT_ID = "9a1c0f10-0001-4c00-8000-0000000000aa";
