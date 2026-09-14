@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
@@ -15,32 +14,9 @@ import {
   searchEmptyTitle,
 } from "@/components/panel/queue";
 import { PayoutReconciliationForm } from "@/components/payout-reconciliation/payout-reconciliation-form";
-import { SafeUserLink } from "@/components/panel/safe-user-link";
-import {
-  Badge,
-  EmptyState,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
-} from "@/components/ui";
-import { EMPTY_VALUE, formatCurrency, formatDateTime } from "@/lib/format";
-import {
-  ALL_STATUSES_PARAM,
-  assignmentHref,
-  isUuid,
-  payoutHref,
-  payoutsHref,
-} from "@/lib/panel-href";
-import {
-  PAYOUT_PAGING,
-  PAYOUT_STATUSES,
-  PAYOUT_STATUS_LABELS,
-  getPayouts,
-  type Payout,
-} from "@/server/api/payout-reconciliation";
+import { EmptyState } from "@/components/ui";
+import { ALL_STATUSES_PARAM, isUuid, payoutsHref } from "@/lib/panel-href";
+import { PAYOUT_PAGING, PAYOUT_STATUSES, getPayouts } from "@/server/api/payout-reconciliation";
 import {
   pageWindow,
   readPaging,
@@ -58,7 +34,7 @@ import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { submitPayoutReconciliation } from "./actions";
-import { PAYOUT_STATUS_TONES } from "./labels";
+import { PayoutTable } from "./payout-table";
 
 export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
 
@@ -203,29 +179,11 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
             description="Kuyruk boşsa aşağıdaki forma hakediş kimliğini yazabilirsiniz."
           />
         ) : (
-          <Table caption="Bekleyen hakedişler">
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Tarih</TableHeaderCell>
-                <TableHeaderCell>İşçi</TableHeaderCell>
-                <TableHeaderCell>Tutar</TableHeaderCell>
-                <TableHeaderCell>Durum</TableHeaderCell>
-                <TableHeaderCell>Atama</TableHeaderCell>
-                <TableHeaderCell>Onay</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((row) => (
-                <PayoutRow
-                  key={row.id}
-                  row={row}
-                  selected={row.id === selectedId}
-                  page={paging.page}
-                  query={query}
-                />
-              ))}
-            </TableBody>
-          </Table>
+          <PayoutTable
+            rows={rows}
+            caption="Bekleyen hakedişler"
+            action={{ selectedId, page: paging.page, query }}
+          />
         )}
 
         {page.totalElements > 0 ? (
@@ -235,66 +193,6 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
 
       <ConfirmSection payoutId={selectedId} />
     </div>
-  );
-}
-
-function PayoutRow({
-  row,
-  selected,
-  page,
-  query,
-}: {
-  row: Payout;
-  selected: boolean;
-  page: number;
-  /** Satırdan onaya geçmek aramayı silmesin. */
-  query: string | null;
-}) {
-  const reconcilable = row.status === "PROCESSING";
-  return (
-    <TableRow>
-      <TableCell>
-        <Link href={payoutHref(row.id)} className="text-brand hover:underline">
-          {formatDateTime(row.createdAt)}
-        </Link>
-      </TableCell>
-      <TableCell>
-        <SafeUserLink user={row.recipient} />
-      </TableCell>
-      <TableCell>{formatCurrency(row.amount, row.currency)}</TableCell>
-      <TableCell>
-        <Badge tone={PAYOUT_STATUS_TONES[row.status]}>{PAYOUT_STATUS_LABELS[row.status]}</Badge>
-      </TableCell>
-      <TableCell>
-        <Link
-          href={assignmentHref(row.jobAssignmentId)}
-          className="font-mono text-xs text-brand hover:underline"
-        >
-          {row.jobAssignmentId}
-        </Link>
-      </TableCell>
-      <TableCell>
-        {!reconcilable ? (
-          <span className="text-ink-muted">{EMPTY_VALUE}</span>
-        ) : selected ? (
-          <Badge tone="brand">Seçili</Badge>
-        ) : (
-          <Link
-            href={{
-              pathname: "/payout-reconciliation",
-              query: {
-                hakedis: row.id,
-                ...(page > 0 ? { sayfa: String(page) } : {}),
-                ...(query === null ? {} : { [SEARCH_PARAM]: query }),
-              },
-            }}
-            className="text-sm font-medium text-brand hover:underline"
-          >
-            Onayla
-          </Link>
-        )}
-      </TableCell>
-    </TableRow>
   );
 }
 

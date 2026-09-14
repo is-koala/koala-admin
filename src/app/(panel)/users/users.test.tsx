@@ -300,6 +300,7 @@ describe("a bookmarked marketplace user", () => {
   function stubUser(user: UserRow) {
     let objectCalls = 0;
     let reportCalls = 0;
+    let roleCalls = 0;
     server.use(
       http.get(`${USERS}/${user.id}`, () => {
         objectCalls += 1;
@@ -313,8 +314,9 @@ describe("a bookmarked marketplace user", () => {
           data: user,
         });
       }),
-      http.get(apiUrl("/admin/users/:userId/roles"), () =>
-        HttpResponse.json({
+      http.get(apiUrl("/admin/users/:userId/roles"), () => {
+        roleCalls += 1;
+        return HttpResponse.json({
           success: true,
           message: "Roller listelendi.",
           httpStatus: "200 OK",
@@ -329,8 +331,8 @@ describe("a bookmarked marketplace user", () => {
               grantedByName: "Sistem",
             },
           ],
-        }),
-      ),
+        });
+      }),
       http.get(apiUrl("/admin/reports"), () => {
         reportCalls += 1;
         return HttpResponse.json({
@@ -359,6 +361,9 @@ describe("a bookmarked marketplace user", () => {
       get reportCalls() {
         return reportCalls;
       },
+      get roleCalls() {
+        return roleCalls;
+      },
     };
   }
 
@@ -373,20 +378,46 @@ describe("a bookmarked marketplace user", () => {
 
     expect(seen.objectCalls).toBe(1);
     expect(seen.reportCalls).toBe(0);
+    // Roller "Rol / Denetim" sekmesinde; varsayılan sekme rol isteği çıkarmaz.
+    expect(seen.roleCalls).toBe(0);
     expect(html).toContain("Ada Yılmaz");
-    expect(html).toContain("ROLE_USER");
-    expect(html).toContain("Sistem");
     expect(html).not.toContain(`kullanici=${user.id}`);
     expect(html).not.toMatch(/>Askıya al</);
     expect(html).not.toContain("suspend");
   });
 
-  it("draws grant and revoke on the object page when user.role.manage is held", async () => {
+  /** koala-admin#103: roller "Rol / Denetim" sekmesinde. */
+  it("lists the marketplace roles on the denetim tab", async () => {
+    stubMe(READER);
+    const user = row();
+    const seen = stubUser(user);
+
+    const html = (
+      await renderServerComponent(
+        <UserDetailPage
+          params={Promise.resolve({ id: user.id })}
+          searchParams={Promise.resolve({ sekme: "denetim" })}
+        />,
+      )
+    ).replaceAll("<!-- -->", "");
+
+    expect(seen.roleCalls).toBe(1);
+    expect(html).toContain("ROLE_USER");
+    expect(html).toContain("Sistem");
+    expect(html).not.toContain("Rol ver");
+  });
+
+  it("draws grant and revoke on the denetim tab when user.role.manage is held", async () => {
     stubMe(["user.read", "user.role.manage"]);
     stubUser(row());
 
     const html = (
-      await renderServerComponent(<UserDetailPage params={Promise.resolve({ id: row().id })} />)
+      await renderServerComponent(
+        <UserDetailPage
+          params={Promise.resolve({ id: row().id })}
+          searchParams={Promise.resolve({ sekme: "denetim" })}
+        />,
+      )
     ).replaceAll("<!-- -->", "");
 
     expect(html).toContain("Rol ver");
@@ -616,7 +647,8 @@ describe("the user detail's contact, verification, memberships, badges and histo
     expect(pii).toContain(`href="/account-deletions/${DELETION_ID}"`);
   });
 
-  it("links each history counter to its filtered list only when that list's permission is held", async () => {
+  /** koala-admin#103: sayaç sayfadan çıkarmaz, ilgili sekmeyi açar; tam liste sekmede. */
+  it("links each history counter to its tab only when that tab's permission is held", async () => {
     stubMe(READER);
     stubDetail(detail());
     const alone = await renderDetail();
@@ -624,11 +656,11 @@ describe("the user detail's contact, verification, memberships, badges and histo
     for (const count of ["3", "2", "5", "4", "1", "6", "7", "8"]) {
       expect(alone).toMatch(new RegExp(`<dd[^>]*>${count}</dd>`));
     }
-    expect(alone).not.toContain(`href="/assignments?isci=`);
-    expect(alone).not.toContain(`href="/payout-reconciliation?isci=`);
-    expect(alone).not.toContain(`href="/reports?kullanici=${row().id}&amp;durum=hepsi"`);
-    expect(alone).not.toContain(`href="/disputes?kullanici=`);
-    expect(alone).not.toContain(`href="/reports?sikayetci=`);
+    const id = row().id;
+    expect(alone).not.toContain(`href="/users/${id}?sekme=atamalar"`);
+    expect(alone).not.toContain(`href="/users/${id}?sekme=hakedisler"`);
+    expect(alone).not.toContain(`href="/users/${id}?sekme=uyusmazliklar"`);
+    expect(alone).not.toContain(`href="/users/${id}?sekme=sikayetler"`);
 
     stubMe([
       "user.read",
@@ -639,14 +671,29 @@ describe("the user detail's contact, verification, memberships, badges and histo
     ]);
     stubDetail(detail());
     const linked = await renderDetail();
-    const id = row().id;
-    expect(linked).toContain(`href="/assignments?isci=${id}"`);
-    expect(linked).toContain(`href="/assignments?isveren=${id}"`);
-    // Sayaç her durumu sayar; hakediş ve şikayet listeleri de her durumu açar.
-    expect(linked).toContain(`href="/payout-reconciliation?isci=${id}&amp;durum=hepsi"`);
-    expect(linked).toContain(`href="/disputes?kullanici=${id}"`);
-    expect(linked).toContain(`href="/reports?kullanici=${id}&amp;durum=hepsi"`);
-    expect(linked).toContain(`href="/reports?sikayetci=${id}&amp;durum=hepsi"`);
+    expect(linked).toMatch(
+      new RegExp(`Atamalar \\(işçi\\)</dt><dd[^>]*><a[^>]*href="/users/${id}\\?sekme=atamalar"`),
+    );
+    expect(linked).toMatch(
+      new RegExp(`Atamalar \\(işveren\\)</dt><dd[^>]*><a[^>]*href="/users/${id}\\?sekme=atamalar"`),
+    );
+    expect(linked).toMatch(
+      new RegExp(`Ödemeler</dt><dd[^>]*><a[^>]*href="/users/${id}\\?sekme=atamalar"`),
+    );
+    expect(linked).toMatch(
+      new RegExp(`Hakedişler</dt><dd[^>]*><a[^>]*href="/users/${id}\\?sekme=hakedisler"`),
+    );
+    expect(linked).toMatch(
+      new RegExp(`Uyuşmazlıklar</dt><dd[^>]*><a[^>]*href="/users/${id}\\?sekme=uyusmazliklar"`),
+    );
+    expect(linked).toMatch(
+      new RegExp(
+        `Hakkındaki şikayetler</dt><dd[^>]*><a[^>]*href="/users/${id}\\?sekme=sikayetler"`,
+      ),
+    );
+    expect(linked).toMatch(
+      new RegExp(`Açtığı şikayetler</dt><dd[^>]*><a[^>]*href="/users/${id}\\?sekme=sikayetler"`),
+    );
     // Başvuruların listesi yok: sayı bağlantısız kalır.
     expect(linked).toMatch(/Başvurular<\/dt><dd[^>]*>3</);
   });

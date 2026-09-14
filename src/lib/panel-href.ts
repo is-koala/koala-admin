@@ -1,5 +1,7 @@
 import type { Route } from "next";
 
+import { USER_TAB_PARAM, type UserTab } from "@/lib/user-tabs";
+
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isUuid(value: string): boolean {
@@ -75,6 +77,11 @@ export function userHref(userId: string): Route {
 
 export function userHrefOrNull(userId: string | null | undefined): Route | null {
   return userId !== null && userId !== undefined && isUuid(userId) ? userHref(userId) : null;
+}
+
+/** Sekme `?sekme=` ile taşınır; `genel` varsayılan olduğu için adrese yazılmaz. */
+export function userTabHref(userId: string, tab: UserTab): Route {
+  return withQuery(`/users/${userId}`, tab === "genel" ? {} : { [USER_TAB_PARAM]: tab });
 }
 
 /** Atama nesne sayfası (koala-admin#95); `?atama=` bakışı liste sayfasında kaldı. */
@@ -166,10 +173,20 @@ export function disputesForUserHref(userId: string): Route {
   return disputesHref({ kullanici: userId });
 }
 
+/** Uyuşmazlık ucu "hepsi" almaz: bekleyenler `disputesForUserHref`, çözülmüşler burası. */
+export function resolvedDisputesForUserHref(userId: string): Route {
+  return disputesHref({ kullanici: userId, durum: "RESOLVED" });
+}
+
 export function jobsForCompanyHref(companyId: string): Route {
   return jobsHref({ sirket: companyId });
 }
 
 export function payoutReconcileHref(payoutId: string): Route {
   return asRoute(`/payout-reconciliation?hakedis=${encodeURIComponent(payoutId)}`);
+}
+
+/** Bir kaydın bütün denetim satırları; süzgeç adı backend'in `resourceId` parametresi. */
+export function auditLogForResourceHref(resourceId: string): Route {
+  return withQuery("/audit-log", { resourceId });
 }

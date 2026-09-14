@@ -13,19 +13,9 @@ import {
   activeSearch,
   searchEmptyTitle,
 } from "@/components/panel/queue";
-import {
-  Badge,
-  EmptyState,
-  ErrorState,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
-} from "@/components/ui";
-import { formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
-import { assignmentHref, disputeHref, disputesHref, userHrefOrNull } from "@/lib/panel-href";
+import { EmptyState, ErrorState } from "@/components/ui";
+import { formatInteger } from "@/lib/format";
+import { disputesHref } from "@/lib/panel-href";
 import { DISPUTE_PAGING, getDisputes, type Dispute } from "@/server/api/disputes";
 import {
   pageWindow,
@@ -35,20 +25,20 @@ import {
   type PageWindow,
   type SearchParams,
 } from "@/server/api/paging";
-import { getEscrowSummary } from "@/server/api/escrow";
 import { isKoalaApiError } from "@/server/api/errors";
 import {
   SEARCH_QUERY_TOO_LONG_MESSAGE,
   isSearchQueryTooLong,
   readSearchQuery,
 } from "@/server/api/search-query";
-import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { recentOperations } from "@/server/escrow/recent-operations";
 
-import { DISPUTE_STATUS_LABELS, DISPUTE_STATUS_TONES, type SummaryEntry } from "./dispute-detail";
+import type { SummaryEntry } from "./dispute-detail";
+import { DisputeTable } from "./dispute-table";
+import { loadSummaries } from "./load-summaries";
 
 export const metadata: Metadata = { title: "Uyuşmazlıklar" };
 
@@ -161,54 +151,6 @@ async function loadQueue(
       requestId: isKoalaApiError(error) ? error.requestId : null,
     };
   }
-}
-
-/**
- * One escrow read per dispute on the page, in parallel.
- *
- * This is an N+1 and it is deliberate rather than overlooked. `DisputeDto`
- * carries no money at all, so the alternatives were: show no amount in the
- * queue, or compute one in the panel (which it forbids). The page size is
- * bounded to {@link DISPUTE_PAGING} to keep the fan-out small.
- *
- * `allSettled`, never `all`: one assignment the backend will not talk about
- * must not blank the whole queue.
- */
-async function loadSummaries(
-  accessToken: string,
-  disputes: readonly Dispute[],
-): Promise<Map<string, SummaryEntry>> {
-  const results = await Promise.allSettled(
-    disputes.map((dispute) => getEscrowSummary(accessToken, dispute.jobAssignmentId)),
-  );
-
-  const byAssignment = new Map<string, SummaryEntry>();
-
-  results.forEach((result, index) => {
-    const dispute = disputes[index];
-    if (dispute === undefined) return;
-
-    if (result.status === "fulfilled") {
-      byAssignment.set(dispute.jobAssignmentId, { ok: true, summary: result.value });
-      return;
-    }
-
-    const error: unknown = result.reason;
-    byAssignment.set(dispute.jobAssignmentId, {
-      ok: false,
-      failure: {
-        message: isKoalaApiError(error)
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : "Bilinmeyen bir hata oluştu.",
-        errorCode: isKoalaApiError(error) ? error.errorCode : "UNEXPECTED",
-        requestId: isKoalaApiError(error) ? error.requestId : null,
-      },
-    });
-  });
-
-  return byAssignment;
 }
 
 interface WorkspaceProps {
@@ -370,69 +312,11 @@ async function DisputeWorkspace({ filter, paging, query, userId }: WorkspaceProp
               {filter === "ALL" ? "" : ` (${FILTER_LABELS[filter]})`}.
             </p>
 
-            <Table
+            <DisputeTable
+              disputes={visible}
+              summaries={summaries}
               caption={filter === "RESOLVED" ? "Çözülmüş uyuşmazlıklar" : "Etkin uyuşmazlıklar"}
-            >
-              <TableHead>
-                <TableRow>
-                  <TableHeaderCell>Durum</TableHeaderCell>
-                  <TableHeaderCell>Açan taraf</TableHeaderCell>
-                  <TableHeaderCell>Atama</TableHeaderCell>
-                  <TableHeaderCell>Emanetteki tutar</TableHeaderCell>
-                  <TableHeaderCell>Açılış</TableHeaderCell>
-                  <TableHeaderCell>Detay</TableHeaderCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {visible.map((dispute) => {
-                  const entry = summaries.get(dispute.jobAssignmentId);
-                  const openedByHref = userHrefOrNull(dispute.openedBy?.id);
-                  return (
-                    <TableRow key={dispute.id}>
-                      <TableCell>
-                        <Badge tone={DISPUTE_STATUS_TONES[dispute.status]}>
-                          {DISPUTE_STATUS_LABELS[dispute.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {openedByHref === null ? (
-                          safeUserName(dispute.openedBy)
-                        ) : (
-                          <Link href={openedByHref} className="text-brand hover:underline">
-                            {safeUserName(dispute.openedBy)}
-                          </Link>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Link
-                          href={assignmentHref(dispute.jobAssignmentId)}
-                          className="font-mono text-xs text-brand hover:underline"
-                        >
-                          {dispute.jobAssignmentId}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        {entry !== undefined && entry.ok
-                          ? formatCurrency(
-                              entry.summary.pricing.employerTotal,
-                              entry.summary.pricing.currency,
-                            )
-                          : "—"}
-                      </TableCell>
-                      <TableCell>{formatDateTime(dispute.createdAt)}</TableCell>
-                      <TableCell>
-                        <Link
-                          href={disputeHref(dispute.id)}
-                          className="text-sm font-medium text-brand hover:underline"
-                        >
-                          İncele
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            />
           </>
         )}
 

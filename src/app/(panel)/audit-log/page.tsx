@@ -16,7 +16,7 @@ import { getAuditLog } from "@/server/api/audit";
 import { isKoalaApiError } from "@/server/api/errors";
 import type { PageDto } from "@/server/api/types";
 import { getKoalaAccessToken } from "@/server/auth/session";
-import { isPermission, permissionLabel } from "@/server/authz/permissions";
+import { permissionLabelsFor } from "@/server/authz/audit-permission-labels";
 import { RequirePermission } from "@/server/authz/require-permission";
 
 export const metadata: Metadata = { title: "Denetim kaydı" };
@@ -138,27 +138,6 @@ function AuditLogResults({
       />
     </div>
   );
-}
-
-/**
- * Turkish labels for the permissions this page happens to be showing.
- *
- * Resolved here because the catalogue lives under `src/server/` and the table
- * is a Client Component; `no-client-secrets.test.ts` keeps that boundary and it
- * is not worth spending for a tooltip. A permission the catalogue does not know
- * — one the backend added after this build — simply has no entry, and the raw
- * name is shown on its own rather than the row being dropped.
- */
-function permissionLabelsFor(entries: readonly AuditEntry[]): Record<string, string> {
-  const labels: Record<string, string> = {};
-
-  for (const entry of entries) {
-    if (isPermission(entry.permission)) {
-      labels[entry.permission] = permissionLabel(entry.permission);
-    }
-  }
-
-  return labels;
 }
 
 type LoadResult =

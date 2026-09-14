@@ -14,18 +14,7 @@ import {
   activeSearch,
   searchEmptyTitle,
 } from "@/components/panel/queue";
-import {
-  Badge,
-  EmptyState,
-  FormField,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
-  TextInput,
-} from "@/components/ui";
+import { Badge, EmptyState, FormField, TextInput } from "@/components/ui";
 import {
   EMPTY_VALUE,
   formatCurrency,
@@ -57,6 +46,7 @@ import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
+import { AssignmentTable } from "./assignment-table";
 import { ASSIGNMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONES } from "./labels";
 
 export const metadata: Metadata = { title: "Atama özeti" };
@@ -254,53 +244,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
             }
           />
         ) : (
-          <Table caption="Atamalar">
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Atama zamanı</TableHeaderCell>
-                <TableHeaderCell>İş</TableHeaderCell>
-                <TableHeaderCell>İşçi</TableHeaderCell>
-                <TableHeaderCell>İşveren</TableHeaderCell>
-                <TableHeaderCell>Durum</TableHeaderCell>
-                <TableHeaderCell>Ödeme</TableHeaderCell>
-                <TableHeaderCell>Tutar</TableHeaderCell>
-                <TableHeaderCell>Detay</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {list.content.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{formatDateTime(row.assignmentDateTime)}</TableCell>
-                  <TableCell>{row.jobTitle ?? EMPTY_VALUE}</TableCell>
-                  <TableCell>{safeUserName(row.worker)}</TableCell>
-                  <TableCell>
-                    {row.companyName === null
-                      ? safeUserName(row.employer)
-                      : `${safeUserName(row.employer)} · ${row.companyName}`}
-                  </TableCell>
-                  <TableCell>
-                    <Badge>{ASSIGNMENT_STATUS_LABELS[row.status]}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge tone={PAYMENT_STATUS_TONES[row.paymentStatus]}>
-                      {PAYMENT_STATUS_LABELS[row.paymentStatus]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {formatCurrency(row.pricing.employerTotal, row.pricing.currency)}
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      href={assignmentHref(row.id)}
-                      className="text-sm font-medium text-brand hover:underline"
-                    >
-                      Aç
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <AssignmentTable rows={list.content} />
         )}
 
         {list.totalElements > 0 ? (

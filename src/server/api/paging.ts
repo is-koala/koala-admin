@@ -149,6 +149,19 @@ export function readPaging(params: SearchParams, contract: PagingContract): Pagi
 }
 
 /**
+ * Bir ucun ilk sayfası, varsayılan sıralamayla, verilen boyutta. Kullanıcı
+ * sayfasının satır içi listeleri (koala-admin#103) URL'den değil koddan
+ * sayfalar; sahte `searchParams` kurup `readPaging`e vermek yerine burası.
+ */
+export function firstPage(contract: PagingContract, size: number): Paging {
+  return {
+    page: 0,
+    size: Math.min(MAX_PAGE_SIZE, Math.max(1, Math.trunc(size))),
+    sort: contract.defaultSort,
+  };
+}
+
+/**
  * The query parameters for one page.
  *
  * Named `sort` rather than `sirala` on purpose — the panel's URLs are Turkish

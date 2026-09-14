@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
+  firstPage,
   pageWindow,
   pagingQuery,
   parseSort,
@@ -90,6 +91,23 @@ describe("reading a page request out of a URL", () => {
     expect(readBooleanParam({ onayli: "true" }, "onayli", false)).toBe(true);
     expect(readBooleanParam({ onayli: "1" }, "onayli", false)).toBe(false);
     expect(readBooleanParam({}, "onayli", false)).toBe(false);
+  });
+});
+
+/** koala-admin#103: satır içi listeler URL'siz sayfalar; sınırlar yine geçerli. */
+describe("firstPage", () => {
+  it("is page zero with the contract's default sort and the asked size", () => {
+    expect(firstPage(REPORTS, 10)).toEqual({
+      page: 0,
+      size: 10,
+      sort: { field: "createdAt", direction: "desc" },
+    });
+  });
+
+  it("clamps the size to what the backend accepts", () => {
+    expect(firstPage(REPORTS, 5000).size).toBe(MAX_PAGE_SIZE);
+    expect(firstPage(REPORTS, 0).size).toBe(1);
+    expect(firstPage(REPORTS, 7.9).size).toBe(7);
   });
 });
 

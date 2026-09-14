@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 import type { ReactNode } from "react";
 
-import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { ProfilePicture } from "@/components/panel/profile-picture";
 import { QueueLoadFailure } from "@/components/panel/queue";
@@ -11,17 +10,13 @@ import { Badge } from "@/components/ui";
 import { EMPTY_VALUE, formatBoolean, formatDateTime, formatInteger } from "@/lib/format";
 import {
   accountDeletionHref,
-  assignmentsForEmployerHref,
-  assignmentsForWorkerHref,
   companyHref,
-  disputesForUserHref,
   isUuid,
-  payoutsForWorkerHref,
   reportHref,
-  reportsAboutUserHref,
-  reportsByReporterHref,
   reportsForUserHref,
+  userTabHref,
 } from "@/lib/panel-href";
+import { USER_TABS, USER_TAB_PARAM, isTabEnabled, type UserTab } from "@/lib/user-tabs";
 import { getReports, REPORT_PAGING, reportReasonLabel, type Report } from "@/server/api/reports";
 import {
   badgeFamilyLabel,
@@ -34,8 +29,7 @@ import {
   type AdminUserCounts,
   type MarketplaceUserDetail,
 } from "@/server/api/marketplace-users";
-import { getMarketplaceUserRoles } from "@/server/api/marketplace-user-roles";
-import { readPaging } from "@/server/api/paging";
+import { readEnumParam, readPaging, type SearchParams } from "@/server/api/paging";
 import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import type { Permission } from "@/server/authz/permissions";
@@ -43,7 +37,15 @@ import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
-import { UserRoleDetail, type UserGrants } from "../user-roles";
+import {
+  AssignmentsTab,
+  AuditTab,
+  DisabledTabPanel,
+  DisputesTab,
+  PayoutsTab,
+  ReportsTab,
+  UserTabNav,
+} from "./user-tabs";
 
 export const metadata: Metadata = { title: "Kullanıcı" };
 
@@ -59,9 +61,22 @@ export const metadata: Metadata = { title: "Kullanıcı" };
  * izinsiz kişide `null` gelen bir alanın "—" olarak görünmesi "bu kişinin
  * e-postası yok" diye okunurdu. Açık şikayetler yalnız `content.moderate`
  * varken okunur. Kapı `user.read`: izni olmayan kişide GET hiç çıkmaz.
+ *
+ * Kimlik kartlarının altı sekmeli (koala-admin#103): `?sekme=` ile
+ * `genel | atamalar | hakedisler | uyusmazliklar | sikayetler | denetim`.
+ * Yalnız seçili sekmenin listesi istenir; sekme tanımları `@/lib/user-tabs`,
+ * içerikleri `user-tabs.tsx`.
  */
-export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function UserDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<SearchParams>;
+}) {
   const { id } = await params;
+  const query = searchParams === undefined ? {} : await searchParams;
+  const tab = readEnumParam<UserTab>(query, USER_TAB_PARAM, USER_TABS, "genel");
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,13 +94,13 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
       />
 
       <RequirePermission permission="user.read">
-        <UserObject id={id} />
+        <UserObject id={id} tab={tab} />
       </RequirePermission>
     </div>
   );
 }
 
-async function UserObject({ id }: { id: string }) {
+async function UserObject({ id, tab }: { id: string; tab: UserTab }) {
   // UUID olmayan bir kimlik hiçbir kaydı adresleyemez: backend'e sormadan
   // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
   if (!isUuid(id)) notFound();
@@ -110,15 +125,8 @@ async function UserObject({ id }: { id: string }) {
     );
   }
 
-  let grants: UserGrants;
-  try {
-    grants = { status: "ok", grants: await getMarketplaceUserRoles(accessToken, user.id) };
-  } catch {
-    grants = { status: "failed" };
-  }
-
-  const openReports = canModerate ? await loadOpenReports(accessToken, user.id) : null;
   const held = new Set<Permission>(context.staff?.permissions ?? []);
+  const enabled = isTabEnabled(tab, held);
 
   return (
     <div className="flex flex-col gap-4">
@@ -146,29 +154,64 @@ async function UserObject({ id }: { id: string }) {
         </div>
       </section>
 
+      <UserTabNav userId={user.id} activeTab={tab} held={held} counts={user.counts} />
+
+      {!enabled ? (
+        <DisabledTabPanel tab={tab} />
+      ) : tab === "genel" ? (
+        <GeneralTab user={user} held={held} accessToken={accessToken} canModerate={canModerate} />
+      ) : tab === "atamalar" ? (
+        <AssignmentsTab accessToken={accessToken} userId={user.id} />
+      ) : tab === "hakedisler" ? (
+        <PayoutsTab accessToken={accessToken} userId={user.id} />
+      ) : tab === "uyusmazliklar" ? (
+        <DisputesTab
+          accessToken={accessToken}
+          userId={user.id}
+          canReadSummaries={held.has("payment.read")}
+        />
+      ) : tab === "sikayetler" ? (
+        <ReportsTab accessToken={accessToken} userId={user.id} />
+      ) : (
+        <AuditTab
+          accessToken={accessToken}
+          user={user}
+          canManage={canManage}
+          canReadAudit={held.has("audit.read")}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Sayaçlar, üyelikler, rozetler ve moderasyon bağlamı için açık şikayetler. */
+async function GeneralTab({
+  user,
+  held,
+  accessToken,
+  canModerate,
+}: {
+  user: MarketplaceUserDetail;
+  held: ReadonlySet<Permission>;
+  accessToken: string;
+  canModerate: boolean;
+}) {
+  const openReports = canModerate ? await loadOpenReports(accessToken, user.id) : null;
+
+  return (
+    <div className="flex flex-col gap-4">
       {user.counts === null ? null : <HistoryCounts user={user} counts={user.counts} held={held} />}
 
-      <section className="grid gap-4 md:grid-cols-2">
-        {user.companies === null ? null : (
-          <Memberships companies={user.companies} canOpen={held.has("company.approve")} />
-        )}
-        {user.badges === null ? null : <Badges badges={user.badges} />}
-      </section>
+      {user.companies === null && user.badges === null ? null : (
+        <section className="grid gap-4 md:grid-cols-2">
+          {user.companies === null ? null : (
+            <Memberships companies={user.companies} canOpen={held.has("company.approve")} />
+          )}
+          {user.badges === null ? null : <Badges badges={user.badges} />}
+        </section>
+      )}
 
       {canModerate ? <OpenReports userId={user.id} reports={openReports} /> : null}
-
-      <UserRoleDetail user={user} grants={grants} canManage={canManage} />
-
-      {canManage ? (
-        <AuditPointer
-          permission="user.role.manage"
-          resourceId={user.id}
-          linkLabel="Kullanıcı rol kayıtlarını aç"
-        >
-          Backend başarılı vermeyi user.role.grant, geri almayı user.role.revoke adıyla kaydeder.
-          Personel üyelik yazımlarından ayrı izin — staff.manage bu uçları açmaz.
-        </AuditPointer>
-      ) : null}
     </div>
   );
 }
@@ -270,70 +313,27 @@ function VerificationCard({
 interface CountEntry {
   readonly key: keyof AdminUserCounts;
   readonly label: string;
-  /** Süzgeçli liste; `null` ise o sayacın listesi yok (başvuru ucu açılmadı). */
-  readonly href: Route | null;
-  /** Listeyi açan sayfanın kapısı; izin yoksa yalnız sayı yazılır. */
-  readonly permission: Permission | null;
+  /** Sayacın açıldığı sekme; `null` ise o sayacın listesi yok (başvuru ucu açılmadı). İzin sekmenin. */
+  readonly tab: UserTab | null;
 }
 
 /**
- * Sekiz sayaç, süzgeçli listelere bağlantıyla. Ödemeler için ayrı bir liste
- * ucu yok; `/admin/payments` açılmadı, sayaç işveren olarak atamalara iner
- * (koala-backend PR 286). Başvuruların da listesi yok, yalnız sayı.
- *
- * Backend sayaçları her durumu sayar; hakediş ve şikayet bağlantıları bu
- * yüzden `durum=hepsi` taşır (kuyruk varsayılanları PROCESSING ve OPEN
- * olurdu, sayı ile liste tutmazdı). Uyuşmazlık ucu tek `status` alır ve
- * verilmezse yalnız bekleyenleri döner — orada "hepsi" yok, bağlantı
- * bekleyen kuyruğa gider; çözülmüşler durum sekmesinden.
+ * Sekiz sayaç. Bağlantı artık sayfadan çıkmaz: ilgili sekmeyi açar
+ * (koala-admin#103), süzgeçli tam liste sekmedeki "Tümünü aç" ile. Ödemeler
+ * için ayrı bir liste ucu yok; `/admin/payments` açılmadı, sayaç işveren
+ * olarak atamalara iner (koala-backend PR 286). Başvuruların da listesi yok,
+ * yalnız sayı.
  */
-function countEntries(userId: string): readonly CountEntry[] {
-  return [
-    { key: "applications", label: "Başvurular", href: null, permission: null },
-    {
-      key: "assignmentsAsWorker",
-      label: "Atamalar (işçi)",
-      href: assignmentsForWorkerHref(userId),
-      permission: "payment.read",
-    },
-    {
-      key: "assignmentsAsEmployer",
-      label: "Atamalar (işveren)",
-      href: assignmentsForEmployerHref(userId),
-      permission: "payment.read",
-    },
-    {
-      key: "payments",
-      label: "Ödemeler",
-      href: assignmentsForEmployerHref(userId),
-      permission: "payment.read",
-    },
-    {
-      key: "payouts",
-      label: "Hakedişler",
-      href: payoutsForWorkerHref(userId),
-      permission: "payout.reconcile",
-    },
-    {
-      key: "disputes",
-      label: "Uyuşmazlıklar",
-      href: disputesForUserHref(userId),
-      permission: "dispute.resolve",
-    },
-    {
-      key: "reportsReceived",
-      label: "Hakkındaki şikayetler",
-      href: reportsAboutUserHref(userId),
-      permission: "content.moderate",
-    },
-    {
-      key: "reportsMade",
-      label: "Açtığı şikayetler",
-      href: reportsByReporterHref(userId),
-      permission: "content.moderate",
-    },
-  ];
-}
+const COUNT_ENTRIES: readonly CountEntry[] = [
+  { key: "applications", label: "Başvurular", tab: null },
+  { key: "assignmentsAsWorker", label: "Atamalar (işçi)", tab: "atamalar" },
+  { key: "assignmentsAsEmployer", label: "Atamalar (işveren)", tab: "atamalar" },
+  { key: "payments", label: "Ödemeler", tab: "atamalar" },
+  { key: "payouts", label: "Hakedişler", tab: "hakedisler" },
+  { key: "disputes", label: "Uyuşmazlıklar", tab: "uyusmazliklar" },
+  { key: "reportsReceived", label: "Hakkındaki şikayetler", tab: "sikayetler" },
+  { key: "reportsMade", label: "Açtığı şikayetler", tab: "sikayetler" },
+];
 
 function HistoryCounts({
   user,
@@ -355,20 +355,22 @@ function HistoryCounts({
           Geçmiş
         </h2>
         <p className="max-w-prose text-xs text-ink-muted">
-          Sayaçlar backend&apos;den gelir; bağlantı ilgili listeyi bu kullanıcıya süzer ve yalnız o
+          Sayaçlar backend&apos;den gelir; bağlantı ilgili sekmeyi bu sayfada açar ve yalnız o
           listenin izni varken verilir. Ödemelerin ayrı listesi yok: işveren olarak atamalara iner.
         </p>
       </div>
       <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        {countEntries(user.id).map((entry) => {
-          const canOpen =
-            entry.href !== null && entry.permission !== null && held.has(entry.permission);
+        {COUNT_ENTRIES.map((entry) => {
+          const canOpen = entry.tab !== null && isTabEnabled(entry.tab, held);
           return (
             <div key={entry.key} className="flex flex-col gap-0.5">
               <dt className="text-xs text-ink-muted">{entry.label}</dt>
               <dd className="text-lg font-semibold">
-                {canOpen && entry.href !== null ? (
-                  <Link href={entry.href} className="text-brand hover:underline">
+                {canOpen && entry.tab !== null ? (
+                  <Link
+                    href={userTabHref(user.id, entry.tab)}
+                    className="text-brand hover:underline"
+                  >
                     {formatInteger(counts[entry.key])}
                   </Link>
                 ) : (
