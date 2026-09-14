@@ -3,7 +3,15 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { PageHeader } from "@/components/panel/page-header";
-import { QueueLoadFailure, QueuePager } from "@/components/panel/queue";
+import {
+  ListSearchForm,
+  QueueLoadFailure,
+  QueuePager,
+  SEARCH_PARAM,
+  SearchResultSummary,
+  activeSearch,
+  searchEmptyTitle,
+} from "@/components/panel/queue";
 import {
   Badge,
   EmptyState,
@@ -34,6 +42,11 @@ import {
   type PaymentStatus,
 } from "@/server/api/escrow";
 import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
+import {
+  SEARCH_QUERY_TOO_LONG_MESSAGE,
+  isSearchQueryTooLong,
+  readSearchQuery,
+} from "@/server/api/search-query";
 import { safeUserName, type SafeUser } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
@@ -46,6 +59,10 @@ export const metadata: Metadata = { title: "Atama özeti" };
  *
  * `GET /admin/job-assignments` `payment.read` ile sayfalar; satır DTO'su
  * UUID bakışıyla aynı `AdminAssignmentDto`. Emanet yazımı burada yok.
+ *
+ * İki kutu, iki iş: `?atama=` tek bir kaydı UUID ile açar, `?ara=` kuyruğu
+ * backend'de süzer (koala-admin#94). Arama kutusu UUID doğrulamaz — atama
+ * id'si de aranabilen alanlardan biri, kısmi id yazmak meşru.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -106,11 +123,33 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
   const raw = readParam(params, "atama")?.trim() ?? "";
   const candidate = raw.length === 0 ? null : raw;
   const invalid = candidate !== null && !UUID.test(candidate);
+  const query = readSearchQuery(readParam(params, SEARCH_PARAM));
+  const search = activeSearch(query);
+
+  const viewState = {
+    boyut: String(paging.size),
+    ...(candidate === null ? {} : { atama: candidate }),
+    ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+  };
 
   const form = (
     <LookupForm
       value={candidate ?? ""}
       error={invalid ? "Geçerli bir atama kimliği girin." : null}
+      carry={query === null ? {} : { [SEARCH_PARAM]: query }}
+    />
+  );
+
+  const searchForm = (error: string | null = null) => (
+    <ListSearchForm
+      id="atama-ara"
+      label="Atamalarda ara"
+      pathname="/assignments"
+      query={query}
+      state={viewState}
+      placeholder="ör. garson, ayşe@example.com, 9a1c0f10"
+      hint="Atama kimliği, ilan başlığı, işveren ve çalışanın ad-soyadı ile e-postasında arar; backend süzer."
+      error={error}
     />
   );
 
@@ -118,11 +157,20 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
 
   let list;
   try {
-    list = await getAdminAssignments(accessToken, paging);
+    list = await getAdminAssignments(accessToken, { paging, query });
   } catch (error) {
+    if (isSearchQueryTooLong(error)) {
+      return (
+        <div className="flex flex-col gap-6">
+          {form}
+          {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col gap-6">
         {form}
+        {searchForm()}
         <QueueLoadFailure
           subject="Atama kuyruğu"
           permission="payment.read"
@@ -150,6 +198,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
   return (
     <div className="flex flex-col gap-6">
       {form}
+      {searchForm()}
 
       <section className="flex flex-col gap-3" aria-labelledby="assignment-queue-heading">
         <div className="flex flex-col gap-1">
@@ -162,10 +211,16 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
           </p>
         </div>
 
+        <SearchResultSummary search={search} total={list.totalElements} unit="atama" />
+
         {list.content.length === 0 ? (
           <EmptyState
-            title="Atama yok."
-            description="Kuyruk boşsa yine de yukarıdan bir atama kimliğiyle bakabilirsiniz."
+            title={search === null ? "Atama yok." : searchEmptyTitle(search)}
+            description={
+              search === null
+                ? "Kuyruk boşsa yine de yukarıdan bir atama kimliğiyle bakabilirsiniz."
+                : "Arama backend'de atama kimliği, ilan başlığı ve tarafların ad-soyadı ile e-postasında çalışır."
+            }
           />
         ) : (
           <Table caption="Atamalar">
@@ -210,6 +265,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
                         query: {
                           atama: row.id,
                           ...(paging.page > 0 ? { sayfa: String(paging.page) } : {}),
+                          ...(query === null ? {} : { [SEARCH_PARAM]: query }),
                         },
                       }}
                       className="text-sm font-medium text-brand hover:underline"
@@ -224,14 +280,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
         )}
 
         {list.totalElements > 0 ? (
-          <QueuePager
-            window={pageWindow(list)}
-            state={{
-              boyut: String(paging.size),
-              ...(candidate === null ? {} : { atama: candidate }),
-            }}
-            unit="atama"
-          />
+          <QueuePager window={pageWindow(list)} state={viewState} unit="atama" />
         ) : null}
       </section>
 
@@ -248,9 +297,21 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
   );
 }
 
-function LookupForm({ value, error }: { value: string; error: string | null }) {
+function LookupForm({
+  value,
+  error,
+  carry,
+}: {
+  value: string;
+  error: string | null;
+  /** Kimlik bakışı aramayı silmesin: `ara` gizli alan olarak taşınır. */
+  carry: Readonly<Record<string, string>>;
+}) {
   return (
     <form className="flex flex-wrap items-end gap-3" method="get">
+      {Object.entries(carry).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <FormField
         id="atama"
         label="Atama kimliği"

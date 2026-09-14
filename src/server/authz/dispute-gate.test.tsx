@@ -1,7 +1,11 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { adminMeSuccessBody, resourceNotFoundBody } from "../../../test/fixtures/envelopes";
+import {
+  adminMeSuccessBody,
+  resourceNotFoundBody,
+  searchQueryTooLongBody,
+} from "../../../test/fixtures/envelopes";
 import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment";
 import { apiUrl, server } from "../../../test/msw";
 import { renderServerComponent } from "../../../test/render-server";
@@ -659,5 +663,64 @@ describe("a dispute that does not exist", () => {
 
     expect(dispute.calls).toBe(0);
     expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+});
+
+describe("the dispute search box — koala-admin#94", () => {
+  it("sends ara to the backend as query, next to the status, and names it in the result line", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    const disputes = watchDisputes();
+    watchSummary();
+
+    const html = (
+      await renderServerComponent(
+        <DisputesPage searchParams={params({ ara: " ayşe ", durum: "UNDER_REVIEW" })} />,
+      )
+    ).replaceAll("<!-- -->", "");
+
+    expect(disputes.url?.searchParams.get("query")).toBe("ayşe");
+    expect(disputes.url?.searchParams.get("status")).toBe("UNDER_REVIEW");
+    expect(html).toContain("“ayşe” için 1 uyuşmazlık bulundu.");
+    expect(html).toContain('name="ara"');
+  });
+
+  it("offers Temizle, which drops ara and keeps the status; the status tabs carry ara", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    watchDisputes();
+    watchSummary();
+
+    const html = await renderServerComponent(
+      <DisputesPage searchParams={params({ ara: "ayşe", durum: "OPEN" })} />,
+    );
+
+    expect(html).toContain('href="/disputes?durum=OPEN&amp;boyut=25"');
+    expect(html).toContain("Temizle");
+    expect(html).toContain('href="/disputes?durum=RESOLVED&amp;ara=ay%C5%9Fe"');
+  });
+
+  it("says there is no result for the query", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    watchDisputes(emptyQueue);
+
+    const html = await renderServerComponent(
+      <DisputesPage searchParams={params({ ara: "kimse" })} />,
+    );
+
+    expect(html).toContain("“kimse” için sonuç yok.");
+    expect(html).not.toContain("Bekleyen uyuşmazlık yok.");
+  });
+
+  it("shows the backend's 400 for an over-long query inline", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    watchDisputes(() =>
+      HttpResponse.json(searchQueryTooLongBody("/admin/disputes"), { status: 400 }),
+    );
+
+    const html = await renderServerComponent(
+      <DisputesPage searchParams={params({ ara: "k".repeat(120) })} />,
+    );
+
+    expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
+    expect(html).not.toContain("Uyuşmazlık kuyruğu yüklenemedi.");
   });
 });

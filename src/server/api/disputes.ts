@@ -5,6 +5,7 @@ import type { Permission } from "@/server/authz/permissions";
 import { koalaApi } from "./koala";
 import type { PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
+import { searchQueryParam } from "./search-query";
 import type { PageDto } from "./types";
 import { safeUserSchema } from "./users";
 
@@ -190,6 +191,8 @@ export interface DisputeQuery {
    * resolutions; DISMISSED itself is not a list status.
    */
   status?: DisputeStatus | null;
+  /** koala-backend#263: uyuşmazlık id'si, atama id'si ve tarafların ad-soyadı/e-postası. */
+  query?: string | null;
 }
 
 /**
@@ -209,6 +212,7 @@ export function getDisputes(
       page: query.page ?? 0,
       size: query.size ?? DISPUTE_PAGING.defaultSize ?? 25,
       ...(query.status ? { status: query.status } : {}),
+      query: searchQueryParam(query.query),
     },
     accessToken,
     cache: "no-store",

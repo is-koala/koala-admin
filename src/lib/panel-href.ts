@@ -20,6 +20,14 @@ function withQuery(path: string, state: Readonly<Record<string, string>> = {}): 
   return asRoute(encoded.length > 0 ? `${path}?${encoded}` : path);
 }
 
+/**
+ * Bir liste sayfasının kendi adresi, verilen görünümle. Arama kutusunun
+ * "Temizle" bağlantısı bunu kullanır: `q` düşer, durum/sıralama/boyut kalır.
+ */
+export function listHref(pathname: string, state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery(pathname, state);
+}
+
 export function reportHref(reportId: string): Route {
   return asRoute(`/reports/${reportId}`);
 }

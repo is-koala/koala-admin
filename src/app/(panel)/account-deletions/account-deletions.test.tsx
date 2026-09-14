@@ -1,7 +1,11 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
+import {
+  adminMeSuccessBody,
+  resourceNotFoundBody,
+  searchQueryTooLongBody,
+} from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -289,5 +293,55 @@ describe("a deletion request that does not exist", () => {
 
     expect(detail.calls).toBe(0);
     expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+});
+
+describe("the search box — koala-admin#94", () => {
+  it("sends ara to the backend as query, next to the status, and names it in the result line", async () => {
+    stubMe(READER);
+    const queue = watchQueue([row()]);
+
+    const html = await render({ ara: " ayse@example.com ", durum: "REQUESTED" });
+
+    expect(queue.url?.searchParams.get("query")).toBe("ayse@example.com");
+    expect(queue.url?.searchParams.get("status")).toBe("REQUESTED");
+    expect(html).toContain("“ayse@example.com” için 1 talep bulundu.");
+    expect(html).toContain('name="ara"');
+  });
+
+  it("offers Temizle, which drops ara and keeps the view", async () => {
+    stubMe(READER);
+    watchQueue([row()]);
+
+    const html = await render({ ara: "ayse@example.com", durum: "REJECTED" });
+
+    expect(html).toContain(
+      'href="/account-deletions?durum=REJECTED&amp;sirala=requestedAt%2Cdesc&amp;boyut=20"',
+    );
+    expect(html).toContain("Temizle");
+  });
+
+  it("says there is no result for the query", async () => {
+    stubMe(READER);
+    watchQueue([]);
+
+    const html = await render({ ara: "kimse@example.com" });
+
+    expect(html).toContain("“kimse@example.com” için sonuç yok.");
+    expect(html).not.toContain("Hesap silme talebi yok.");
+  });
+
+  it("shows the backend's 400 for an over-long query inline", async () => {
+    stubMe(READER);
+    server.use(
+      http.get(DELETIONS, () =>
+        HttpResponse.json(searchQueryTooLongBody("/admin/account-deletions"), { status: 400 }),
+      ),
+    );
+
+    const html = await render({ ara: "k".repeat(120) });
+
+    expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
+    expect(html).not.toContain("Hesap silme kuyruğu yüklenemedi.");
   });
 });

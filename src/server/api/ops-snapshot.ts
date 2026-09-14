@@ -110,7 +110,7 @@ export async function loadOpsHome(
   if (held.has("bank.account.verify")) {
     jobs.push(
       countTile("/iban-verifications", "IBAN doğrulama", () =>
-        getPendingIbanVerifications(accessToken, countPaging(IBAN_PENDING_PAGING)),
+        getPendingIbanVerifications(accessToken, { paging: countPaging(IBAN_PENDING_PAGING) }),
       ),
     );
   }

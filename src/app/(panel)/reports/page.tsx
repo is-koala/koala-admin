@@ -2,7 +2,16 @@ import Link from "next/link";
 import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
-import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
+import {
+  ListSearchForm,
+  QueueFilters,
+  QueueLoadFailure,
+  QueuePager,
+  SEARCH_PARAM,
+  SearchResultSummary,
+  activeSearch,
+  searchEmptyTitle,
+} from "@/components/panel/queue";
 import {
   Badge,
   EmptyState,
@@ -34,6 +43,11 @@ import {
   reportTargets,
   type ReportStatus,
 } from "@/server/api/reports";
+import {
+  SEARCH_QUERY_TOO_LONG_MESSAGE,
+  isSearchQueryTooLong,
+  readSearchQuery,
+} from "@/server/api/search-query";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
@@ -104,6 +118,8 @@ async function ReportQueue({ params }: { params: SearchParams }) {
   const status = readEnumParam<ReportStatus>(params, "durum", REPORT_STATUSES, "OPEN");
   const paging = readPaging(params, REPORT_PAGING);
   const reportedUserId = readUuidParam(params, "kullanici");
+  const query = readSearchQuery(readParam(params, SEARCH_PARAM));
+  const search = activeSearch(query);
 
   const viewState: Record<string, string> = {
     durum: status,
@@ -111,6 +127,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
     boyut: String(paging.size),
   };
   if (reportedUserId !== null) viewState.kullanici = reportedUserId;
+  if (query !== null) viewState[SEARCH_PARAM] = query;
 
   const filters = (
     <QueueFilters
@@ -134,6 +151,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
       carry={{
         boyut: String(paging.size),
         ...(reportedUserId !== null ? { kullanici: reportedUserId } : {}),
+        ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
       }}
       notice={
         reportedUserId !== null ? (
@@ -144,6 +162,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
                 durum: status,
                 sirala: sortParam(paging.sort),
                 boyut: String(paging.size),
+                ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
               })}
             >
               Süzgeci kaldır
@@ -157,13 +176,40 @@ async function ReportQueue({ params }: { params: SearchParams }) {
     />
   );
 
+  const searchForm = (error: string | null = null) => (
+    <ListSearchForm
+      id="sikayet-ara"
+      label="Şikayetlerde ara"
+      pathname="/reports"
+      query={query}
+      state={viewState}
+      placeholder="ör. ayşe yılmaz, ayse@example.com veya garson"
+      hint="Şikayet eden ve edilenin ad-soyadı ile e-postasında, ilan başlığında arar; durum süzgeciyle kesişir."
+      error={error}
+    />
+  );
+
   let page;
   try {
-    page = await getReports(await getKoalaAccessToken(), { status, reportedUserId, paging });
+    page = await getReports(await getKoalaAccessToken(), {
+      status,
+      reportedUserId,
+      paging,
+      query,
+    });
   } catch (error) {
+    if (isSearchQueryTooLong(error)) {
+      return (
+        <div className="flex flex-col gap-4">
+          {filters}
+          {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col gap-4">
         {filters}
+        {searchForm()}
         <QueueLoadFailure
           subject="Şikayet kuyruğu"
           permission="content.moderate"
@@ -176,11 +222,21 @@ async function ReportQueue({ params }: { params: SearchParams }) {
   return (
     <div className="flex flex-col gap-6">
       {filters}
+      {searchForm()}
+      <SearchResultSummary search={search} total={page.totalElements} unit="şikayet" />
 
       {page.content.length === 0 ? (
         <EmptyState
-          title={`"${reportStatusLabel(status)}" durumunda şikayet yok.`}
-          description="Bu, bu durumdaki kuyruğun boş olduğu anlamına gelir — başka durumdaki şikayetler için yukarıdaki süzgeci değiştirin."
+          title={
+            search === null
+              ? `"${reportStatusLabel(status)}" durumunda şikayet yok.`
+              : searchEmptyTitle(search)
+          }
+          description={
+            search === null
+              ? "Bu, bu durumdaki kuyruğun boş olduğu anlamına gelir — başka durumdaki şikayetler için yukarıdaki süzgeci değiştirin."
+              : `Arama "${reportStatusLabel(status)}" durumuyla kesişir; başka bir durum seçebilir ya da aramayı temizleyebilirsiniz.`
+          }
         />
       ) : (
         <>

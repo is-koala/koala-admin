@@ -3,7 +3,15 @@ import type { Metadata } from "next";
 
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
-import { QueueLoadFailure, QueuePager } from "@/components/panel/queue";
+import {
+  ListSearchForm,
+  QueueLoadFailure,
+  QueuePager,
+  SEARCH_PARAM,
+  SearchResultSummary,
+  activeSearch,
+  searchEmptyTitle,
+} from "@/components/panel/queue";
 import { PayoutReconciliationForm } from "@/components/payout-reconciliation/payout-reconciliation-form";
 import {
   Badge,
@@ -19,6 +27,11 @@ import { formatCurrency, formatDateTime } from "@/lib/format";
 import { assignmentLookupHref, isUuid } from "@/lib/panel-href";
 import { getPayouts, PAYOUT_PAGING, type Payout } from "@/server/api/payout-reconciliation";
 import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
+import {
+  SEARCH_QUERY_TOO_LONG_MESSAGE,
+  isSearchQueryTooLong,
+  readSearchQuery,
+} from "@/server/api/search-query";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
@@ -62,15 +75,45 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
   const paging = readPaging(params, PAYOUT_PAGING);
   const selected = readParam(params, "hakedis");
   const selectedId = selected !== null && isUuid(selected) ? selected : null;
+  const query = readSearchQuery(readParam(params, SEARCH_PARAM));
+  const search = activeSearch(query);
+
+  const viewState = {
+    boyut: String(paging.size),
+    ...(selectedId === null ? {} : { hakedis: selectedId }),
+    ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+  };
+
+  const searchForm = (error: string | null = null) => (
+    <ListSearchForm
+      id="hakedis-ara"
+      label="Hakedişlerde ara"
+      pathname="/payout-reconciliation"
+      query={query}
+      state={viewState}
+      placeholder="ör. 9c000000, ayşe yılmaz veya ayse@example.com"
+      hint="Hakediş kimliği, atama kimliği, alıcının ad-soyadı ve e-postasında arar; yalnız bekleyen kuyruk."
+      error={error}
+    />
+  );
 
   const accessToken = await getKoalaAccessToken();
 
   let page;
   try {
-    page = await getPayouts(accessToken, { paging });
+    page = await getPayouts(accessToken, { paging, query });
   } catch (error) {
+    if (isSearchQueryTooLong(error)) {
+      return (
+        <div className="flex flex-col gap-6">
+          {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
+          <ConfirmSection payoutId={selectedId} />
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col gap-6">
+        {searchForm()}
         <QueueLoadFailure
           subject="Bekleyen hakedişler"
           permission="payout.reconcile"
@@ -96,9 +139,12 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
           </p>
         </div>
 
+        {searchForm()}
+        <SearchResultSummary search={search} total={page.totalElements} unit="hakediş" />
+
         {rows.length === 0 ? (
           <EmptyState
-            title="Bekleyen hakediş yok."
+            title={search === null ? "Bekleyen hakediş yok." : searchEmptyTitle(search)}
             description="Kuyruk boşsa aşağıdaki forma hakediş kimliğini yazabilirsiniz."
           />
         ) : (
@@ -119,6 +165,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
                   row={row}
                   selected={row.id === selectedId}
                   page={paging.page}
+                  query={query}
                 />
               ))}
             </TableBody>
@@ -126,14 +173,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
         )}
 
         {page.totalElements > 0 ? (
-          <QueuePager
-            window={pageWindow(page)}
-            state={{
-              boyut: String(paging.size),
-              ...(selectedId === null ? {} : { hakedis: selectedId }),
-            }}
-            unit="hakediş"
-          />
+          <QueuePager window={pageWindow(page)} state={viewState} unit="hakediş" />
         ) : null}
       </section>
 
@@ -142,7 +182,18 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
   );
 }
 
-function PayoutRow({ row, selected, page }: { row: Payout; selected: boolean; page: number }) {
+function PayoutRow({
+  row,
+  selected,
+  page,
+  query,
+}: {
+  row: Payout;
+  selected: boolean;
+  page: number;
+  /** Satırdan onaya geçmek aramayı silmesin. */
+  query: string | null;
+}) {
   return (
     <TableRow>
       <TableCell>{formatDateTime(row.createdAt)}</TableCell>
@@ -168,6 +219,7 @@ function PayoutRow({ row, selected, page }: { row: Payout; selected: boolean; pa
               query: {
                 hakedis: row.id,
                 ...(page > 0 ? { sayfa: String(page) } : {}),
+                ...(query === null ? {} : { [SEARCH_PARAM]: query }),
               },
             }}
             className="text-sm font-medium text-brand hover:underline"

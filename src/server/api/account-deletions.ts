@@ -5,6 +5,7 @@ import { z } from "zod";
 import { koalaApi } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
+import { searchQueryParam } from "./search-query";
 import type { PageDto } from "./types";
 
 /**
@@ -68,6 +69,8 @@ export function deletionStatusLabel(status: string): string {
 export interface DeletionQueueQuery {
   readonly status?: DeletionStatus;
   readonly paging: Paging;
+  /** koala-backend#263: talep sahibinin e-postası. */
+  readonly query?: string | null;
 }
 
 export function getAccountDeletions(
@@ -79,6 +82,7 @@ export function getAccountDeletions(
     schema: pageDtoSchema(accountDeletionSchema),
     query: {
       ...(query.status !== undefined ? { status: query.status } : {}),
+      query: searchQueryParam(query.query),
       ...pagingQuery(query.paging),
     },
     accessToken,
