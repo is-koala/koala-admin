@@ -14,7 +14,7 @@ import type { Permission } from "@/server/authz/permissions";
  * süzgece gidiyor ve yanlış yazılmış bir ad, boş bir denetim kaydı sayfası
  * açardı — hiçbir şey kırılmadan, hiçbir şey söylenmeden.
  *
- * Nesne sayfalarında (koala-admin#99) izin verilmez: bir atamaya hem
+ * Nesne sayfaları (koala-admin#99, `ObjectAuditPointer`) izin vermez: bir atamaya hem
  * `payout.release` hem `payment.refund` yazar, bir şirkete hem `company.approve`
  * hem `content.moderate`. Tek izne süzmek diğer satırları saklardı; yalnız
  * `resourceId` süzgeci o kaydın bütün satırlarını getirir.

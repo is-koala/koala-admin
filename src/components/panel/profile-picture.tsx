@@ -1,3 +1,4 @@
+import { httpUrlOrNull } from "@/lib/external-url";
 import { EMPTY_VALUE } from "@/lib/format";
 
 /**
@@ -6,7 +7,8 @@ import { EMPTY_VALUE } from "@/lib/format";
  * Backend'in verdiği adres olduğu gibi çizilir; şikayet görseli ve rozet
  * simgesiyle aynı kalıp. İmzalı indirme BFF'i yok: profil fotoğrafı kanıt
  * değil, kullanıcı yüzeyinin de gösterdiği herkese açık görsel. Adres yoksa
- * boş değer yazılır ki "fotoğraf yok" ile "alan çizilmedi" ayrışsın.
+ * ya da `http(s)` değilse boş değer yazılır ki "fotoğraf yok" ile "alan
+ * çizilmedi" ayrışsın.
  */
 export function ProfilePicture({
   url,
@@ -18,12 +20,13 @@ export function ProfilePicture({
   name: string;
   size?: "sm" | "md";
 }) {
-  if (url === null || url.trim().length === 0) return <>{EMPTY_VALUE}</>;
+  const src = httpUrlOrNull(url);
+  if (src === null) return <>{EMPTY_VALUE}</>;
   const dimension = size === "sm" ? "h-6 w-6" : "h-16 w-16";
   return (
     // eslint-disable-next-line @next/next/no-img-element -- backend'in verdiği depo adresi; şikayet sayfasıyla aynı kalıp.
     <img
-      src={url}
+      src={src}
       alt={`${name} profil fotoğrafı`}
       className={`${dimension} inline-block rounded-full border border-border-subtle object-cover align-middle`}
     />

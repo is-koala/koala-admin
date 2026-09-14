@@ -440,12 +440,16 @@ describe("the report's job, message and audit pointer", () => {
     expect(html).not.toMatch(/>İlan<\/dt>/);
   });
 
-  it("points at the audit log filtered to this report", async () => {
+  it("points at the audit log filtered to this report, only for an audit.read holder", async () => {
     stubMe(MODERATOR);
     watchDetail(row());
+    const alone = await renderDetail();
+    expect(alone).not.toContain("Her değişiklik denetim kaydında");
+    expect(alone).not.toContain("/audit-log?");
 
+    stubMe([...MODERATOR, "audit.read"]);
+    watchDetail(row());
     const html = await renderDetail();
-
     expect(html).toContain("Her değişiklik denetim kaydında");
     expect(html).toContain(`href="/audit-log?resourceId=${row().id}"`);
   });

@@ -330,6 +330,43 @@ describe("TCKK photos on the object page", () => {
  * söyleyen tek yer ortak `not-found.tsx`. `notFound()` fırlattığı için render
  * reddeder — Next onu digest'ten tanır.
  */
+describe("a review that does not exist", () => {
+  it("calls notFound() on the backend's RESOURCE_NOT_FOUND rather than drawing an alert", async () => {
+    stubMe(REVIEWER);
+    const detail = watchDetail(undefined, () =>
+      HttpResponse.json(
+        {
+          ...resourceNotFoundBody,
+          errorCode: "IDENTITY_VERIFICATION_NOT_FOUND",
+          path: `/admin/identity-verifications/${REVIEW_ID}`,
+        },
+        { status: 404 },
+      ),
+    );
+
+    const thrown = await renderDetail().then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(detail.calls).toBe(1);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+
+  it("treats an id that cannot be a UUID the same way, without asking the backend", async () => {
+    stubMe(REVIEWER);
+    const detail = watchDetail();
+
+    const thrown = await renderDetail("not-a-uuid").then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(detail.calls).toBe(0);
+    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+});
+
 /** koala-admin#99: karar zamanı ve kararı veren zod'da vardı, çizilmiyordu. */
 describe("the decision's time and author on the object page", () => {
   it("draws verifiedAt, rejectedAt and reviewedByStaffId for a decided review", async () => {
@@ -371,51 +408,18 @@ describe("the decision's time and author on the object page", () => {
     expect(pending).toMatch(/Kararı veren personel<\/dt><dd[^>]*><span[^>]*>—</);
   });
 
-  it("points at the audit log filtered to this review", async () => {
+  it("points at the audit log filtered to this review, only for an audit.read holder", async () => {
     stubMe(REVIEWER);
     watchDetail(PENDING_REVIEW);
+    const alone = await renderDetail();
+    expect(alone).not.toContain("Her değişiklik denetim kaydında");
+    expect(alone).not.toContain("/audit-log?");
 
+    stubMe([...REVIEWER, "audit.read"]);
+    watchDetail(PENDING_REVIEW);
     const html = await renderDetail();
-
     expect(html).toContain("Her değişiklik denetim kaydında");
     expect(html).toContain(`href="/audit-log?resourceId=${REVIEW_ID}"`);
-  });
-});
-
-describe("a review that does not exist", () => {
-  it("calls notFound() on the backend's RESOURCE_NOT_FOUND rather than drawing an alert", async () => {
-    stubMe(REVIEWER);
-    const detail = watchDetail(undefined, () =>
-      HttpResponse.json(
-        {
-          ...resourceNotFoundBody,
-          errorCode: "IDENTITY_VERIFICATION_NOT_FOUND",
-          path: `/admin/identity-verifications/${REVIEW_ID}`,
-        },
-        { status: 404 },
-      ),
-    );
-
-    const thrown = await renderDetail().then(
-      () => null,
-      (error: unknown) => error,
-    );
-
-    expect(detail.calls).toBe(1);
-    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
-  });
-
-  it("treats an id that cannot be a UUID the same way, without asking the backend", async () => {
-    stubMe(REVIEWER);
-    const detail = watchDetail();
-
-    const thrown = await renderDetail("not-a-uuid").then(
-      () => null,
-      (error: unknown) => error,
-    );
-
-    expect(detail.calls).toBe(0);
-    expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });
 

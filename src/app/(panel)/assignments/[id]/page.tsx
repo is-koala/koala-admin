@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
-import { AuditPointer } from "@/components/panel/authz/audit-pointer";
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { isUuid } from "@/lib/panel-href";
@@ -84,10 +84,10 @@ async function AssignmentObject({ id }: { id: string }) {
         payments={payments}
         permissions={context.staff?.permissions ?? []}
       />
-      <AuditPointer resourceId={assignment.id} linkLabel="Bu atamanın denetim kayıtlarını aç">
+      <ObjectAuditPointer resourceId={assignment.id} linkLabel="Bu atamanın denetim kayıtlarını aç">
         Serbest bırakma ve iade backend tarafından bu atama kimliğiyle denetim kaydına yazılır;
         personelin bu kaydı açması da kayda düşer.
-      </AuditPointer>
+      </ObjectAuditPointer>
     </div>
   );
 }

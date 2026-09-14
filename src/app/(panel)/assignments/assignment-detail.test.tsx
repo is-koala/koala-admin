@@ -180,14 +180,34 @@ describe("party pictures and the audit pointer", () => {
     expect(html).toContain("Ayşe Yılmaz");
   });
 
-  it("points at the audit log filtered to this assignment", async () => {
+  it("points at the audit log filtered to this assignment, only for an audit.read holder", async () => {
     stubMe(ANALYST);
     watch();
+    const alone = await render();
+    expect(alone).not.toContain("Her değişiklik denetim kaydında");
+    expect(alone).not.toContain("/audit-log?");
+
+    stubMe([...ANALYST, "audit.read"]);
+    watch();
+    const html = await render();
+    expect(html).toContain("Her değişiklik denetim kaydında");
+    expect(html).toContain(`href="/audit-log?resourceId=${ASSIGNMENT_ID}"`);
+  });
+
+  it("refuses a non-http profile picture address without drawing an img", async () => {
+    stubMe(ANALYST);
+    const detail = adminAssignmentDetailFixture();
+    watch({
+      ...detail,
+      worker: { ...detail.worker, profilePictureUrl: "javascript:alert(1)" },
+      employer: { ...detail.employer, profilePictureUrl: "data:image/png;base64,AAAA" },
+    });
 
     const html = await render();
 
-    expect(html).toContain("Her değişiklik denetim kaydında");
-    expect(html).toContain(`href="/audit-log?resourceId=${ASSIGNMENT_ID}"`);
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("javascript:alert(1)");
+    expect(html).not.toContain("data:image/png");
   });
 });
 

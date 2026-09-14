@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 import type { ReactNode } from "react";
 
-import { AuditPointer } from "@/components/panel/authz/audit-pointer";
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
+import { httpUrlOrNull } from "@/lib/external-url";
 import {
   EMPTY_VALUE,
   formatCurrency,
@@ -286,10 +287,10 @@ async function JobObject({ id }: { id: string }) {
 
       <Gallery job={job} />
 
-      <AuditPointer resourceId={job.id} linkLabel="Bu ilanın denetim kayıtlarını aç">
+      <ObjectAuditPointer resourceId={job.id} linkLabel="Bu ilanın denetim kayıtlarını aç">
         Panel ilana yazmaz; backend bu ilan kimliğiyle yapılan her personel okumasını ve işlemini
         denetim kaydına düşer.
-      </AuditPointer>
+      </ObjectAuditPointer>
     </div>
   );
 }
@@ -300,16 +301,16 @@ async function JobObject({ id }: { id: string }) {
  */
 function Website({ url }: { url: string | null }) {
   if (url === null || url.trim().length === 0) return <>{EMPTY_VALUE}</>;
-  const trimmed = url.trim();
-  if (!/^https?:\/\//i.test(trimmed)) return <span className="break-all">{trimmed}</span>;
+  const href = httpUrlOrNull(url);
+  if (href === null) return <span className="break-all">{url.trim()}</span>;
   return (
     <a
-      href={trimmed}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="text-brand break-all hover:underline"
     >
-      {trimmed}
+      {href}
     </a>
   );
 }

@@ -404,12 +404,16 @@ describe("the safe review projection", () => {
 
 /** koala-admin#99: nesne sayfası denetim kaydına bu şirket kimliğiyle bağlanır. */
 describe("the audit pointer on the company page", () => {
-  it("points at the audit log filtered to this company", async () => {
+  it("points at the audit log filtered to this company, only for an audit.read holder", async () => {
     stubMe(APPROVER);
     watchDetail();
+    const alone = await renderDetail();
+    expect(alone).not.toContain("Her değişiklik denetim kaydında");
+    expect(alone).not.toContain("/audit-log?");
 
+    stubMe([...APPROVER, "audit.read"]);
+    watchDetail();
     const html = await renderDetail();
-
     expect(html).toContain("Her değişiklik denetim kaydında");
     expect(html).toContain(`href="/audit-log?resourceId=${COMPANY_REVIEW_ID}"`);
   });

@@ -418,6 +418,22 @@ describe("a bookmarked marketplace user", () => {
     expect(withoutPicture).not.toContain("<img");
   });
 
+  it("draws no img for a profile picture address that is not http(s)", async () => {
+    stubMe(READER);
+    for (const url of ["javascript:alert(1)", "data:image/png;base64,AAAA", "s3://bucket/a.jpg"]) {
+      const user = row({ profilePictureUrl: url });
+      stubUser(user);
+
+      const html = (
+        await renderServerComponent(<UserDetailPage params={Promise.resolve({ id: user.id })} />)
+      ).replaceAll("<!-- -->", "");
+
+      expect(html).not.toContain("<img");
+      expect(html).not.toContain(url);
+      expect(html).toMatch(/Profil fotoğrafı<\/dt><dd[^>]*>—</);
+    }
+  });
+
   it("loads open reports only when content.moderate is held", async () => {
     stubMe(["user.read", "content.moderate"]);
     const user = row();

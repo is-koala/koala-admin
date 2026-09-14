@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { AuditPointer } from "@/components/panel/authz/audit-pointer";
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import {
@@ -248,10 +248,10 @@ async function PaymentObject({ id }: { id: string }) {
 
       <Refunds payment={payment} currency={currency} />
 
-      <AuditPointer resourceId={payment.id} linkLabel="Bu ödemenin denetim kayıtlarını aç">
+      <ObjectAuditPointer resourceId={payment.id} linkLabel="Bu ödemenin denetim kayıtlarını aç">
         İade atama sayfasından yapılır ve backend tarafından denetim kaydına yazılır; bu ödeme
         kimliğiyle yapılan personel okumaları da kayda düşer.
-      </AuditPointer>
+      </ObjectAuditPointer>
     </div>
   );
 }

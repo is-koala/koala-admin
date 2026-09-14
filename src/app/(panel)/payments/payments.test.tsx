@@ -191,12 +191,16 @@ describe("the pricing snapshot, refund updates and the audit pointer", () => {
     expect(html).toContain("03.09.2026 12:12");
   });
 
-  it("points at the audit log filtered to this payment", async () => {
+  it("points at the audit log filtered to this payment, only for an audit.read holder", async () => {
     stubMe(ANALYST);
     watch();
+    const alone = await render();
+    expect(alone).not.toContain("Her değişiklik denetim kaydında");
+    expect(alone).not.toContain("/audit-log?");
 
+    stubMe([...ANALYST, "audit.read"]);
+    watch();
     const html = await render();
-
     expect(html).toContain("Her değişiklik denetim kaydında");
     expect(html).toContain(`href="/audit-log?resourceId=${PAYMENT_ID}"`);
   });

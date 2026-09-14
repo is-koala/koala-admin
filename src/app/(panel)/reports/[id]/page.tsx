@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
-import { AuditPointer } from "@/components/panel/authz/audit-pointer";
+import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
@@ -95,10 +95,10 @@ async function ReportObject({ id }: { id: string }) {
         <span className="text-sm text-ink-muted">{formatDateTime(report.createdAt)}</span>
       </header>
       <ReportDecision report={report} content={content} canOpenJob={context.has("job.read")} />
-      <AuditPointer resourceId={report.id} linkLabel="Bu şikayetin denetim kayıtlarını aç">
+      <ObjectAuditPointer resourceId={report.id} linkLabel="Bu şikayetin denetim kayıtlarını aç">
         Karar ve görsel kaldırma backend tarafından bu şikayet kimliğiyle denetim kaydına yazılır;
         personelin bu kaydı açması da kayda düşer.
-      </AuditPointer>
+      </ObjectAuditPointer>
     </section>
   );
 }
