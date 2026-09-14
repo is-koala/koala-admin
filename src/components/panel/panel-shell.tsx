@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 
+import { CommandPalette } from "./command-palette";
 import { HomeNavIcon } from "./nav-icons";
 import { navItemClass } from "./nav-item";
 import { StaffNav } from "./staff-nav";
@@ -51,6 +52,7 @@ export function PanelShell({
           <span className="text-xs font-medium text-on-brand/80">Yönetim</span>
         </Link>
         <div className="flex items-center gap-2">
+          <CommandPalette />
           <ThemeToggle initialTheme={initialTheme} />
           {staff === null ? null : (
             <div className="hidden items-center gap-2 sm:flex">

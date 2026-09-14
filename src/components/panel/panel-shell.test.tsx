@@ -9,6 +9,8 @@ const pathname = vi.hoisted(() => ({ current: "/identity-reviews" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname.current,
+  // Üst çubuktaki komut paleti (#104) yönlendirici ister; burada gezinilmez.
+  useRouter: () => ({ push: () => undefined }),
 }));
 
 /**

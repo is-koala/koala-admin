@@ -40,6 +40,8 @@ vi.mock("@/server/auth/actions", () => ({
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
+  // Üst çubuktaki komut paleti (#104) yönlendirici ister; burada gezinilmez.
+  useRouter: () => ({ push: () => undefined }),
 }));
 
 vi.mock("next/headers", () => ({

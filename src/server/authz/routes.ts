@@ -442,6 +442,19 @@ export const ROUTE_HANDLERS = [
       "Yük dengeleyici çerezsiz çağırır ve yalnız 'ayaktayım' der; hiçbir iş verisi taşımaz.",
   },
   {
+    /**
+     * koala-admin#104. Tek bir izin isteyemez: aramanın yedi hedefi yedi
+     * ayrı izne bağlı ve `globalSearch` hangi hedefin sorulacağını o
+     * listeden seçer — izni olmayan uç hiç istenmez. Kapı yine backend'de;
+     * burası oturumu ister, sonra her hedefi kendi izniyle süzer.
+     */
+    path: "/api/search",
+    title: "Global arama",
+    access: "session",
+    ungatedReason:
+      "Yedi nesne ucunu ve dört liste ucunu tek kutudan sorar; her biri ayrı bir izne bağlı olduğu için tek bir izinle kapılanamaz. Oturum zorunlu, hedefler personelin /admin/me'den çözülen izinleriyle süzülür; izni olmayan uç istenmez, cevaba girmez.",
+  },
+  {
     path: "/api/disputes/[disputeId]/evidence/[evidenceId]/download",
     title: "Uyuşmazlık kanıtı indir",
     access: "permission",
