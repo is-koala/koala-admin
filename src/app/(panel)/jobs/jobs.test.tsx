@@ -295,6 +295,51 @@ describe("the job object page", () => {
 });
 
 /** koala-admin#85: olmayan ilan ortak 404 yüzeyidir, uyarı kutusu değil. */
+/** koala-admin#99: `JobCompanyDto.website/type` ve denetim izi bağlantısı. */
+describe("the company's type and website, and the audit pointer", () => {
+  it("names the company type and links the website in a new tab", async () => {
+    stubMe(AGENT);
+    const job = adminJobDetailFixture();
+    watchDetail({
+      ...job,
+      company: { ...(job.company as object), website: "https://koalakafe.test", type: "LIMITED" },
+    });
+
+    const html = await renderDetail();
+
+    expect(html).toMatch(/Şirket türü<\/dt><dd[^>]*>Limited şirket</);
+    expect(html).toMatch(
+      /<a href="https:\/\/koalakafe\.test" target="_blank" rel="noopener noreferrer"/,
+    );
+  });
+
+  it("writes the empty value for a missing website and keeps a non-http address as text", async () => {
+    stubMe(AGENT);
+    watchDetail();
+    expect(await renderDetail()).toMatch(/Web sitesi<\/dt><dd[^>]*>—</);
+
+    const job = adminJobDetailFixture();
+    watchDetail({
+      ...job,
+      company: { ...(job.company as object), website: "javascript:alert(1)", type: null },
+    });
+    const html = await renderDetail();
+    expect(html).not.toContain('href="javascript:');
+    expect(html).toContain("javascript:alert(1)");
+    expect(html).toMatch(/Şirket türü<\/dt><dd[^>]*>—</);
+  });
+
+  it("points at the audit log filtered to this job", async () => {
+    stubMe(AGENT);
+    watchDetail();
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Her değişiklik denetim kaydında");
+    expect(html).toContain(`href="/audit-log?resourceId=${JOB_ID}"`);
+  });
+});
+
 describe("a job that does not exist", () => {
   it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {
     stubMe(AGENT);

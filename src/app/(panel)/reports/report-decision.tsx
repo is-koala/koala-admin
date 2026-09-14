@@ -3,7 +3,7 @@ import Link from "next/link";
 import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
 import { Badge, type BadgeTone } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
-import { reportsForUserHref, userHref, userHrefOrNull } from "@/lib/panel-href";
+import { jobHref, reportsForUserHref, userHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   REVIEW_MIN_NOTE_LENGTH,
   reportPartyName,
@@ -56,9 +56,12 @@ function decisionOptions(): DecisionOption[] {
 export function ReportDecision({
   report,
   content,
+  canOpenJob = false,
 }: {
   report: Report;
   content: ReportContent | null;
+  /** İlan sayfası `job.read` ister; izni olmayana bağlantı 403 ekranı olurdu. */
+  canOpenJob?: boolean;
 }) {
   const targets = reportTargets(report);
   const closed = CLOSED_STATUSES.has(report.status);
@@ -130,10 +133,23 @@ export function ReportDecision({
           ))}
         </dd>
 
-        {content !== null && content.jobTitle !== null ? (
+        {report.jobId !== null || (content !== null && content.jobTitle !== null) ? (
           <>
             <dt className="text-sm text-ink-muted">İlan</dt>
-            <dd className="text-sm">{content.jobTitle}</dd>
+            <dd className="text-sm">
+              <JobReference
+                jobId={report.jobId}
+                jobTitle={content?.jobTitle ?? null}
+                canOpenJob={canOpenJob}
+              />
+            </dd>
+          </>
+        ) : null}
+
+        {report.messageId !== null ? (
+          <>
+            <dt className="text-sm text-ink-muted">Mesaj kimliği</dt>
+            <dd className="font-mono text-xs break-all">{report.messageId}</dd>
           </>
         ) : null}
 
@@ -195,6 +211,35 @@ export function ReportDecision({
         <ImageRemovalForm imageId={report.imageId} reportId={report.id} />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Şikayetin ilanı: başlık içerikten, kimlik şikayetten gelir. Kimlik varsa
+ * mono yazılır; bağlantı yalnız `job.read` varken.
+ */
+function JobReference({
+  jobId,
+  jobTitle,
+  canOpenJob,
+}: {
+  jobId: string | null;
+  jobTitle: string | null;
+  canOpenJob: boolean;
+}) {
+  if (jobId === null) return <>{jobTitle ?? EMPTY_VALUE}</>;
+  const label = jobTitle ?? jobId;
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-2">
+      {canOpenJob ? (
+        <Link href={jobHref(jobId)} className="text-brand hover:underline">
+          {label}
+        </Link>
+      ) : (
+        <span>{label}</span>
+      )}
+      {jobTitle === null ? null : <span className="font-mono text-xs break-all">{jobId}</span>}
+    </span>
   );
 }
 

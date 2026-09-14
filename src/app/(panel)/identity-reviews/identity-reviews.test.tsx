@@ -330,6 +330,58 @@ describe("TCKK photos on the object page", () => {
  * söyleyen tek yer ortak `not-found.tsx`. `notFound()` fırlattığı için render
  * reddeder — Next onu digest'ten tanır.
  */
+/** koala-admin#99: karar zamanı ve kararı veren zod'da vardı, çizilmiyordu. */
+describe("the decision's time and author on the object page", () => {
+  it("draws verifiedAt, rejectedAt and reviewedByStaffId for a decided review", async () => {
+    stubMe(REVIEWER);
+    watchDetail({
+      ...PENDING_REVIEW,
+      status: "APPROVED",
+      verifiedAt: "2026-09-12T09:30:00Z",
+      rejectedAt: null,
+      reviewedByStaffId: "5f000000-0000-4000-8000-000000000055",
+    });
+
+    const html = await renderDetail();
+
+    expect(html).toMatch(/Onay zamanı<\/dt><dd[^>]*>12\.09\.2026 12:30</);
+    expect(html).toMatch(/Ret zamanı<\/dt><dd[^>]*>—</);
+    expect(html).toMatch(
+      /Kararı veren personel<\/dt><dd[^>]*><span[^>]*>5f000000-0000-4000-8000-000000000055</,
+    );
+  });
+
+  it("draws rejectedAt for a rejected review and empty values while pending", async () => {
+    stubMe(REVIEWER);
+    watchDetail({
+      ...PENDING_REVIEW,
+      status: "REJECTED",
+      rejectionReason: "Fotoğraf bulanık",
+      rejectedAt: "2026-09-12T10:00:00Z",
+      reviewedByStaffId: "5f000000-0000-4000-8000-000000000055",
+    });
+    const rejected = await renderDetail();
+    expect(rejected).toMatch(/Ret zamanı<\/dt><dd[^>]*>12\.09\.2026 13:00</);
+    expect(rejected).toMatch(/Onay zamanı<\/dt><dd[^>]*>—</);
+
+    watchDetail(PENDING_REVIEW);
+    const pending = await renderDetail();
+    expect(pending).toMatch(/Onay zamanı<\/dt><dd[^>]*>—</);
+    expect(pending).toMatch(/Ret zamanı<\/dt><dd[^>]*>—</);
+    expect(pending).toMatch(/Kararı veren personel<\/dt><dd[^>]*><span[^>]*>—</);
+  });
+
+  it("points at the audit log filtered to this review", async () => {
+    stubMe(REVIEWER);
+    watchDetail(PENDING_REVIEW);
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Her değişiklik denetim kaydında");
+    expect(html).toContain(`href="/audit-log?resourceId=${REVIEW_ID}"`);
+  });
+});
+
 describe("a review that does not exist", () => {
   it("calls notFound() on the backend's RESOURCE_NOT_FOUND rather than drawing an alert", async () => {
     stubMe(REVIEWER);

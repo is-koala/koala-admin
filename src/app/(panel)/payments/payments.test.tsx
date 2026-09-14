@@ -139,6 +139,69 @@ describe("who can open a payment attempt", () => {
   });
 });
 
+/** koala-admin#99: zod'da olup çizilmeyen alanlar ve denetim izi bağlantısı. */
+describe("the pricing snapshot, refund updates and the audit pointer", () => {
+  it("draws the pricing breakdown next to the realised amounts", async () => {
+    stubMe(ANALYST);
+    watch(
+      adminPaymentFixture({
+        pricing: {
+          pricingVersion: "v2",
+          currency: "TRY",
+          workerPayout: "1000.00",
+          serviceFeeRate: "0.1250",
+          serviceFeeAmount: "125.00",
+          employerTotal: "1125.00",
+        },
+      }),
+    );
+
+    const html = await render();
+
+    expect(html).toContain('data-testid="payment-pricing"');
+    expect(html).toMatch(/Komisyon oranı<\/dt><dd[^>]*>%12,5</);
+    expect(html).toMatch(/İşverenden tahsil edilecek<\/dt><dd[^>]*>₺1\.125,00</);
+    expect(html).toMatch(/İşçiye ödenecek<\/dt><dd[^>]*>₺1\.000,00</);
+    expect(html).toMatch(/Komisyon tutarı<\/dt><dd[^>]*>₺125,00</);
+  });
+
+  it("says when the payment carries no pricing snapshot", async () => {
+    stubMe(ANALYST);
+    watch(adminPaymentFixture({ pricing: null }));
+
+    const html = await render();
+
+    expect(html).toContain("payment-pricing-missing");
+    expect(html).toContain("Bu deneme için fiyat dökümü yok.");
+  });
+
+  it("shows each refund's last update next to its completion", async () => {
+    stubMe(ANALYST);
+    const [refund] = adminPaymentFixture().refunds as Record<string, unknown>[];
+    watch(
+      adminPaymentFixture({
+        refunds: [{ ...refund, updatedAt: "2026-09-03T09:12:00.000000000Z" }],
+      }),
+    );
+
+    const html = await render();
+
+    expect(html).toMatch(/<th[^>]*>Tamamlanma<\/th><th[^>]*>Güncelleme<\/th>/);
+    expect(html).toContain("03.09.2026 12:00");
+    expect(html).toContain("03.09.2026 12:12");
+  });
+
+  it("points at the audit log filtered to this payment", async () => {
+    stubMe(ANALYST);
+    watch();
+
+    const html = await render();
+
+    expect(html).toContain("Her değişiklik denetim kaydında");
+    expect(html).toContain(`href="/audit-log?resourceId=${PAYMENT_ID}"`);
+  });
+});
+
 /** koala-admin#85: olmayan ödeme ortak 404 yüzeyidir, uyarı kutusu değil. */
 describe("a payment that does not exist", () => {
   it("calls notFound() on the backend's RESOURCE_NOT_FOUND", async () => {

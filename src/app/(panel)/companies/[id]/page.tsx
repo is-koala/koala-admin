@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
+import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { companiesHref, isUuid } from "@/lib/panel-href";
@@ -108,6 +109,10 @@ async function CompanyObject({
       )}
       <DecisionDeliveryNotice />
       <CompanyReviewBody company={company} returnTo={returnTo} />
+      <AuditPointer resourceId={company.id} linkLabel="Bu şirketin denetim kayıtlarını aç">
+        Onay, ret ve galeri görseli kaldırma backend tarafından bu şirket kimliğiyle denetim kaydına
+        yazılır; personelin bu kaydı açması da kayda düşer.
+      </AuditPointer>
     </section>
   );
 }

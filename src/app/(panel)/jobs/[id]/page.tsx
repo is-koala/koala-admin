@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 import type { ReactNode } from "react";
 
+import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
@@ -15,6 +16,7 @@ import {
   formatWallClock,
 } from "@/lib/format";
 import { companyHref, isUuid, userHrefOrNull } from "@/lib/panel-href";
+import { companyTypeLabel } from "@/server/api/companies";
 import {
   JOB_EMPLOYER_TYPE_LABELS,
   JOB_STATUS_LABELS,
@@ -210,8 +212,13 @@ async function JobObject({ id }: { id: string }) {
               />
               {job.company === null ? null : (
                 <>
+                  <Row
+                    label="Şirket türü"
+                    value={companyTypeLabel(job.company.type) ?? EMPTY_VALUE}
+                  />
                   <Row label="Şirket e-postası" value={job.company.email ?? EMPTY_VALUE} />
                   <Row label="Telefon" value={job.company.phoneNumber ?? EMPTY_VALUE} />
+                  <Row label="Web sitesi" value={<Website url={job.company.website} />} />
                   <Row label="Vergi no" value={job.company.taxNumber ?? EMPTY_VALUE} />
                 </>
               )}
@@ -278,7 +285,32 @@ async function JobObject({ id }: { id: string }) {
       </section>
 
       <Gallery job={job} />
+
+      <AuditPointer resourceId={job.id} linkLabel="Bu ilanın denetim kayıtlarını aç">
+        Panel ilana yazmaz; backend bu ilan kimliğiyle yapılan her personel okumasını ve işlemini
+        denetim kaydına düşer.
+      </AuditPointer>
     </div>
+  );
+}
+
+/**
+ * Şirketin beyan ettiği adres; dış bağlantı yeni sekmede ve yönlendiren
+ * bilgisi olmadan açılır. `http(s)` dışı bir şema bağlantı olmaz, metin kalır.
+ */
+function Website({ url }: { url: string | null }) {
+  if (url === null || url.trim().length === 0) return <>{EMPTY_VALUE}</>;
+  const trimmed = url.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return <span className="break-all">{trimmed}</span>;
+  return (
+    <a
+      href={trimmed}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-brand break-all hover:underline"
+    >
+      {trimmed}
+    </a>
   );
 }
 

@@ -175,6 +175,23 @@ async function PayoutObject({ id }: { id: string }) {
                 )
               }
             />
+            <Row
+              label="Ödeme"
+              value={
+                payout.paymentId === null ? (
+                  EMPTY_VALUE
+                ) : canOpenAssignment ? (
+                  <Link
+                    href={paymentHref(payout.paymentId)}
+                    className="font-mono text-xs text-brand hover:underline"
+                  >
+                    {payout.paymentId}
+                  </Link>
+                ) : (
+                  <span className="font-mono text-xs">{payout.paymentId}</span>
+                )
+              }
+            />
             {payout.failureReason === null ? null : (
               <Row label="Hata nedeni" value={payout.failureReason} />
             )}

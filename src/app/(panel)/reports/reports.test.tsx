@@ -384,6 +384,73 @@ describe("the detail, and what it refuses to make up", () => {
   });
 });
 
+/** koala-admin#99: ilan bağlantısı, mesaj kimliği ve denetim izi. */
+describe("the report's job, message and audit pointer", () => {
+  const JOB = "bbbbbbbb-0000-4000-8000-000000000002";
+  const MESSAGE = "eeeeeeee-0000-4000-8000-000000000005";
+
+  it("links the job only to a job.read holder and keeps the id visible either way", async () => {
+    stubMe(MODERATOR);
+    watchDetail(row({ jobId: JOB }), {
+      jobTitle: "Akşam barista",
+      messageBody: null,
+      imageUrl: null,
+    });
+    const alone = await renderDetail();
+    expect(alone).not.toContain(`href="/jobs/${JOB}"`);
+    expect(alone).toContain("Akşam barista");
+    expect(alone).toContain(JOB);
+
+    stubMe([...MODERATOR, "job.read"]);
+    watchDetail(row({ jobId: JOB }), {
+      jobTitle: "Akşam barista",
+      messageBody: null,
+      imageUrl: null,
+    });
+    const both = await renderDetail();
+    expect(both).toContain(`href="/jobs/${JOB}"`);
+    expect(both).toMatch(new RegExp(`<a[^>]*href="/jobs/${JOB}"[^>]*>Akşam barista</a>`));
+  });
+
+  it("falls back to the job id as the link text when the content has no title", async () => {
+    stubMe([...MODERATOR, "job.read"]);
+    watchDetail(row({ jobId: JOB }));
+
+    const html = await renderDetail();
+
+    expect(html).toMatch(new RegExp(`<a[^>]*href="/jobs/${JOB}"[^>]*>${JOB}</a>`));
+  });
+
+  it("writes the message id in mono", async () => {
+    stubMe(MODERATOR);
+    watchDetail(row({ messageId: MESSAGE }));
+
+    const html = await renderDetail();
+
+    expect(html).toMatch(new RegExp(`Mesaj kimliği</dt><dd class="font-mono[^"]*">${MESSAGE}<`));
+  });
+
+  it("omits the job and message rows when the report names neither", async () => {
+    stubMe(MODERATOR);
+    watchDetail(row());
+
+    const html = await renderDetail();
+
+    expect(html).not.toContain("Mesaj kimliği");
+    expect(html).not.toMatch(/>İlan<\/dt>/);
+  });
+
+  it("points at the audit log filtered to this report", async () => {
+    stubMe(MODERATOR);
+    watchDetail(row());
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Her değişiklik denetim kaydında");
+    expect(html).toContain(`href="/audit-log?resourceId=${row().id}"`);
+  });
+});
+
 describe("a bookmarked report", () => {
   it("loads GET /admin/reports/{id} and shows the targeted content", async () => {
     stubMe(MODERATOR);

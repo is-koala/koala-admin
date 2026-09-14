@@ -402,6 +402,19 @@ describe("the safe review projection", () => {
   });
 });
 
+/** koala-admin#99: nesne sayfası denetim kaydına bu şirket kimliğiyle bağlanır. */
+describe("the audit pointer on the company page", () => {
+  it("points at the audit log filtered to this company", async () => {
+    stubMe(APPROVER);
+    watchDetail();
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Her değişiklik denetim kaydında");
+    expect(html).toContain(`href="/audit-log?resourceId=${COMPANY_REVIEW_ID}"`);
+  });
+});
+
 describe("the backend decision state machine", () => {
   it("keeps successful decision feedback visible after the decided row leaves the queue", async () => {
     stubMe(APPROVER);

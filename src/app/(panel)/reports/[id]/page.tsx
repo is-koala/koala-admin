@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
+import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
@@ -10,6 +11,7 @@ import { readParam, type SearchParams } from "@/server/api/paging";
 import { getReport, reportReasonLabel, reportStatusLabel } from "@/server/api/reports";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
+import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
 import { ReportDecision, REPORT_STATUS_TONES } from "../report-decision";
@@ -65,6 +67,8 @@ async function ReportObject({ id }: { id: string }) {
   // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
   if (!OBJECT_ID.test(id)) notFound();
 
+  const context = await getStaffContext();
+
   let detail;
   try {
     detail = await getReport(await getKoalaAccessToken(), id);
@@ -90,7 +94,11 @@ async function ReportObject({ id }: { id: string }) {
         <span className="text-sm font-medium">{reportReasonLabel(report.reason)}</span>
         <span className="text-sm text-ink-muted">{formatDateTime(report.createdAt)}</span>
       </header>
-      <ReportDecision report={report} content={content} />
+      <ReportDecision report={report} content={content} canOpenJob={context.has("job.read")} />
+      <AuditPointer resourceId={report.id} linkLabel="Bu şikayetin denetim kayıtlarını aç">
+        Karar ve görsel kaldırma backend tarafından bu şikayet kimliğiyle denetim kaydına yazılır;
+        personelin bu kaydı açması da kayda düşer.
+      </AuditPointer>
     </section>
   );
 }

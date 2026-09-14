@@ -223,6 +223,19 @@ describe("reject stays gated on the object page", () => {
   });
 });
 
+/** koala-admin#99: nesne sayfası denetim kaydına bu talep kimliğiyle bağlanır. */
+describe("the audit pointer on the deletion page", () => {
+  it("points at the audit log filtered to this request, for the PII reader too", async () => {
+    stubMe(READER);
+    watchDetail();
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Her değişiklik denetim kaydında");
+    expect(html).toContain(`href="/audit-log?resourceId=${REQUEST_ID}"`);
+  });
+});
+
 describe("status and paging are backend query parameters", () => {
   it("omits status when the filter is all", async () => {
     stubMe(READER);

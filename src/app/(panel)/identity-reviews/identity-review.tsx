@@ -65,6 +65,14 @@ export function IdentityReviewBody({
         <Row label="Doğum tarihi" value={review.birthDate ?? EMPTY_VALUE} />
         <Row label="Gönderim" value={formatDateTime(review.createdAt)} />
         <Row label="Ret gerekçesi" value={review.rejectionReason ?? EMPTY_VALUE} />
+        <Row label="Onay zamanı" value={formatDateTime(review.verifiedAt)} />
+        <Row label="Ret zamanı" value={formatDateTime(review.rejectedAt)} />
+        <Row
+          label="Kararı veren personel"
+          value={
+            <span className="font-mono text-xs">{review.reviewedByStaffId ?? EMPTY_VALUE}</span>
+          }
+        />
       </dl>
 
       <section className="flex flex-col gap-3" aria-labelledby={`tckk-${review.id}`}>
