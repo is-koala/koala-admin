@@ -24,6 +24,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
+import { objectQueryFor } from "@/lib/breadcrumb";
 import { EMPTY_VALUE, formatDateTime, formatInteger, formatWallClock } from "@/lib/format";
 import { jobHref, jobsHref, userHrefOrNull } from "@/lib/panel-href";
 import {
@@ -119,8 +120,7 @@ async function JobQueue({ params }: { params: SearchParams }) {
   };
   if (query !== null) viewState[SEARCH_PARAM] = query;
   if (companyId !== null) viewState.sirket = companyId;
-  // Nesne adresi görünümü taşır; ilan sayfasının kırıntısı buraya döner.
-  const objectQuery = { ...viewState, sayfa: String(paging.page) };
+  const objectQuery = objectQueryFor(viewState, paging.page);
 
   const filters = (
     <QueueFilters

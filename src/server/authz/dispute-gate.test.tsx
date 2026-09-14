@@ -8,7 +8,7 @@ import {
 } from "../../../test/fixtures/envelopes";
 import { adminAssignmentFixture } from "../../../test/fixtures/admin-assignment";
 import { categoryCreatedEntry } from "../../../test/fixtures/audit-log";
-import { stubStaffMember } from "../../../test/fixtures/staff";
+import { stubStaffMember } from "../../../test/support/stub-staff-member";
 import { apiUrl, server } from "../../../test/msw";
 import { renderServerComponent } from "../../../test/render-server";
 import { detailValuesOf, watchAudit } from "../../../test/support/watch-audit";

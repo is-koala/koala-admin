@@ -27,7 +27,7 @@ import { safeUserName } from "@/server/api/users";
 import type { Permission } from "@/server/authz/permissions";
 import { submitEscrowOperation } from "@/server/escrow/actions";
 import { escrowMovement, refundAvailability, releaseAvailability } from "@/server/escrow/figures";
-import { NO_STAFF_REFS, type StaffRefs } from "@/server/staff/staff-refs";
+import type { StaffRefs } from "@/server/staff/staff-refs";
 
 export const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
   OPEN: "Açık",
@@ -76,16 +76,10 @@ interface DetailProps {
   evidence: EvidenceResult | null;
   permissions: readonly Permission[];
   /** `resolvedByStaffId` için çözülmüş adlar (koala-admin#112). */
-  staffRefs?: StaffRefs;
+  staffRefs: StaffRefs;
 }
 
-export function DisputeDetail({
-  dispute,
-  entry,
-  evidence,
-  permissions,
-  staffRefs = NO_STAFF_REFS,
-}: DetailProps) {
+export function DisputeDetail({ dispute, entry, evidence, permissions, staffRefs }: DetailProps) {
   const summary = entry !== undefined && entry.ok ? entry.summary : null;
   const failure = entry !== undefined && !entry.ok ? entry.failure : null;
   const heldPermissions = new Set(permissions);

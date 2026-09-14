@@ -9,7 +9,12 @@ import {
   envelope,
 } from "../../../../test/fixtures/admin-detail";
 import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
-import { STAFF_HREF, STAFF_ID, STAFF_NAME, stubStaffMember } from "../../../../test/fixtures/staff";
+import {
+  STAFF_HREF,
+  STAFF_ID,
+  STAFF_NAME,
+  stubStaffMember,
+} from "../../../../test/support/stub-staff-member";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -287,7 +292,7 @@ describe("release origin, settlement instant and the reconciling staff member", 
 
     expect(html).toContain('<nav aria-label="Konum">');
     expect(html).toContain(
-      `href="/payout-reconciliation?durum=hepsi&amp;isci=${ASSIGNMENT_ID}"><span class="">Hakediş mutabakatı</span></a>`,
+      `href="/payout-reconciliation?durum=hepsi&amp;isci=${ASSIGNMENT_ID}"><span>Hakediş mutabakatı</span></a>`,
     );
     expect(html).toContain(`title="${PAYOUT_ID}">${PAYOUT_ID.slice(0, 8)}<`);
   });

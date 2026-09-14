@@ -60,7 +60,7 @@ function Breadcrumb({ items }: { items: readonly BreadcrumbItem[] }) {
         {items.map((item, index) => {
           const current = index === last;
           const text = (
-            <span className={cn(item.mono ? "font-mono text-xs" : null)} title={item.title}>
+            <span className={item.mono ? "font-mono text-xs" : undefined} title={item.title}>
               {item.label}
             </span>
           );

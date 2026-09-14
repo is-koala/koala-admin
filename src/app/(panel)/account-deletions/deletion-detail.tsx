@@ -16,7 +16,7 @@ import {
   type DeletionBlocker,
 } from "@/server/api/account-deletions";
 import type { Permission } from "@/server/authz/permissions";
-import { NO_STAFF_REFS, type StaffRefs } from "@/server/staff/staff-refs";
+import type { StaffRefs } from "@/server/staff/staff-refs";
 
 import { submitDeletionRejection } from "./actions";
 
@@ -111,14 +111,14 @@ export function DeletionReviewBody({
   row,
   canReject,
   permissions = [],
-  staffRefs = NO_STAFF_REFS,
+  staffRefs,
 }: {
   row: AccountDeletion;
   canReject: boolean;
   /** Engelleyici bağlantıları: ödeme/atama `payment.read`, uyuşmazlık `dispute.resolve`. */
   permissions?: readonly Permission[];
   /** `rejectedByStaffId` için çözülmüş adlar (koala-admin#112). */
-  staffRefs?: StaffRefs;
+  staffRefs: StaffRefs;
 }) {
   const open = row.status === "REQUESTED";
   const held = new Set(permissions);

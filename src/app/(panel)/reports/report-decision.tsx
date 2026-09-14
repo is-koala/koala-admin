@@ -21,7 +21,7 @@ import {
   type Report,
   type ReportContent,
 } from "@/server/api/reports";
-import { NO_STAFF_REFS, type StaffRefs } from "@/server/staff/staff-refs";
+import type { StaffRefs } from "@/server/staff/staff-refs";
 
 import { submitReportReview } from "./actions";
 import { ImageRemovalForm } from "./image-removal-form";
@@ -66,7 +66,7 @@ export function ReportDecision({
   content,
   canOpenJob = false,
   canOpenAssignment = false,
-  staffRefs = NO_STAFF_REFS,
+  staffRefs,
 }: {
   report: Report;
   content: ReportContent | null;
@@ -75,7 +75,7 @@ export function ReportDecision({
   /** Atama sayfası `payment.read` ister (koala-backend#283 `jobAssignmentId`). */
   canOpenAssignment?: boolean;
   /** `reviewedByStaffId` için çözülmüş adlar (koala-admin#112). */
-  staffRefs?: StaffRefs;
+  staffRefs: StaffRefs;
 }) {
   const targets = reportTargets(report);
   const closed = CLOSED_STATUSES.has(report.status);

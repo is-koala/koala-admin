@@ -9,7 +9,12 @@ import {
 } from "../../../../test/fixtures/companies";
 import { categoryCreatedEntry } from "../../../../test/fixtures/audit-log";
 import { adminMeSuccessBody, resourceNotFoundBody } from "../../../../test/fixtures/envelopes";
-import { STAFF_HREF, STAFF_ID, STAFF_NAME, stubStaffMember } from "../../../../test/fixtures/staff";
+import {
+  STAFF_HREF,
+  STAFF_ID,
+  STAFF_NAME,
+  stubStaffMember,
+} from "../../../../test/support/stub-staff-member";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 import { detailValuesOf, watchAudit } from "../../../../test/support/watch-audit";

@@ -10,8 +10,10 @@ import { getIdentityReview } from "@/server/api/identity-reviews";
 import { readParam, type SearchParams } from "@/server/api/paging";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
+import { getStaffContext } from "@/server/authz/staff-context";
 import { SignedDownloadAllowlistNotice } from "@/server/evidence/signed-download-notice";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
+import { resolveStaffRefs } from "@/server/staff/staff-refs";
 
 import { IdentityReviewBody, IdentityStatusBadge, identityDisplayName } from "../identity-review";
 
@@ -73,9 +75,11 @@ async function IdentityObject({
   // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
   if (!isUuid(id)) notFound();
 
+  const accessToken = await getKoalaAccessToken();
+
   let review;
   try {
-    review = await getIdentityReview(await getKoalaAccessToken(), id);
+    review = await getIdentityReview(accessToken, id);
   } catch (error) {
     notFoundIfMissing(error);
     return (
@@ -86,6 +90,19 @@ async function IdentityObject({
       />
     );
   }
+
+  // Backend adı zaten veriyorsa (`reviewedByStaffName`) ikinci istek çıkmaz;
+  // eski sunucuda ad yoktur, `staff.read` varsa `GET /admin/staff/{id}` çözer.
+  const staffRefs =
+    review.reviewedByStaffId === null
+      ? {}
+      : await resolveStaffRefs(
+          [{ id: review.reviewedByStaffId, name: review.reviewedByStaffName }],
+          {
+            accessToken,
+            context: await getStaffContext(),
+          },
+        );
 
   return (
     <section className="flex flex-col gap-4 rounded-lg border border-border-subtle bg-surface px-4 py-4">
@@ -99,7 +116,7 @@ async function IdentityObject({
         <h2 className="text-lg font-semibold">{identityDisplayName(review)}</h2>
         <IdentityStatusBadge status={review.status} />
       </div>
-      <IdentityReviewBody review={review} returnTo={returnTo} />
+      <IdentityReviewBody review={review} returnTo={returnTo} staffRefs={staffRefs} />
       <ObjectAuditPointer resourceId={review.id} linkLabel="Bu incelemenin denetim kayıtlarını aç">
         Onay ve ret backend tarafından bu inceleme kimliğiyle denetim kaydına yazılır; personelin bu
         kaydı açması da kayda düşer.

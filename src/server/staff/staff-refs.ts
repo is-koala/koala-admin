@@ -2,8 +2,8 @@ import "server-only";
 
 import type { Route } from "next";
 
-import { shortId } from "@/lib/breadcrumb";
 import { isUuid, staffMemberHref } from "@/lib/panel-href";
+import { shortId } from "@/lib/short-id";
 import { getStaffMember } from "@/server/api/staff-members";
 import type { StaffContext } from "@/server/authz/staff-context";
 
@@ -36,6 +36,12 @@ export type StaffRefs = Readonly<Record<string, StaffRef>>;
 
 export const NO_STAFF_REFS: StaffRefs = {};
 
+/**
+ * Çözülecek bir kimlik; DTO adı zaten veriyorsa (`reviewedByStaffName`) o
+ * adla gelir ve ikinci bir istek çıkmaz, bağlantı yine kurulur.
+ */
+export type StaffRefRequest = string | { readonly id: string; readonly name: string | null };
+
 function unresolved(id: string, canReadStaff: boolean): StaffRef {
   return {
     id,
@@ -50,16 +56,36 @@ function unresolved(id: string, canReadStaff: boolean): StaffRef {
  * ve UUID olmayanlar atlanır; aynı kimlik bir kez istenir.
  */
 export async function resolveStaffRefs(
-  ids: ReadonlyArray<string | null | undefined>,
+  requests: ReadonlyArray<StaffRefRequest | null | undefined>,
   options: { readonly accessToken: string; readonly context: Pick<StaffContext, "has"> },
 ): Promise<StaffRefs> {
   const canReadStaff = options.context.has("staff.read");
-  const unique = [
-    ...new Set(ids.filter((id): id is string => typeof id === "string" && id.length > 0)),
-  ];
+  const known = new Map<string, string>();
+  const unique: string[] = [];
+  for (const request of requests) {
+    if (request === null || request === undefined) continue;
+    const id = typeof request === "string" ? request : request.id;
+    if (id.length === 0) continue;
+    if (typeof request !== "string" && request.name !== null && request.name.length > 0) {
+      known.set(id, request.name);
+    }
+    if (!unique.includes(id)) unique.push(id);
+  }
 
   const entries = await Promise.all(
     unique.map(async (id): Promise<[string, StaffRef]> => {
+      const name = known.get(id);
+      if (name !== undefined) {
+        return [
+          id,
+          {
+            id,
+            label: name,
+            href: canReadStaff && isUuid(id) ? staffMemberHref(id) : null,
+            resolved: true,
+          },
+        ];
+      }
       if (!canReadStaff || !isUuid(id)) return [id, unresolved(id, canReadStaff)];
       try {
         const member = await getStaffMember(options.accessToken, id);

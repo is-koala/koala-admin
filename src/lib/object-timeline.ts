@@ -111,6 +111,3 @@ export function mergeTimeline(
     })
     .map(({ event }) => event);
 }
-
-/** Kırıntıyla aynı kısaltma (koala-admin#112); çizelge kendi kopyasını taşımaz. */
-export { shortId } from "@/lib/breadcrumb";

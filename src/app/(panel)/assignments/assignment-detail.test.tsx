@@ -129,7 +129,7 @@ describe("who can open an assignment", () => {
     // Ödeme sayfasının kırıntısı atamayı `?atama=` ile tanır (koala-admin#112).
     expect(html).toContain(`href="/payments/${PAYMENT_ID}?atama=${ASSIGNMENT_ID}"`);
     expect(html).toContain('<nav aria-label="Konum">');
-    expect(html).toContain('href="/assignments"><span class="">Atama özeti</span></a>');
+    expect(html).toContain('href="/assignments"><span>Atama özeti</span></a>');
     expect(html).toMatch(
       new RegExp(`aria-current="page"[^>]*><span[^>]*title="${ASSIGNMENT_ID}">9a1c0f10<`),
     );

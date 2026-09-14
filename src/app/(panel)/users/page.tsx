@@ -12,6 +12,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
+import { objectQueryFor } from "@/lib/breadcrumb";
 import { EMPTY_VALUE } from "@/lib/format";
 import { userHref } from "@/lib/panel-href";
 import {
@@ -95,8 +96,7 @@ async function UserDirectory({ params }: { params: SearchParams }) {
     sirala: sortParam(paging.sort),
     boyut: String(paging.size),
   };
-  // Nesne adresi görünümü taşır; kullanıcı sayfasının kırıntısı buraya döner.
-  const objectQuery = { ...viewState, sayfa: String(paging.page) };
+  const objectQuery = objectQueryFor(viewState, paging.page);
 
   const filters = (
     <QueueFilters

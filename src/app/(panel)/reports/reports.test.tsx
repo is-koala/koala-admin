@@ -7,7 +7,12 @@ import {
   resourceNotFoundBody,
   searchQueryTooLongBody,
 } from "../../../../test/fixtures/envelopes";
-import { STAFF_HREF, STAFF_ID, STAFF_NAME, stubStaffMember } from "../../../../test/fixtures/staff";
+import {
+  STAFF_HREF,
+  STAFF_ID,
+  STAFF_NAME,
+  stubStaffMember,
+} from "../../../../test/support/stub-staff-member";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
 
@@ -854,7 +859,7 @@ describe("the deciding staff member's name and the report breadcrumb", () => {
 
     expect(html).toContain('<nav aria-label="Konum">');
     expect(html).toContain(
-      `href="/reports?durum=OPEN&amp;sayfa=1&amp;kullanici=${REPORTED.id}"><span class="">Şikayetler</span>`,
+      `href="/reports?durum=OPEN&amp;sayfa=1&amp;kullanici=${REPORTED.id}"><span>Şikayetler</span>`,
     );
     expect(html).toContain(
       `aria-current="page" class="text-ink"><span class="font-mono text-xs" title="${row().id}">11111111<`,

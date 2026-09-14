@@ -1,6 +1,7 @@
 import type { Route } from "next";
 
 import { isUuid, listHref } from "@/lib/panel-href";
+import { shortId } from "@/lib/short-id";
 import { readParam, type SearchParams } from "@/server/api/paging";
 import { navLabel, type NavRoutePath } from "@/server/authz/routes";
 
@@ -57,12 +58,12 @@ export interface BreadcrumbItem {
 }
 
 /**
- * Bir UUID'nin ilk bloğu (`3f2a1b4c`). Kırıntıda ve personel adı çözülemeyince
- * gösterilir; tam kimlik `title`'da kalır. UUID olmayan bir değer olduğu gibi
- * döner — zaten kısa ya da zaten yanlış.
+ * Liste sayfasının satır bağlantısına eklediği görünüm: süzgeçler artı
+ * bulunulan sayfa. `sayfa` `viewState`'te yoktur (sayfalayıcı onu kendi
+ * yazar), nesne adresine burada eklenir ki kırıntı aynı sayfaya dönsün.
  */
-export function shortId(id: string): string {
-  return isUuid(id) ? id.slice(0, 8) : id;
+export function objectQueryFor(viewState: QueueState, page: number): QueueState {
+  return { ...viewState, sayfa: String(page) };
 }
 
 /** Menüdeki liste sayfası, taşınan görünümle: kırıntının ilk halkası. */

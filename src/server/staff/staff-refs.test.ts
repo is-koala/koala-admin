@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiUrl, server } from "../../../test/msw";
 
-import { staffMemberHref } from "@/lib/panel-href";
-
 import { resolveStaffRefs, staffRefFor } from "./staff-refs";
 
 /**
@@ -98,6 +96,40 @@ describe("resolveStaffRefs", () => {
     });
   });
 
+  it("takes a name the DTO already carries without asking the backend, still linking the anchor", async () => {
+    const seen = watchStaff();
+
+    const linked = await resolveStaffRefs([{ id: ALICE, name: "Ayşe K." }], {
+      accessToken: "ACCESS-TOKEN",
+      context: withRead,
+    });
+    const plain = await resolveStaffRefs([{ id: ALICE, name: "Ayşe K." }], {
+      accessToken: "ACCESS-TOKEN",
+      context: withoutRead,
+    });
+
+    expect(seen.ids).toEqual([]);
+    expect(linked[ALICE]).toEqual({
+      id: ALICE,
+      label: "Ayşe K.",
+      href: `/staff#personel-${ALICE}`,
+      resolved: true,
+    });
+    expect(plain[ALICE]).toEqual({ id: ALICE, label: "Ayşe K.", href: null, resolved: true });
+  });
+
+  it("asks the backend when the DTO's name is null", async () => {
+    const seen = watchStaff();
+
+    const refs = await resolveStaffRefs([{ id: ALICE, name: null }], {
+      accessToken: "ACCESS-TOKEN",
+      context: withRead,
+    });
+
+    expect(seen.ids).toEqual([ALICE]);
+    expect(refs[ALICE]?.label).toBe("Ayşe Kaya");
+  });
+
   it("falls back to the email when the member has no display name", async () => {
     watchStaff();
 
@@ -162,14 +194,5 @@ describe("staffRefFor", () => {
       href: null,
       resolved: false,
     });
-  });
-});
-
-describe("staffMemberHref", () => {
-  it("anchors the staff row and pre-filters by email when it is known", () => {
-    expect(staffMemberHref(ALICE)).toBe(`/staff#personel-${ALICE}`);
-    expect(staffMemberHref(ALICE, "a+b@koala.local")).toBe(
-      `/staff?ara=a%2Bb%40koala.local#personel-${ALICE}`,
-    );
   });
 });

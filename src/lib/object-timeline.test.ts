@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { categoryCreatedEntry, refusedEntry } from "../../test/fixtures/audit-log";
 import type { AuditEntry } from "./audit-log";
-import { TimelineBuilder, auditTimelineEvents, mergeTimeline, shortId } from "./object-timeline";
+import { TimelineBuilder, auditTimelineEvents, mergeTimeline } from "./object-timeline";
 
 /**
  * koala-admin#107: iki kaynağın tek kronolojiye inmesi. Sıralama etikete
@@ -112,12 +112,5 @@ describe("mergeTimeline", () => {
       "Mesai girişi",
       "Mesai çıkışı",
     ]);
-  });
-});
-
-describe("shortId", () => {
-  it("keeps the first eight characters of a UUID and a short id whole", () => {
-    expect(shortId("b7f4a2c1-0000-4c00-8000-000000000001")).toBe("b7f4a2c1");
-    expect(shortId("abc")).toBe("abc");
   });
 });

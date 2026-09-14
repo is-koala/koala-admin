@@ -327,7 +327,7 @@ describe("the payment page's breadcrumb", () => {
     const html = await render();
 
     expect(html).toContain('<nav aria-label="Konum">');
-    expect(html).toContain('href="/assignments"><span class="">Atama özeti</span></a>');
+    expect(html).toContain('href="/assignments"><span>Atama özeti</span></a>');
     expect(html).toContain(`title="${PAYMENT_ID}">${PAYMENT_ID.slice(0, 8)}<`);
     expect(html).not.toContain(`title="${ASSIGNMENT_ID}">${ASSIGNMENT_ID.slice(0, 8)}</span></a>`);
   });
@@ -367,6 +367,6 @@ describe("the payment page's breadcrumb", () => {
     ).replaceAll("<!-- -->", "");
 
     expect(html).not.toContain("javascript:");
-    expect(html).toContain('href="/assignments"><span class="">Atama özeti</span></a>');
+    expect(html).toContain('href="/assignments"><span>Atama özeti</span></a>');
   });
 });

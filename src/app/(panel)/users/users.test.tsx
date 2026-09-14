@@ -386,9 +386,7 @@ describe("a bookmarked marketplace user", () => {
     ).replaceAll("<!-- -->", "");
 
     expect(html).toContain('<nav aria-label="Konum">');
-    expect(html).toContain(
-      'href="/users?ara=ada&amp;sayfa=2"><span class="">Kullanıcılar</span></a>',
-    );
+    expect(html).toContain('href="/users?ara=ada&amp;sayfa=2"><span>Kullanıcılar</span></a>');
     expect(html).toContain(
       `aria-current="page" class="text-ink"><span class="font-mono text-xs" title="${user.id}">aaaaaaaa<`,
     );

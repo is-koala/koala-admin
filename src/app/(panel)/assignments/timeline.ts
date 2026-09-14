@@ -1,5 +1,6 @@
 import { formatInteger } from "@/lib/format";
-import { TimelineBuilder, shortId, type TimelineEvent } from "@/lib/object-timeline";
+import { TimelineBuilder, type TimelineEvent } from "@/lib/object-timeline";
+import { shortId } from "@/lib/short-id";
 import {
   applicationStatusLabel,
   cancellationPartyLabel,

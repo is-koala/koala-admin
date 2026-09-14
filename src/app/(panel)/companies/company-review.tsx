@@ -17,7 +17,7 @@ import {
   type CompanyContact,
   type CompanyReview,
 } from "@/server/api/companies";
-import { NO_STAFF_REFS, type StaffRefs } from "@/server/staff/staff-refs";
+import type { StaffRefs } from "@/server/staff/staff-refs";
 
 import { submitCompanyDecision } from "./actions";
 import { GalleryPhoto } from "./gallery-photo";
@@ -31,14 +31,14 @@ export function CompanyReviewBody({
   company,
   returnTo,
   canOpenJobs = false,
-  staffRefs = NO_STAFF_REFS,
+  staffRefs,
 }: {
   company: CompanyReview;
   returnTo: string;
   /** İlan listesi `job.read` ister; izni olmayana bağlantı 403 ekranı olurdu. */
   canOpenJobs?: boolean;
   /** `approvedByStaffId` için çözülmüş adlar (koala-admin#112). */
-  staffRefs?: StaffRefs;
+  staffRefs: StaffRefs;
 }) {
   const creator = company.createdBy;
   const creatorHref = userHrefOrNull(creator?.id);

@@ -5,8 +5,8 @@ import {
   listCrumb,
   objectBreadcrumb,
   objectCrumb,
+  objectQueryFor,
   readQueueState,
-  shortId,
 } from "./breadcrumb";
 
 /**
@@ -44,15 +44,23 @@ describe("readQueueState", () => {
   });
 });
 
-describe("shortId and objectCrumb", () => {
+describe("objectCrumb", () => {
   it("shortens a UUID to its first block and keeps the full id as the title", () => {
-    expect(shortId(ID)).toBe("9a1c0f10");
     expect(objectCrumb(ID)).toEqual({ label: "9a1c0f10", title: ID, mono: true });
   });
 
   it("leaves a non-UUID alone, without a title or mono flag", () => {
-    expect(shortId("KOALA-9F3A")).toBe("KOALA-9F3A");
     expect(objectCrumb("bozuk")).toEqual({ label: "bozuk" });
+  });
+});
+
+describe("objectQueryFor", () => {
+  it("appends the current page to the list's view state", () => {
+    expect(objectQueryFor({ durum: "OPEN", boyut: "20" }, 3)).toEqual({
+      durum: "OPEN",
+      boyut: "20",
+      sayfa: "3",
+    });
   });
 });
 

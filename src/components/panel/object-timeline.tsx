@@ -17,11 +17,11 @@ import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
 import {
   auditTimelineEvents,
   mergeTimeline,
-  shortId,
   type TimelineActor,
   type TimelineEvent,
 } from "@/lib/object-timeline";
 import { userHrefOrNull } from "@/lib/panel-href";
+import { shortId } from "@/lib/short-id";
 import { getAuditLog } from "@/server/api/audit";
 import type { PageDto } from "@/server/api/types";
 import { getKoalaAccessToken } from "@/server/auth/session";

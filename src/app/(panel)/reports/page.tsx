@@ -13,6 +13,7 @@ import {
   searchEmptyTitle,
 } from "@/components/panel/queue";
 import { EmptyState } from "@/components/ui";
+import { objectQueryFor } from "@/lib/breadcrumb";
 import { ALL_STATUSES_PARAM } from "@/lib/panel-href";
 import {
   pageWindow,
@@ -119,8 +120,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
   if (reporterId !== null) viewState.sikayetci = reporterId;
   if (query !== null) viewState[SEARCH_PARAM] = query;
   const userFiltered = reportedUserId !== null || reporterId !== null;
-  // Nesne adresi görünümü taşır; şikayet sayfasının kırıntısı buraya döner.
-  const objectQuery = { ...viewState, sayfa: String(paging.page) };
+  const objectQuery = objectQueryFor(viewState, paging.page);
 
   const filters = (
     <QueueFilters

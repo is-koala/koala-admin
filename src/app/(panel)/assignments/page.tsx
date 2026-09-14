@@ -15,6 +15,7 @@ import {
   searchEmptyTitle,
 } from "@/components/panel/queue";
 import { Badge, EmptyState, FormField, TextInput } from "@/components/ui";
+import { objectQueryFor } from "@/lib/breadcrumb";
 import {
   EMPTY_VALUE,
   formatCurrency,
@@ -118,8 +119,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
     ...(query === null ? {} : { [SEARCH_PARAM]: query }),
     ...partyFilter,
   };
-  // Nesne adresi görünümü taşır; atama sayfasının kırıntısı buraya döner.
-  const objectQuery = { ...viewState, sayfa: String(paging.page) };
+  const objectQuery = objectQueryFor(viewState, paging.page);
 
   const form = (
     <LookupForm

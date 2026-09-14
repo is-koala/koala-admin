@@ -459,7 +459,7 @@ describe("the deletion request's breadcrumb", () => {
 
     expect(html).toContain('<nav aria-label="Konum">');
     expect(html).toContain(
-      'href="/account-deletions?durum=REJECTED&amp;sirala=requestedAt%2Cdesc"><span class="">Hesap silme</span></a>',
+      'href="/account-deletions?durum=REJECTED&amp;sirala=requestedAt%2Cdesc"><span>Hesap silme</span></a>',
     );
     expect(html).toContain(`title="${REQUEST_ID}">${REQUEST_ID.slice(0, 8)}<`);
     expect(html).not.toContain("Kuyruğa dön");
