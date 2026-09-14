@@ -122,6 +122,30 @@ export function istanbulDayBoundary(day: string, edge: "start" | "end"): string 
   return Number.isNaN(local.getTime()) ? null : local.toISOString();
 }
 
+/**
+ * `01.09.2026 08:00` — ofsetsiz bir `LocalDateTime` için.
+ *
+ * İlanın başlangıç ve bitişi (`AdminJobDto.startDateTime`) backend'den
+ * `2026-09-01T08:00:00` gibi dilimsiz gelir. Bu bir an değil, üzerinde
+ * anlaşılmış duvar saatidir; `new Date(...)` onu sürecin diliminde yorumlar
+ * ve UTC'de koşan bir konteynerde üç saat kaydırırdı. Metin olduğu gibi
+ * okunur, hiçbir dönüşümden geçmez. Ofset taşıyan ya da tanınmayan bir değer
+ * {@link formatDateTime}'a düşer.
+ */
+export function formatWallClock(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === "") {
+    return EMPTY_VALUE;
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(value);
+  if (match === null) {
+    return formatDateTime(value);
+  }
+
+  const [, year, month, day, hour, minute] = match;
+  return `${day}.${month}.${year} ${hour}:${minute}`;
+}
+
 /** `01:58:48` */
 export function formatTime(value: DateInput): string {
   return formatWith(value, {

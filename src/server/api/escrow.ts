@@ -4,6 +4,8 @@ import { koalaApi, koalaRequestNoData } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import { searchQueryParam } from "./search-query";
+import { linkedRecordSchema } from "./shared/linked-record";
+import { pricingBreakdownSchema } from "./shared/pricing";
 import type { KoalaResultMeta, PageDto } from "./types";
 import { safeUserSchema } from "./users";
 
@@ -89,7 +91,6 @@ export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
  * here; `formatCurrency` takes either representation.
  */
 const moneySchema = z.union([z.number(), z.string()]);
-const decimalStringSchema = z.string();
 
 const nullableMoney = moneySchema.nullish().transform((value) => value ?? null);
 
@@ -115,16 +116,6 @@ export const ASSIGNMENT_PAGING: PagingContract = {
 export function escrowSummaryPath(assignmentId: string): string {
   return `${ASSIGNMENTS_PATH}/${encodeURIComponent(assignmentId)}`;
 }
-
-/** `PricingBreakdownDto`, kept nested exactly as the backend returns it. */
-const pricingBreakdownSchema = z.object({
-  pricingVersion: z.string(),
-  currency: z.string(),
-  workerPayout: decimalStringSchema,
-  serviceFeeRate: decimalStringSchema,
-  serviceFeeAmount: decimalStringSchema,
-  employerTotal: decimalStringSchema,
-});
 
 /**
  * `AdminAssignmentDto` from `GET /admin/job-assignments/{id}`.
@@ -158,6 +149,38 @@ export function getEscrowSummary(
   return koalaApi.get({
     path: escrowSummaryPath(assignmentId),
     schema: escrowSummarySchema,
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+/**
+ * `AdminAssignmentDetailDto` (koala-backend#265) — `AdminAssignmentDto`'nun
+ * üst kümesi. Bağlı kayıtlar `LinkedRecordDto`; ödeme denemelerinin gövdesi
+ * ayrı uçtan (`getAssignmentPayments`, `payments.ts`) okunur.
+ *
+ * Eski `escrowSummarySchema` aynı uca karşı çalışmaya devam eder: zod
+ * bilinmeyen alanları düşürür, uyuşmazlık sayfası ve emanet kapısı tek bir
+ * alan bile değiştirmeden aynı özeti alır.
+ */
+export const assignmentDetailSchema = escrowSummarySchema.extend({
+  payments: z.array(linkedRecordSchema).default([]),
+  payout: linkedRecordSchema.nullish().transform((value) => value ?? null),
+  disputes: z.array(linkedRecordSchema).default([]),
+  reports: z.array(linkedRecordSchema).default([]),
+});
+
+export type AssignmentDetail = z.infer<typeof assignmentDetailSchema>;
+
+export type { LinkedRecord } from "./shared/linked-record";
+
+export function getAssignmentDetail(
+  accessToken: string,
+  assignmentId: string,
+): Promise<AssignmentDetail> {
+  return koalaApi.get({
+    path: escrowSummaryPath(assignmentId),
+    schema: assignmentDetailSchema,
     accessToken,
     cache: "no-store",
   });

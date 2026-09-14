@@ -5,6 +5,7 @@ import { apiUrl, server } from "../../../test/msw";
 
 import {
   confirmIbanVerification,
+  findPendingIbanVerification,
   getPendingIbanVerifications,
   IBAN_PENDING_PATH,
   IBAN_PENDING_PAGING,
@@ -227,5 +228,43 @@ describe("the IBAN queue search goes to the backend as query", () => {
       query: "k".repeat(120),
     });
     expect(seen.url?.searchParams.get("query")).toHaveLength(100);
+  });
+});
+
+/** koala-admin#95: tekil uç yok; nesne kuyruğun referansla süzülmüş tam eşleşmesidir. */
+describe("findPendingIbanVerification", () => {
+  it("filters the PENDING queue by the reference and returns the exact match", async () => {
+    const seen: { url: URL | null } = { url: null };
+    server.use(
+      http.get(apiUrl(IBAN_PENDING_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        return pageSuccess([
+          {
+            ...PENDING,
+            reference: `${REFERENCE}Z`,
+            accountId: "7c000000-0000-4000-8000-000000000049",
+          },
+          PENDING,
+        ]);
+      }),
+    );
+
+    const found = await findPendingIbanVerification("TOKEN", REFERENCE);
+
+    expect(seen.url?.searchParams.get("status")).toBe("PENDING");
+    expect(seen.url?.searchParams.get("query")).toBe(REFERENCE);
+    expect(found?.accountId).toBe(PENDING.accountId);
+  });
+
+  it("returns null when only prefix matches or nothing comes back", async () => {
+    server.use(
+      http.get(apiUrl(IBAN_PENDING_PATH), () =>
+        pageSuccess([{ ...PENDING, reference: `${REFERENCE}Z` }]),
+      ),
+    );
+    expect(await findPendingIbanVerification("TOKEN", REFERENCE)).toBeNull();
+
+    server.use(http.get(apiUrl(IBAN_PENDING_PATH), () => pageSuccess([])));
+    expect(await findPendingIbanVerification("TOKEN", REFERENCE)).toBeNull();
   });
 });

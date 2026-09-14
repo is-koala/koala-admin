@@ -7,7 +7,8 @@ import { revalidateAfterWrite } from "@/server/queue/revalidate-after-write";
 import { runEscrowOperation, type EscrowOperationKind } from "./operations";
 
 /**
- * The one Server Action behind every money button on `/disputes`.
+ * The one Server Action behind every money button on `/disputes` and
+ * `/assignments/[id]` (koala-admin#95).
  *
  * A Server Action is a public HTTP endpoint with a hard-to-guess name — not a
  * private function call — so nothing it receives is trusted. This file's whole
@@ -57,11 +58,12 @@ export async function submitEscrowOperation(
     ? rawResolution
     : null;
   const disputeId = optionalText(formData, ESCROW_FIELD.disputeId);
+  const assignmentId = text(formData, ESCROW_FIELD.assignmentId).trim();
 
   const outcome = await runEscrowOperation({
     operationKey,
     kind,
-    assignmentId: text(formData, ESCROW_FIELD.assignmentId).trim(),
+    assignmentId,
     disputeId,
     resolution,
     reason: text(formData, ESCROW_FIELD.reason),
@@ -69,9 +71,14 @@ export async function submitEscrowOperation(
   });
 
   if (outcome.status === "SUCCEEDED") {
+    // Aynı para hareketi iki sayfada görünür: uyuşmazlık ve atama detayı
+    // (koala-admin#95). İkisinin de router önbelleği düşer ki operatör eski
+    // ödeme durumunu görüp aynı düğmeye ikinci kez basmasın.
     revalidateAfterWrite(
       ...(disputeId === null ? [] : [`/disputes/${disputeId}`]),
       "/disputes",
+      ...(assignmentId.length === 0 ? [] : [`/assignments/${assignmentId}`]),
+      "/assignments",
       "/",
     );
   }

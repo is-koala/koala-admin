@@ -23,7 +23,6 @@ import {
   TableHeaderCell,
   TableRow,
   TextInput,
-  type BadgeTone,
 } from "@/components/ui";
 import {
   EMPTY_VALUE,
@@ -32,14 +31,12 @@ import {
   formatInteger,
   formatPercent,
 } from "@/lib/format";
-import { userHrefOrNull } from "@/lib/panel-href";
+import { assignmentHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   ASSIGNMENT_PAGING,
   getAdminAssignments,
   getEscrowSummary,
-  type AssignmentStatus,
   type EscrowSummary,
-  type PaymentStatus,
 } from "@/server/api/escrow";
 import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
 import {
@@ -52,6 +49,8 @@ import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
+import { ASSIGNMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONES } from "./labels";
+
 export const metadata: Metadata = { title: "Atama özeti" };
 
 /**
@@ -63,34 +62,13 @@ export const metadata: Metadata = { title: "Atama özeti" };
  * İki kutu, iki iş: `?atama=` tek bir kaydı UUID ile açar, `?ara=` kuyruğu
  * backend'de süzer (koala-admin#94). Arama kutusu UUID doğrulamaz — atama
  * id'si de aranabilen alanlardan biri, kısmi id yazmak meşru.
+ *
+ * Satırın "Aç" bağlantısı nesne sayfasına gider (`/assignments/{id}`,
+ * koala-admin#95); `?atama=` bakışı kısa özet olarak kaldı ve oradan da
+ * nesne sayfasına bağlantı verir.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const PAYMENT_STATUS_TONES: Record<string, BadgeTone> = {
-  HELD_IN_ESCROW: "warning",
-  RELEASED_TO_WORKER: "success",
-  REFUNDED: "neutral",
-  PENDING_COLLECTION: "neutral",
-  FAILED: "danger",
-};
-
-const ASSIGNMENT_STATUS_LABELS: Record<AssignmentStatus, string> = {
-  PENDING_CONFIRMATION: "Onay bekliyor",
-  CONFIRMED: "Onaylı",
-  IN_PROGRESS: "Devam ediyor",
-  COMPLETED: "Tamamlandı",
-  REJECTED: "Reddedildi",
-  CANCELLED: "İptal",
-};
-
-const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
-  PENDING_COLLECTION: "Tahsil bekliyor",
-  HELD_IN_ESCROW: "Emanette",
-  RELEASED_TO_WORKER: "İşçiye çıktı",
-  FAILED: "Başarısız",
-  REFUNDED: "İade",
-};
 
 export default async function AssignmentsPage({
   searchParams,
@@ -251,7 +229,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
                     <Badge>{ASSIGNMENT_STATUS_LABELS[row.status]}</Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge tone={PAYMENT_STATUS_TONES[row.paymentStatus] ?? "neutral"}>
+                    <Badge tone={PAYMENT_STATUS_TONES[row.paymentStatus]}>
                       {PAYMENT_STATUS_LABELS[row.paymentStatus]}
                     </Badge>
                   </TableCell>
@@ -260,14 +238,7 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
                   </TableCell>
                   <TableCell>
                     <Link
-                      href={{
-                        pathname: "/assignments",
-                        query: {
-                          atama: row.id,
-                          ...(paging.page > 0 ? { sayfa: String(paging.page) } : {}),
-                          ...(query === null ? {} : { [SEARCH_PARAM]: query }),
-                        },
-                      }}
+                      href={assignmentHref(row.id)}
                       className="text-sm font-medium text-brand hover:underline"
                     >
                       Aç
@@ -345,9 +316,17 @@ function LookupForm({
 function AssignmentSummary({ summary }: { summary: EscrowSummary }) {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="assignment-summary-heading">
-      <h2 id="assignment-summary-heading" className="text-lg font-semibold">
-        Atama
-      </h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="assignment-summary-heading" className="text-lg font-semibold">
+          Atama
+        </h2>
+        <Link
+          href={assignmentHref(summary.id)}
+          className="text-sm font-medium text-brand hover:underline"
+        >
+          Detayı aç
+        </Link>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <dl className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4 text-sm">
@@ -370,7 +349,7 @@ function AssignmentSummary({ summary }: { summary: EscrowSummary }) {
           <Row
             label="Ödeme durumu"
             value={
-              <Badge tone={PAYMENT_STATUS_TONES[summary.paymentStatus] ?? "neutral"}>
+              <Badge tone={PAYMENT_STATUS_TONES[summary.paymentStatus]}>
                 {PAYMENT_STATUS_LABELS[summary.paymentStatus]}
               </Badge>
             }

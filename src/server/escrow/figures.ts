@@ -1,3 +1,5 @@
+import type { MoneyMovement } from "@/components/escrow/escrow-operation-form";
+import { formatCurrency } from "@/lib/format";
 import { safeUserName } from "@/server/api/users";
 import type { EscrowSummary, Money } from "@/server/api/escrow";
 
@@ -58,6 +60,27 @@ export function escrowFigure(summary: EscrowSummary, direction: EscrowDirection)
     amount: summary.pricing.employerTotal,
     currency: summary.pricing.currency,
     source: "pricing.employerTotal",
+  };
+}
+
+/**
+ * {@link escrowFigure}, onay formunun okuduğu biçimde. Uyuşmazlık ve atama
+ * sayfaları aynı düğmeleri çizer; rakamın hangi alandan geldiği ve nasıl
+ * yazıldığı tek yerde kalsın. `null`, "rakam yok, işlem sunulmaz" demektir.
+ */
+export function escrowMovement(
+  summary: EscrowSummary,
+  direction: EscrowDirection,
+): MoneyMovement | null {
+  const figure = escrowFigure(summary, direction);
+  if (figure.amount === null) return null;
+
+  return {
+    confirmedAmount: normaliseMoney(figure.amount),
+    amountText: formatCurrency(figure.amount, figure.currency),
+    partyName: figure.partyName,
+    partyRole: figure.partyRole,
+    source: figure.source,
   };
 }
 

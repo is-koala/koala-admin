@@ -1,11 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { userHref } from "@/lib/panel-href";
-
 import {
   EscrowOperationForm,
-  type MoneyMovement,
   type ResolutionChoice,
 } from "@/components/escrow/escrow-operation-form";
 import { Badge, ErrorState, type BadgeTone } from "@/components/ui";
@@ -16,6 +13,7 @@ import {
   formatNumber,
   formatPercent,
 } from "@/lib/format";
+import { assignmentHref, userHref } from "@/lib/panel-href";
 import {
   DISPUTE_RESOLUTION_SPECS,
   type Dispute,
@@ -26,12 +24,7 @@ import { type EscrowSummary } from "@/server/api/escrow";
 import { safeUserName } from "@/server/api/users";
 import type { Permission } from "@/server/authz/permissions";
 import { submitEscrowOperation } from "@/server/escrow/actions";
-import {
-  escrowFigure,
-  normaliseMoney,
-  refundAvailability,
-  releaseAvailability,
-} from "@/server/escrow/figures";
+import { escrowMovement, refundAvailability, releaseAvailability } from "@/server/escrow/figures";
 
 export const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
   OPEN: "Açık",
@@ -88,8 +81,8 @@ export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailP
   const canRelease = heldPermissions.has("payout.release");
   const canRefund = heldPermissions.has("payment.refund");
 
-  const releaseMovement = summary === null ? null : movementFor(summary, "WORKER");
-  const refundMovement = summary === null ? null : movementFor(summary, "EMPLOYER");
+  const releaseMovement = summary === null ? null : escrowMovement(summary, "WORKER");
+  const refundMovement = summary === null ? null : escrowMovement(summary, "EMPLOYER");
 
   const release = summary === null ? null : releaseAvailability(summary);
   const refund = summary === null ? null : refundAvailability(summary);
@@ -164,7 +157,7 @@ export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailP
             label="Atama"
             value={
               <Link
-                href={{ pathname: "/assignments", query: { atama: dispute.jobAssignmentId } }}
+                href={assignmentHref(dispute.jobAssignmentId)}
                 className="font-mono text-xs text-brand hover:underline"
               >
                 {dispute.jobAssignmentId}
@@ -470,20 +463,4 @@ function formatFileSize(bytes: number): string {
     return `${formatNumber(bytes / 1024, { maximumFractionDigits: 1 })} KB`;
   }
   return `${formatNumber(bytes / (1024 * 1024), { maximumFractionDigits: 1 })} MB`;
-}
-
-function movementFor(
-  summary: EscrowSummary,
-  direction: "WORKER" | "EMPLOYER",
-): MoneyMovement | null {
-  const figure = escrowFigure(summary, direction);
-  if (figure.amount === null) return null;
-
-  return {
-    confirmedAmount: normaliseMoney(figure.amount),
-    amountText: formatCurrency(figure.amount, figure.currency),
-    partyName: figure.partyName,
-    partyRole: figure.partyRole,
-    source: figure.source,
-  };
 }

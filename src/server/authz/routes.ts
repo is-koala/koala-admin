@@ -201,6 +201,25 @@ export const ROUTES = [
   },
   {
     /**
+     * koala-admin#95 / koala-backend#265. Liste `GET /admin/jobs`, nesne
+     * `GET /admin/jobs/{jobId}`; ikisi de yeni `job.read` (PERSONAL_DATA —
+     * satır işvereni e-postasıyla, detay tam adresi taşır). Kapı aynı izin:
+     * izni olmayan kişide GET hiç çıkmaz.
+     */
+    path: "/jobs",
+    title: "İlanlar",
+    access: "permission",
+    permission: "job.read",
+    nav: { label: "İlanlar", order: 28, group: "operasyon" },
+  },
+  {
+    path: "/jobs/[id]",
+    title: "İlan",
+    access: "permission",
+    permission: "job.read",
+  },
+  {
+    /**
      * koala-admin#8. Approval is irreversible and is the gate in front of a
      * company posting jobs at all, so it gets its own permission rather than
      * riding along with anything else — `COMPANY_APPROVE` on the backend.
@@ -279,6 +298,29 @@ export const ROUTES = [
   },
   {
     /**
+     * koala-admin#95. Nesne `GET /admin/job-assignments/{id}`
+     * (`AdminAssignmentDetailDto`) ve `GET .../{id}/payments`; ikisi de
+     * `payment.read`. Serbest bırak/iade formları sayfanın içinde ayrıca
+     * `payout.release` / `payment.refund` bakar; asıl kapı
+     * `runEscrowOperation`.
+     */
+    path: "/assignments/[id]",
+    title: "Atama",
+    access: "permission",
+    permission: "payment.read",
+  },
+  {
+    /**
+     * Tek ödeme denemesi, `GET /admin/payments/{paymentId}`; `payment.read`.
+     * Menüde yok — atama detayındaki denemeler tablosundan açılır.
+     */
+    path: "/payments/[id]",
+    title: "Ödeme denemesi",
+    access: "permission",
+    permission: "payment.read",
+  },
+  {
+    /**
      * koala-backend#202. Kuyruk `GET /admin/bank-account-verifications`
      * (PENDING); onay hâlâ `POST .../{reference}/confirm`. Kapı
      * `bank.account.verify` — yazım da aynı izin, ve Server Action onu
@@ -292,6 +334,17 @@ export const ROUTES = [
   },
   {
     /**
+     * Backend'de tekil IBAN doğrulama ucu yok; nesne, PENDING kuyruğunun
+     * `query=referans` ile süzülüp tam eşleşen satırından kurulur. Onay
+     * mevcut confirm eylemi; kapı ve eylem aynı `bank.account.verify`.
+     */
+    path: "/iban-verifications/[reference]",
+    title: "IBAN doğrulaması",
+    access: "permission",
+    permission: "bank.account.verify",
+  },
+  {
+    /**
      * Banka ekstresiyle mutabakat, escrow çıkışından ayrı bir operasyondur:
      * `payout.release` talimatı başlatır; `payout.reconcile` gerçekleşmiş banka
      * satırını kanıtlar. Backend de iki ucu ve iki izni ayrı tutar.
@@ -301,6 +354,17 @@ export const ROUTES = [
     access: "permission",
     permission: "payout.reconcile",
     nav: { label: "Hakediş mutabakatı", order: 50, group: "finans" },
+  },
+  {
+    /**
+     * Nesne `GET /admin/payouts/{payoutId}` (`AdminPayoutDetailDto`,
+     * koala-backend#265) — mutabakat/settlement geçmişiyle. Backend ucu
+     * `payout.reconcile` ister; kapı aynı izin.
+     */
+    path: "/payout-reconciliation/[id]",
+    title: "Hakediş",
+    access: "permission",
+    permission: "payout.reconcile",
   },
   {
     /**

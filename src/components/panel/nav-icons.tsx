@@ -30,6 +30,9 @@ const TrashIcon = strokeIcon("M5 7h14M10 7V5h4v2m1 0v12a1 1 0 0 1-1 1H8a1 1 0 0 
 const UsersIcon = strokeIcon(
   "M15 19v-1a3 3 0 0 0-3-3H6a3 3 0 0 0-3 3v1M9.5 9.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm11.5 9.5v-1a3 3 0 0 0-2.2-2.9M16.5 6.2a3 3 0 0 1 0 5.6",
 );
+const BriefcaseIcon = strokeIcon(
+  "M4 9.5A1.5 1.5 0 0 1 5.5 8h13A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5zM9 8V6.5A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5V8M4 13h16",
+);
 const BuildingIcon = strokeIcon(
   "M5 21V5.5A1.5 1.5 0 0 1 6.5 4h7A1.5 1.5 0 0 1 16 5.5V21M16 10h2.5A1.5 1.5 0 0 1 20 11.5V21M9 8h.01M12 8h.01M9 12h.01M12 12h.01M9 16h.01M12 16h.01M4 21h16",
 );
@@ -61,6 +64,7 @@ const BY_HREF: Record<string, typeof HomeIcon> = {
   "/reports": FlagIcon,
   "/account-deletions": TrashIcon,
   "/users": UsersIcon,
+  "/jobs": BriefcaseIcon,
   "/companies": BuildingIcon,
   "/identity-reviews": IdIcon,
   "/disputes": ScaleIcon,

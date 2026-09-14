@@ -6,6 +6,8 @@ import { koalaApi } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import { searchQueryParam } from "./search-query";
+import { linkedRecordSchema } from "./shared/linked-record";
+import { staffPartySchema } from "./shared/staff-party";
 import type { PageDto } from "./types";
 
 /** `PayoutStatus.java`, verbatim. */
@@ -46,6 +48,108 @@ const payoutSchema = z.object({
   completedAt: z.iso.datetime({ offset: true }).nullable(),
   createdAt: z.iso.datetime({ offset: true }),
 });
+
+/** `entities/SettlementOperation.java` — iyzico onay kuyruğundaki iş türü. */
+export const SETTLEMENT_OPERATIONS = ["APPROVE", "DISAPPROVE", "REFUND"] as const;
+export type SettlementOperation = (typeof SETTLEMENT_OPERATIONS)[number];
+
+export const SETTLEMENT_OPERATION_LABELS: Record<SettlementOperation, string> = {
+  APPROVE: "Onay",
+  DISAPPROVE: "Onay iptali",
+  REFUND: "İade",
+};
+
+/** `entities/SettlementTaskStatus.java`. */
+export const SETTLEMENT_TASK_STATUSES = ["PENDING", "SUCCEEDED", "FAILED"] as const;
+export type SettlementTaskStatus = (typeof SETTLEMENT_TASK_STATUSES)[number];
+
+export const SETTLEMENT_TASK_STATUS_LABELS: Record<SettlementTaskStatus, string> = {
+  PENDING: "Bekliyor",
+  SUCCEEDED: "Başarılı",
+  FAILED: "Başarısız",
+};
+
+export const PAYOUT_STATUS_LABELS: Record<PayoutStatus, string> = {
+  PENDING: "Bekliyor",
+  PROCESSING: "İşleniyor",
+  COMPLETED: "Tamamlandı",
+  FAILED: "Başarısız",
+};
+
+const nullableString = z
+  .string()
+  .nullish()
+  .transform((value) => value ?? null);
+
+const nullableInt = z
+  .number()
+  .int()
+  .nullish()
+  .transform((value) => value ?? null);
+
+/** `AdminSettlementTaskDto` — bir settlement denemesi. */
+export const settlementTaskSchema = z.object({
+  id: z.string(),
+  operation: z.enum(SETTLEMENT_OPERATIONS),
+  status: z.enum(SETTLEMENT_TASK_STATUSES),
+  attempts: nullableInt,
+  nextAttemptAt: nullableString,
+  lastError: nullableString,
+  providerTransactionId: nullableString,
+  providerReference: nullableString,
+  amount: nullableString,
+  completedAt: nullableString,
+  createdAt: nullableString,
+  updatedAt: nullableString,
+});
+
+export type SettlementTask = z.infer<typeof settlementTaskSchema>;
+
+/**
+ * `AdminPayoutDetailDto` (koala-backend#265). #80'in kanıt alanları —
+ * sağlayıcı referansı, alıcı, maskeli IBAN, tutar, para birimi — burada;
+ * `settlementTasks` mutabakat geçmişi, `paymentAttempts` bağlı tahsilatlar.
+ * Liste şemasından gevşek: detay yeni uç, para metni yine ondalık string
+ * ama biçimini burada zorlamak yeni bir alan için bütün sayfayı düşürürdü.
+ */
+export const payoutDetailSchema = z.object({
+  id: z.string(),
+  jobAssignmentId: z.string(),
+  jobId: nullableString,
+  jobTitle: nullableString,
+  companyName: nullableString,
+  worker: staffPartySchema.nullish().transform((value) => value ?? null),
+  employer: staffPartySchema.nullish().transform((value) => value ?? null),
+  paymentId: nullableString,
+  maskedIban: nullableString,
+  amount: nullableString,
+  currency: nullableString,
+  status: z.enum(PAYOUT_STATUSES),
+  providerReference: nullableString,
+  settlementReference: nullableString,
+  failureReason: nullableString,
+  processingAt: nullableString,
+  completedAt: nullableString,
+  createdAt: nullableString,
+  updatedAt: nullableString,
+  settlementTasks: z.array(settlementTaskSchema).default([]),
+  paymentAttempts: z.array(linkedRecordSchema).default([]),
+});
+
+export type PayoutDetail = z.infer<typeof payoutDetailSchema>;
+
+export function payoutPath(payoutId: string): string {
+  return `${PAYOUTS_PATH}/${encodeURIComponent(payoutId)}`;
+}
+
+export function getPayoutDetail(accessToken: string, payoutId: string): Promise<PayoutDetail> {
+  return koalaApi.get({
+    path: payoutPath(payoutId),
+    schema: payoutDetailSchema,
+    accessToken,
+    cache: "no-store",
+  });
+}
 
 /** `ConfirmPayoutSettlementDto.java`. Amount is deliberately decimal text. */
 export interface PayoutSettlementEvidence {

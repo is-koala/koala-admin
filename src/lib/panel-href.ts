@@ -77,8 +77,34 @@ export function userHrefOrNull(userId: string | null | undefined): Route | null 
   return userId !== null && userId !== undefined && isUuid(userId) ? userHref(userId) : null;
 }
 
-export function assignmentLookupHref(assignmentId: string): Route {
-  return asRoute(`/assignments?atama=${encodeURIComponent(assignmentId)}`);
+/** Atama nesne sayfası (koala-admin#95); `?atama=` bakışı liste sayfasında kaldı. */
+export function assignmentHref(assignmentId: string): Route {
+  return asRoute(`/assignments/${assignmentId}`);
+}
+
+export function paymentHref(paymentId: string): Route {
+  return asRoute(`/payments/${paymentId}`);
+}
+
+export function payoutHref(payoutId: string): Route {
+  return asRoute(`/payout-reconciliation/${payoutId}`);
+}
+
+export function jobHref(jobId: string): Route {
+  return asRoute(`/jobs/${jobId}`);
+}
+
+export function jobsHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/jobs", state);
+}
+
+/**
+ * Referans UUID değil, backend'in ürettiği serbest metindir (`KOALA-9F3A`);
+ * yol parçası olarak kodlanır ki `/` ya da `?` içeren bir referans rotayı
+ * bozmasın.
+ */
+export function ibanVerificationHref(reference: string): Route {
+  return asRoute(`/iban-verifications/${encodeURIComponent(reference)}`);
 }
 
 export function reportsForUserHref(userId: string): Route {
