@@ -13,7 +13,7 @@ import { isKoalaApiError } from "./errors";
  * Kural burada bir kez yazılır ki yedi istek kurucu aynı şeyi yedi kez
  * hatırlamak zorunda kalmasın. Kısa değer gönderilmez: backend zaten
  * süzmeyecekti, boş bir parametre yalnız URL'yi kirletir. Uzun değer 100'e
- * kırpılır: `?q=` bir adres çubuğundan gelir ve bir yer imi 400 olmamalı.
+ * kırpılır: `?ara=` bir adres çubuğundan gelir ve bir yer imi 400 olmamalı.
  * Kırpma yine de bir ret olasılığını sıfırlamaz (kodun eski bir sürümü,
  * elle yazılmış istek); {@link isSearchQueryTooLong} o cevabı tanır ki sayfa
  * genel "yüklenemedi" yerine arama kutusunun yanında Türkçe söyleyebilsin.

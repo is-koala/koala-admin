@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
-import { QueueLoadFailure } from "@/components/panel/queue";
+import { QueueLoadFailure, SEARCH_PARAM } from "@/components/panel/queue";
 import { identityReviewsHref, isUuid } from "@/lib/panel-href";
 import { getIdentityReview } from "@/server/api/identity-reviews";
 import { readParam, type SearchParams } from "@/server/api/paging";
@@ -16,7 +16,7 @@ import { IdentityReviewBody, IdentityStatusBadge, identityDisplayName } from "..
 
 export const metadata: Metadata = { title: "Kimlik incelemesi" };
 
-const QUEUE_KEYS = ["durum", "sirala", "boyut", "sayfa", "q"] as const;
+const QUEUE_KEYS = ["durum", "sirala", "boyut", "sayfa", SEARCH_PARAM] as const;
 
 /**
  * Kuyruk süzgecini nesne URL'sinden geri taşımak için. Karar sonrası dönüş

@@ -244,22 +244,22 @@ describe("the safe user projection and missing records", () => {
 });
 
 describe("the search box — koala-admin#94", () => {
-  it("sends q to the backend as query and names it in the result line", async () => {
+  it("sends ara to the backend as query and names it in the result line", async () => {
     stubMe(ANALYST);
     const list = watchList();
 
-    const html = await render({ q: " garson " });
+    const html = await render({ ara: " garson " });
 
     expect(list.url?.searchParams.get("query")).toBe("garson");
     expect(html).toContain("“garson” için 1 atama bulundu.");
-    expect(html).toContain('name="q"');
+    expect(html).toContain('name="ara"');
   });
 
-  it("offers Temizle, which drops q and keeps the page size", async () => {
+  it("offers Temizle, which drops ara and keeps the page size", async () => {
     stubMe(ANALYST);
     watchList();
 
-    const html = await render({ q: "garson", boyut: "50" });
+    const html = await render({ ara: "garson", boyut: "50" });
 
     expect(html).toContain('href="/assignments?boyut=50"');
     expect(html).toContain("Temizle");
@@ -269,16 +269,16 @@ describe("the search box — koala-admin#94", () => {
     stubMe(ANALYST);
     watchList();
 
-    const html = await render({ q: "garson" });
+    const html = await render({ ara: "garson" });
 
-    expect(html).toContain(`/assignments?atama=${ASSIGNMENT_ID}&amp;q=garson`);
+    expect(html).toContain(`/assignments?atama=${ASSIGNMENT_ID}&amp;ara=garson`);
   });
 
   it("says there is no result for the query", async () => {
     stubMe(ANALYST);
     watchList([]);
 
-    const html = await render({ q: "kimse" });
+    const html = await render({ ara: "kimse" });
 
     expect(html).toContain("“kimse” için sonuç yok.");
     expect(html).not.toContain("Atama yok.");
@@ -292,7 +292,7 @@ describe("the search box — koala-admin#94", () => {
       ),
     );
 
-    const html = await render({ q: "k".repeat(120) });
+    const html = await render({ ara: "k".repeat(120) });
 
     expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
     expect(html).not.toContain("Atama kuyruğu yüklenemedi.");

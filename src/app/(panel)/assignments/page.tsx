@@ -60,7 +60,7 @@ export const metadata: Metadata = { title: "Atama özeti" };
  * `GET /admin/job-assignments` `payment.read` ile sayfalar; satır DTO'su
  * UUID bakışıyla aynı `AdminAssignmentDto`. Emanet yazımı burada yok.
  *
- * İki kutu, iki iş: `?atama=` tek bir kaydı UUID ile açar, `?q=` kuyruğu
+ * İki kutu, iki iş: `?atama=` tek bir kaydı UUID ile açar, `?ara=` kuyruğu
  * backend'de süzer (koala-admin#94). Arama kutusu UUID doğrulamaz — atama
  * id'si de aranabilen alanlardan biri, kısmi id yazmak meşru.
  */
@@ -304,7 +304,7 @@ function LookupForm({
 }: {
   value: string;
   error: string | null;
-  /** Kimlik bakışı aramayı silmesin: `q` gizli alan olarak taşınır. */
+  /** Kimlik bakışı aramayı silmesin: `ara` gizli alan olarak taşınır. */
   carry: Readonly<Record<string, string>>;
 }) {
   return (

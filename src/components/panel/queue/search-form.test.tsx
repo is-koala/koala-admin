@@ -25,8 +25,8 @@ const BASE = {
   pathname: "/assignments",
 } as const;
 
-describe("the search box is a GET form named q", () => {
-  it("submits q with the carried view and resets the page to the first", () => {
+describe("the search box is a GET form named ara", () => {
+  it("submits ara with the carried view and resets the page to the first", () => {
     render(
       <ListSearchForm
         {...BASE}
@@ -44,7 +44,7 @@ describe("the search box is a GET form named q", () => {
       ["sirala", "createdAt,desc"],
       ["boyut", "20"],
       ["sayfa", "0"],
-      ["q", "ayşe"],
+      ["ara", "ayşe"],
     ]);
   });
 
@@ -53,7 +53,7 @@ describe("the search box is a GET form named q", () => {
 
     const input = screen.getByRole("searchbox", { name: "Atamalarda ara" });
     expect(input).toHaveValue("ayşe");
-    expect(input).toHaveAttribute("name", "q");
+    expect(input).toHaveAttribute("name", "ara");
     expect(input).toHaveAttribute("maxlength", "100");
   });
 
@@ -66,13 +66,13 @@ describe("the search box is a GET form named q", () => {
 });
 
 describe("clearing", () => {
-  it("offers Temizle only while a search is active, and the link drops q but keeps the view", () => {
+  it("offers Temizle only while a search is active, and the link drops ara but keeps the view", () => {
     const { rerender } = render(<ListSearchForm {...BASE} query={null} />);
 
     expect(screen.queryByRole("link", { name: "Temizle" })).not.toBeInTheDocument();
 
     rerender(
-      <ListSearchForm {...BASE} query="ayşe" state={{ durum: "PENDING", boyut: "50", q: "x" }} />,
+      <ListSearchForm {...BASE} query="ayşe" state={{ durum: "PENDING", boyut: "50", ara: "x" }} />,
     );
 
     expect(screen.getByRole("link", { name: "Temizle" })).toHaveAttribute(
@@ -130,10 +130,10 @@ describe("the result line", () => {
     expect(screen.getByRole("status")).toHaveTextContent("“ayşe” için 1.204 atama bulundu.");
   });
 
-  it("says there is no result for the query, in the same words the empty state uses", () => {
-    render(<SearchResultSummary search="ayşe" total={0} unit="atama" />);
+  it("draws nothing for an empty result — the empty state carries that sentence once", () => {
+    const { container } = render(<SearchResultSummary search="ayşe" total={0} unit="atama" />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(searchEmptyTitle("ayşe"));
+    expect(container).toBeEmptyDOMElement();
     expect(searchEmptyTitle("ayşe")).toBe("“ayşe” için sonuç yok.");
   });
 });

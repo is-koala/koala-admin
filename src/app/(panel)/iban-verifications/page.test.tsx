@@ -7,7 +7,7 @@ import { renderServerComponent } from "../../../../test/render-server";
 
 /**
  * IBAN kuyruğu sayfası. Kapı ve arama: `bank.account.verify` yoksa GET hiç
- * çıkmaz; `?q=` backend'e `query` olarak gider ve sonuç satırı onu adıyla
+ * çıkmaz; `?ara=` backend'e `query` olarak gider ve sonuç satırı onu adıyla
  * söyler (koala-admin#94).
  */
 
@@ -128,23 +128,23 @@ describe("who can see the IBAN queue", () => {
 });
 
 describe("the search box — koala-admin#94", () => {
-  it("sends q to the backend as query, still PENDING-only, and names it in the result line", async () => {
+  it("sends ara to the backend as query, still PENDING-only, and names it in the result line", async () => {
     stubMe(VERIFIER);
     const queue = watchQueue([PENDING_ROW]);
 
-    const html = await render({ q: " 9F3A " });
+    const html = await render({ ara: " 9F3A " });
 
     expect(queue.url?.searchParams.get("query")).toBe("9F3A");
     expect(queue.url?.searchParams.get("status")).toBe("PENDING");
     expect(html).toContain("“9F3A” için 1 doğrulama bulundu.");
-    expect(html).toContain('name="q"');
+    expect(html).toContain('name="ara"');
   });
 
-  it("offers Temizle, which drops q and keeps the selected reference", async () => {
+  it("offers Temizle, which drops ara and keeps the selected reference", async () => {
     stubMe(VERIFIER);
     watchQueue([PENDING_ROW]);
 
-    const html = await render({ q: "9F3A", referans: REFERENCE });
+    const html = await render({ ara: "9F3A", referans: REFERENCE });
 
     expect(html).toContain(`href="/iban-verifications?boyut=20&amp;referans=${REFERENCE}"`);
     expect(html).toContain("Temizle");
@@ -154,16 +154,16 @@ describe("the search box — koala-admin#94", () => {
     stubMe(VERIFIER);
     watchQueue([PENDING_ROW]);
 
-    const html = await render({ q: "9F3A" });
+    const html = await render({ ara: "9F3A" });
 
-    expect(html).toContain(`/iban-verifications?referans=${REFERENCE}&amp;tutar=0.17&amp;q=9F3A`);
+    expect(html).toContain(`/iban-verifications?referans=${REFERENCE}&amp;tutar=0.17&amp;ara=9F3A`);
   });
 
   it("says there is no result for the query", async () => {
     stubMe(VERIFIER);
     watchQueue([]);
 
-    const html = await render({ q: "kimse" });
+    const html = await render({ ara: "kimse" });
 
     expect(html).toContain("“kimse” için sonuç yok.");
     expect(html).not.toContain("Bekleyen IBAN doğrulaması yok.");
@@ -177,7 +177,7 @@ describe("the search box — koala-admin#94", () => {
       }),
     );
 
-    const html = await render({ q: "k".repeat(120) });
+    const html = await render({ ara: "k".repeat(120) });
 
     expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
     expect(html).not.toContain("Bekleyen IBAN doğrulamaları yüklenemedi.");

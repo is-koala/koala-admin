@@ -622,23 +622,23 @@ describe("a report that does not exist", () => {
 });
 
 describe("the search box — koala-admin#94", () => {
-  it("sends q to the backend as query, next to the status, and names it in the result line", async () => {
+  it("sends ara to the backend as query, next to the status, and names it in the result line", async () => {
     stubMe(MODERATOR);
     const queue = watchQueue([row()]);
 
-    const html = await render({ q: " berk ", durum: "OPEN" });
+    const html = await render({ ara: " berk ", durum: "OPEN" });
 
     expect(queue.url?.searchParams.get("query")).toBe("berk");
     expect(queue.url?.searchParams.get("status")).toBe("OPEN");
     expect(html).toContain("“berk” için 1 şikayet bulundu.");
-    expect(html).toContain('name="q"');
+    expect(html).toContain('name="ara"');
   });
 
-  it("offers Temizle, which drops q but keeps status, sort and the user filter", async () => {
+  it("offers Temizle, which drops ara but keeps status, sort and the user filter", async () => {
     stubMe(MODERATOR);
     watchQueue([row()]);
 
-    const html = await render({ q: "berk", durum: "ACTIONED", kullanici: REPORTED.id });
+    const html = await render({ ara: "berk", durum: "ACTIONED", kullanici: REPORTED.id });
 
     expect(html).toContain(
       `href="/reports?durum=ACTIONED&amp;sirala=createdAt%2Cdesc&amp;boyut=20&amp;kullanici=${REPORTED.id}"`,
@@ -650,7 +650,7 @@ describe("the search box — koala-admin#94", () => {
     stubMe(MODERATOR);
     watchQueue([]);
 
-    const html = await render({ q: "kimse" });
+    const html = await render({ ara: "kimse" });
 
     expect(html).toContain("“kimse” için sonuç yok.");
     expect(html).not.toContain("durumunda şikayet yok.");
@@ -662,7 +662,7 @@ describe("the search box — koala-admin#94", () => {
       HttpResponse.json(searchQueryTooLongBody("/admin/reports"), { status: 400 }),
     );
 
-    const html = await render({ q: "k".repeat(120) });
+    const html = await render({ ara: "k".repeat(120) });
 
     expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
     expect(html).not.toContain("Şikayet kuyruğu yüklenemedi.");

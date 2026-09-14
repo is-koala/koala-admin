@@ -12,13 +12,13 @@ import {
  * Liste sayfalarının ortak arama kutusu — koala-admin#94.
  *
  * Kullanıcılar sayfasındaki kalıbın aynısı, bir kez yazılmış hâli: sunucu
- * bileşeni ve `<form method="get">`. Arama `?q=` olarak URL'de yaşar, sayfa
+ * bileşeni ve `<form method="get">`. Arama `?ara=` olarak URL'de yaşar, sayfa
  * onu sunucuda okur ve backend'e `query` olarak iletir. Tarayıcıda çalışan
  * kod yok: canlı arama, debounce, fetch yok. Bu bir eksik değil bir karar —
  * bir arama sonucu biletlere yapıştırılabilen bir bağlantıdır ve JavaScript
  * kapalıyken de çalışır.
  *
- * Form yalnız `q`'yu değiştirir. Durum süzgeci, sıralama ve sayfa boyutu
+ * Form yalnız `ara`'yı değiştirir. Durum süzgeci, sıralama ve sayfa boyutu
  * `state` ile gizli alan olarak taşınır ki arama, operatörün seçtiği süzgeci
  * sessizce sıfırlamasın. `sayfa` her gönderimde `0`: yeni bir aramanın
  * eski aramanın dördüncü sayfasında açılması kimsenin kastettiği şey değil.
@@ -27,7 +27,13 @@ import {
  * gönder düğmesi olan bir form, Enter'da gönderilir.
  */
 
-export const SEARCH_PARAM = "q";
+/**
+ * Panelin tek arama parametresi. Kullanıcılar, Şirketler ve Personel
+ * sayfaları zaten `?ara=` kullanıyor; yedi yeni kutu aynı adı taşır ki bir
+ * operatör adres çubuğunda iki farklı sözcük öğrenmek zorunda kalmasın.
+ * Nesne sayfalarının `QUEUE_KEYS` listesi de bu sabiti okur.
+ */
+export const SEARCH_PARAM = "ara";
 
 export interface ListSearchFormProps {
   /** Metin alanının `id`'si; sayfa başına benzersiz olmalı. */
@@ -40,7 +46,7 @@ export interface ListSearchFormProps {
   query: string | null;
   /**
    * Aramanın yanında yaşaması gereken görünüm: `durum`, `sirala`, `boyut`
-   * gibi. `q` ve `sayfa` burada olsa da yok sayılır.
+   * gibi. `ara` ve `sayfa` burada olsa da yok sayılır.
    */
   state?: Readonly<Record<string, string>>;
   placeholder?: string;
@@ -163,14 +169,16 @@ export interface SearchResultSummaryProps {
  * Süzülmüş bir listenin üstündeki tek satır: neye göre süzüldü, kaç kayıt.
  * `role="status"` — Enter'a basan operatör sonucun geldiğini ekran
  * okuyucuda da duyar.
+ *
+ * Boş sonuçta çizilmez: o cümleyi sayfanın `EmptyState`'i
+ * {@link searchEmptyTitle} ile zaten söylüyor; aynı satırı iki kez okutmak
+ * bir şey eklemez.
  */
 export function SearchResultSummary({ search, total, unit }: SearchResultSummaryProps) {
-  if (search === null) return null;
+  if (search === null || total === 0) return null;
   return (
     <p role="status" className="text-sm text-ink-muted">
-      {total === 0
-        ? searchEmptyTitle(search)
-        : `“${search}” için ${formatInteger(total)} ${unit} bulundu.`}
+      {`“${search}” için ${formatInteger(total)} ${unit} bulundu.`}
     </p>
   );
 }

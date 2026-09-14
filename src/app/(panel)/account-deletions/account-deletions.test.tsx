@@ -297,23 +297,23 @@ describe("a deletion request that does not exist", () => {
 });
 
 describe("the search box — koala-admin#94", () => {
-  it("sends q to the backend as query, next to the status, and names it in the result line", async () => {
+  it("sends ara to the backend as query, next to the status, and names it in the result line", async () => {
     stubMe(READER);
     const queue = watchQueue([row()]);
 
-    const html = await render({ q: " ayse@example.com ", durum: "REQUESTED" });
+    const html = await render({ ara: " ayse@example.com ", durum: "REQUESTED" });
 
     expect(queue.url?.searchParams.get("query")).toBe("ayse@example.com");
     expect(queue.url?.searchParams.get("status")).toBe("REQUESTED");
     expect(html).toContain("“ayse@example.com” için 1 talep bulundu.");
-    expect(html).toContain('name="q"');
+    expect(html).toContain('name="ara"');
   });
 
-  it("offers Temizle, which drops q and keeps the view", async () => {
+  it("offers Temizle, which drops ara and keeps the view", async () => {
     stubMe(READER);
     watchQueue([row()]);
 
-    const html = await render({ q: "ayse@example.com", durum: "REJECTED" });
+    const html = await render({ ara: "ayse@example.com", durum: "REJECTED" });
 
     expect(html).toContain(
       'href="/account-deletions?durum=REJECTED&amp;sirala=requestedAt%2Cdesc&amp;boyut=20"',
@@ -325,7 +325,7 @@ describe("the search box — koala-admin#94", () => {
     stubMe(READER);
     watchQueue([]);
 
-    const html = await render({ q: "kimse@example.com" });
+    const html = await render({ ara: "kimse@example.com" });
 
     expect(html).toContain("“kimse@example.com” için sonuç yok.");
     expect(html).not.toContain("Hesap silme talebi yok.");
@@ -339,7 +339,7 @@ describe("the search box — koala-admin#94", () => {
       ),
     );
 
-    const html = await render({ q: "k".repeat(120) });
+    const html = await render({ ara: "k".repeat(120) });
 
     expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
     expect(html).not.toContain("Hesap silme kuyruğu yüklenemedi.");

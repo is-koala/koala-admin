@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
 import { PageHeader } from "@/components/panel/page-header";
-import { QueueLoadFailure } from "@/components/panel/queue";
+import { QueueLoadFailure, SEARCH_PARAM } from "@/components/panel/queue";
 import { accountDeletionsHref, isUuid } from "@/lib/panel-href";
 import { getAccountDeletion } from "@/server/api/account-deletions";
 import { readParam, type SearchParams } from "@/server/api/paging";
@@ -16,7 +16,7 @@ import { DeletionReviewBody, DeletionStatusBadge } from "../deletion-detail";
 
 export const metadata: Metadata = { title: "Hesap silme talebi" };
 
-const QUEUE_KEYS = ["durum", "sirala", "boyut", "sayfa", "q"] as const;
+const QUEUE_KEYS = ["durum", "sirala", "boyut", "sayfa", SEARCH_PARAM] as const;
 
 function queueReturnTo(params: SearchParams): Route {
   const state: Record<string, string> = {};

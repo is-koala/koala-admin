@@ -667,35 +667,35 @@ describe("a dispute that does not exist", () => {
 });
 
 describe("the dispute search box — koala-admin#94", () => {
-  it("sends q to the backend as query, next to the status, and names it in the result line", async () => {
+  it("sends ara to the backend as query, next to the status, and names it in the result line", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     const disputes = watchDisputes();
     watchSummary();
 
     const html = (
       await renderServerComponent(
-        <DisputesPage searchParams={params({ q: " ayşe ", durum: "UNDER_REVIEW" })} />,
+        <DisputesPage searchParams={params({ ara: " ayşe ", durum: "UNDER_REVIEW" })} />,
       )
     ).replaceAll("<!-- -->", "");
 
     expect(disputes.url?.searchParams.get("query")).toBe("ayşe");
     expect(disputes.url?.searchParams.get("status")).toBe("UNDER_REVIEW");
     expect(html).toContain("“ayşe” için 1 uyuşmazlık bulundu.");
-    expect(html).toContain('name="q"');
+    expect(html).toContain('name="ara"');
   });
 
-  it("offers Temizle, which drops q and keeps the status; the status tabs carry q", async () => {
+  it("offers Temizle, which drops ara and keeps the status; the status tabs carry ara", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     watchDisputes();
     watchSummary();
 
     const html = await renderServerComponent(
-      <DisputesPage searchParams={params({ q: "ayşe", durum: "OPEN" })} />,
+      <DisputesPage searchParams={params({ ara: "ayşe", durum: "OPEN" })} />,
     );
 
     expect(html).toContain('href="/disputes?durum=OPEN&amp;boyut=25"');
     expect(html).toContain("Temizle");
-    expect(html).toContain('href="/disputes?durum=RESOLVED&amp;q=ay%C5%9Fe"');
+    expect(html).toContain('href="/disputes?durum=RESOLVED&amp;ara=ay%C5%9Fe"');
   });
 
   it("says there is no result for the query", async () => {
@@ -703,7 +703,7 @@ describe("the dispute search box — koala-admin#94", () => {
     watchDisputes(emptyQueue);
 
     const html = await renderServerComponent(
-      <DisputesPage searchParams={params({ q: "kimse" })} />,
+      <DisputesPage searchParams={params({ ara: "kimse" })} />,
     );
 
     expect(html).toContain("“kimse” için sonuç yok.");
@@ -717,7 +717,7 @@ describe("the dispute search box — koala-admin#94", () => {
     );
 
     const html = await renderServerComponent(
-      <DisputesPage searchParams={params({ q: "k".repeat(120) })} />,
+      <DisputesPage searchParams={params({ ara: "k".repeat(120) })} />,
     );
 
     expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");

@@ -141,23 +141,23 @@ const PROCESSING_ROW = {
 };
 
 describe("the search box — koala-admin#94", () => {
-  it("sends q to the backend as query, still without status, and names it in the result line", async () => {
+  it("sends ara to the backend as query, still without status, and names it in the result line", async () => {
     stubMe(OFFICER);
     const queue = watchQueue([PROCESSING_ROW]);
 
-    const html = await render({ q: " ayşe " });
+    const html = await render({ ara: " ayşe " });
 
     expect(queue.url?.searchParams.get("query")).toBe("ayşe");
     expect(queue.url?.searchParams.has("status")).toBe(false);
     expect(html).toContain("“ayşe” için 1 hakediş bulundu.");
-    expect(html).toContain('name="q"');
+    expect(html).toContain('name="ara"');
   });
 
-  it("offers Temizle, which drops q and keeps the selected payout", async () => {
+  it("offers Temizle, which drops ara and keeps the selected payout", async () => {
     stubMe(OFFICER);
     watchQueue([PROCESSING_ROW]);
 
-    const html = await render({ q: "ayşe", hakedis: PAYOUT_ID });
+    const html = await render({ ara: "ayşe", hakedis: PAYOUT_ID });
 
     expect(html).toContain(`href="/payout-reconciliation?boyut=20&amp;hakedis=${PAYOUT_ID}"`);
     expect(html).toContain("Temizle");
@@ -167,7 +167,7 @@ describe("the search box — koala-admin#94", () => {
     stubMe(OFFICER);
     watchQueue([]);
 
-    const html = await render({ q: "kimse" });
+    const html = await render({ ara: "kimse" });
 
     expect(html).toContain("“kimse” için sonuç yok.");
     expect(html).not.toContain("Bekleyen hakediş yok.");
@@ -181,7 +181,7 @@ describe("the search box — koala-admin#94", () => {
       ),
     );
 
-    const html = await render({ q: "k".repeat(120) });
+    const html = await render({ ara: "k".repeat(120) });
 
     expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
     expect(html).toContain("Ekstre onayı");
