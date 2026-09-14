@@ -46,6 +46,17 @@ const nullableInstant = z
   .nullish()
   .transform((value) => value ?? null);
 
+const nullableInt = z
+  .number()
+  .int()
+  .nullish()
+  .transform((value) => value ?? null);
+
+/**
+ * `IbanPendingDto`. `status` ve `attemptsLeft` koala-backend#283 ile geldi;
+ * eski sunucu göndermez, ikisi de `null`. Durum serbest metin okunur:
+ * kuyruk zaten yalnız PENDING verir, yeni bir enum üyesi listeyi düşürmesin.
+ */
 const ibanPendingSchema = z.object({
   accountId: z.uuid(),
   user: safeUserSchema,
@@ -54,6 +65,11 @@ const ibanPendingSchema = z.object({
   amount: moneySchema.nullish().transform((value) => value ?? null),
   startedAt: nullableInstant,
   expiresAt: nullableInstant,
+  status: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? null),
+  attemptsLeft: nullableInt,
   createdAt: nullableInstant,
 });
 

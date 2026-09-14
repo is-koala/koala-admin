@@ -69,6 +69,16 @@ export const SETTLEMENT_TASK_STATUS_LABELS: Record<SettlementTaskStatus, string>
   FAILED: "Başarısız",
 };
 
+/** `entities/PayoutReleaseOrigin.java` — hakedişi kim serbest bıraktı (koala-backend#283). */
+export const PAYOUT_RELEASE_ORIGINS = ["AUTO_COMPLETION", "DISPUTE", "STAFF"] as const;
+export type PayoutReleaseOrigin = (typeof PAYOUT_RELEASE_ORIGINS)[number];
+
+export const PAYOUT_RELEASE_ORIGIN_LABELS: Record<PayoutReleaseOrigin, string> = {
+  AUTO_COMPLETION: "Otomatik tamamlanma",
+  DISPUTE: "Uyuşmazlık kararı",
+  STAFF: "Personel",
+};
+
 export const PAYOUT_STATUS_LABELS: Record<PayoutStatus, string> = {
   PENDING: "Bekliyor",
   PROCESSING: "İşleniyor",
@@ -121,15 +131,28 @@ export const payoutDetailSchema = z.object({
   worker: staffPartySchema.nullish().transform((value) => value ?? null),
   employer: staffPartySchema.nullish().transform((value) => value ?? null),
   paymentId: nullableString,
+  bankAccountId: nullableString,
   maskedIban: nullableString,
   amount: nullableString,
   currency: nullableString,
   status: z.enum(PAYOUT_STATUSES),
+  /**
+   * koala-backend#283: sütun; geçmiş satırlarda yalnız uyuşmazlıkla açılanlar
+   * dolduruldu, kalanı `null` — panel "—" yazar, uydurmaz.
+   */
+  releaseOrigin: z
+    .enum(PAYOUT_RELEASE_ORIGINS)
+    .nullish()
+    .transform((value) => value ?? null),
   providerReference: nullableString,
   settlementReference: nullableString,
   failureReason: nullableString,
   processingAt: nullableString,
   completedAt: nullableString,
+  /** Ekstredeki gerçekleşme anı; mutabakat onayı yazar (`completedAt` ile aynı sütun). */
+  settledAt: nullableString,
+  /** Mutabakatı onaylayan personel; `POST …/reconcile` yazar. */
+  reconciledByStaffId: nullableString,
   createdAt: nullableString,
   updatedAt: nullableString,
   settlementTasks: z.array(settlementTaskSchema).default([]),
@@ -165,6 +188,8 @@ export interface PayoutQueueQuery {
   readonly status?: PayoutStatus | null;
   /** koala-backend#263: hakediş id'si, atama id'si, alıcının ad-soyadı ve e-postası. */
   readonly query?: string | null;
+  /** koala-backend#283: yalnız bu işçinin hakedişleri; durum ve arama ile kesişir. */
+  readonly workerId?: string | null;
 }
 
 export function getPayouts(accessToken: string, query: PayoutQueueQuery): Promise<PageDto<Payout>> {
@@ -174,6 +199,7 @@ export function getPayouts(accessToken: string, query: PayoutQueueQuery): Promis
     query: {
       ...(query.status ? { status: query.status } : {}),
       query: searchQueryParam(query.query),
+      workerId: query.workerId ?? undefined,
       ...pagingQuery(query.paging),
     },
     accessToken,

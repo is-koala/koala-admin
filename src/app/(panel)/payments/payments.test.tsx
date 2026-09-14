@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ASSIGNMENT_ID,
+  DISPUTE_ID,
   JOB_ID,
   PAYMENT_ID,
+  PAYOUT_ID,
   adminPaymentFixture,
   envelope,
 } from "../../../../test/fixtures/admin-detail";
@@ -249,5 +251,69 @@ describe("a payment that does not exist", () => {
 
     expect(seen.calls).toBe(0);
     expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+});
+
+/**
+ * koala-admin#100 / koala-backend#283: hakediş bağlantısı ve iadenin kaynağı.
+ * Eski sunucu ikisini de göndermez; hücreler "—".
+ */
+describe("the payout link and the refund origin", () => {
+  function withOrigin(origin: string | null, originId: string | null) {
+    const payment = adminPaymentFixture({ payoutId: PAYOUT_ID });
+    const refunds = payment.refunds as Array<Record<string, unknown>>;
+    return { ...payment, refunds: [{ ...refunds[0], origin, originId }] };
+  }
+
+  it("links the payout only to a payout.reconcile holder and keeps the id visible either way", async () => {
+    stubMe(ANALYST);
+    watch(withOrigin("STAFF", null));
+    const alone = await render();
+    expect(alone).toContain(PAYOUT_ID);
+    expect(alone).not.toContain(`href="/payout-reconciliation/${PAYOUT_ID}"`);
+
+    stubMe([...ANALYST, "payout.reconcile"]);
+    watch(withOrigin("STAFF", null));
+    const html = await render();
+    expect(html).toContain(`href="/payout-reconciliation/${PAYOUT_ID}"`);
+  });
+
+  it("names the refund origin and links a dispute origin only to a dispute.resolve holder", async () => {
+    stubMe(ANALYST);
+    watch(withOrigin("DISPUTE", DISPUTE_ID));
+    const alone = await render();
+    expect(alone).toContain("Kaynak");
+    expect(alone).toContain("Uyuşmazlık");
+    expect(alone).toContain(DISPUTE_ID);
+    expect(alone).not.toContain(`href="/disputes/${DISPUTE_ID}"`);
+
+    stubMe([...ANALYST, "dispute.resolve"]);
+    watch(withOrigin("DISPUTE", DISPUTE_ID));
+    const html = await render();
+    expect(html).toContain(`href="/disputes/${DISPUTE_ID}"`);
+  });
+
+  it("writes a cancellation origin's id as text and a staff origin without an id", async () => {
+    stubMe([...ANALYST, "dispute.resolve"]);
+    const cancellationId = "ca000000-0000-4000-8000-000000000001";
+    watch(withOrigin("CANCELLATION", cancellationId));
+    const cancelled = await render();
+    expect(cancelled).toContain("İptal");
+    expect(cancelled).toContain(cancellationId);
+    expect(cancelled).not.toContain(`href="/disputes/${cancellationId}"`);
+
+    stubMe(ANALYST);
+    watch(withOrigin("STAFF", null));
+    const staff = await render();
+    expect(staff).toContain("Personel");
+  });
+
+  it("writes the empty value for a #265 server that sends neither payoutId nor origin", async () => {
+    stubMe([...ANALYST, "payout.reconcile", "dispute.resolve"]);
+    watch();
+    const html = await render();
+    expect(html).toMatch(/Hakediş<\/dt><dd[^>]*>—</);
+    expect(html).not.toContain("/payout-reconciliation/");
+    expect(html).not.toContain("/disputes/");
   });
 });

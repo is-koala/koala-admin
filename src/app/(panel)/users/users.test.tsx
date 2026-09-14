@@ -497,3 +497,193 @@ describe("a marketplace user that does not exist", () => {
     expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });
+
+/**
+ * koala-admin#100 / koala-backend#283: `AdminUserDetailDto`. İletişim iki
+ * kilitli (backend izinle doldurur, panel izinle çizer), sayaçlar süzgeçli
+ * listelere yalnız o listenin izniyle bağlanır, eski sunucuda bölümler gizli.
+ */
+describe("the user detail's contact, verification, memberships, badges and history", () => {
+  const DELETION_ID = "eeeeeeee-0000-4000-8000-00000000000e";
+  const COMPANY_ID = "cccccccc-0000-4000-8000-00000000000c";
+
+  function detail(overrides: Record<string, unknown> = {}) {
+    return {
+      ...row(),
+      email: "ada@koala.test",
+      phoneNumber: "+905551112233",
+      emailVerified: true,
+      phoneVerified: false,
+      identityVerified: true,
+      isEmployer: true,
+      createdAt: "2026-01-05T10:00:00Z",
+      companies: [{ id: COMPANY_ID, name: "Koala Kafe", role: "ADMIN" }],
+      badges: [
+        {
+          code: "GEZGIN_BRONZE",
+          family: "GEZGIN",
+          tier: "BRONZE",
+          name: "Gezgin",
+          description: null,
+          iconUrl: null,
+          earnedAt: "2026-03-01T08:00:00Z",
+        },
+      ],
+      counts: {
+        applications: 3,
+        assignmentsAsWorker: 2,
+        assignmentsAsEmployer: 5,
+        payments: 4,
+        payouts: 1,
+        disputes: 6,
+        reportsReceived: 7,
+        reportsMade: 8,
+      },
+      identityReviewStatus: "APPROVED",
+      pendingDeletionRequestId: DELETION_ID,
+      ...overrides,
+    };
+  }
+
+  function stubDetail(data: unknown) {
+    server.use(
+      http.get(`${USERS}/${row().id}`, () =>
+        HttpResponse.json({
+          success: true,
+          message: "Kullanıcı getirildi.",
+          httpStatus: "200 OK",
+          path: `/admin/users/${row().id}`,
+          requestId: "rid-user",
+          timeStamp: "2026-09-11T13:00:00.000000000Z",
+          data,
+        }),
+      ),
+      http.get(apiUrl("/admin/users/:userId/roles"), () =>
+        HttpResponse.json({
+          success: true,
+          message: "Roller listelendi.",
+          httpStatus: "200 OK",
+          path: `/admin/users/${row().id}/roles`,
+          requestId: "rid-user-roles",
+          timeStamp: "2026-09-11T13:00:00.000000000Z",
+          data: [],
+        }),
+      ),
+    );
+  }
+
+  const renderDetail = async () =>
+    (
+      await renderServerComponent(<UserDetailPage params={Promise.resolve({ id: row().id })} />)
+    ).replaceAll("<!-- -->", "");
+
+  it("draws e-mail and phone only for a user.read_pii holder, even when the payload carries them", async () => {
+    stubMe(READER);
+    stubDetail(detail());
+    const hidden = await renderDetail();
+    expect(hidden).toContain('data-testid="user-contact-hidden"');
+    expect(hidden).not.toContain("ada@koala.test");
+    expect(hidden).not.toContain("+905551112233");
+
+    stubMe(["user.read", "user.read_pii"]);
+    stubDetail(detail());
+    const shown = await renderDetail();
+    expect(shown).toContain('data-testid="user-contact"');
+    expect(shown).toContain("ada@koala.test");
+    expect(shown).toContain("+905551112233");
+    expect(shown).toContain("Doğrulandı");
+    expect(shown).toContain("Doğrulanmadı");
+  });
+
+  it("draws the verification flags, identity review status, employer flag and deletion request", async () => {
+    stubMe(READER);
+    stubDetail(detail());
+    const html = await renderDetail();
+
+    expect(html).toMatch(/E-posta doğrulandı<\/dt><dd[^>]*>Evet</);
+    expect(html).toMatch(/Telefon doğrulandı<\/dt><dd[^>]*>Hayır</);
+    expect(html).toMatch(/Kimlik doğrulandı<\/dt><dd[^>]*>Evet</);
+    expect(html).toMatch(/Kimlik incelemesi<\/dt><dd[^>]*>Onaylı</);
+    expect(html).toMatch(/İşveren<\/dt><dd[^>]*>Evet</);
+    expect(html).toContain("05.01.2026 13:00");
+    // Silme talebi sayfası user.read_pii ister; izinsizde kimlik mono, bağlantı yok.
+    expect(html).toContain(DELETION_ID);
+    expect(html).not.toContain(`href="/account-deletions/${DELETION_ID}"`);
+
+    stubMe(["user.read", "user.read_pii"]);
+    stubDetail(detail());
+    const pii = await renderDetail();
+    expect(pii).toContain(`href="/account-deletions/${DELETION_ID}"`);
+  });
+
+  it("links each history counter to its filtered list only when that list's permission is held", async () => {
+    stubMe(READER);
+    stubDetail(detail());
+    const alone = await renderDetail();
+    expect(alone).toContain('data-testid="user-history"');
+    for (const count of ["3", "2", "5", "4", "1", "6", "7", "8"]) {
+      expect(alone).toMatch(new RegExp(`<dd[^>]*>${count}</dd>`));
+    }
+    expect(alone).not.toContain(`href="/assignments?isci=`);
+    expect(alone).not.toContain(`href="/payout-reconciliation?isci=`);
+    expect(alone).not.toContain(`href="/disputes?kullanici=`);
+    expect(alone).not.toContain(`href="/reports?sikayetci=`);
+
+    stubMe([
+      "user.read",
+      "payment.read",
+      "payout.reconcile",
+      "dispute.resolve",
+      "content.moderate",
+    ]);
+    stubDetail(detail());
+    const linked = await renderDetail();
+    const id = row().id;
+    expect(linked).toContain(`href="/assignments?isci=${id}"`);
+    expect(linked).toContain(`href="/assignments?isveren=${id}"`);
+    expect(linked).toContain(`href="/payout-reconciliation?isci=${id}"`);
+    expect(linked).toContain(`href="/disputes?kullanici=${id}"`);
+    expect(linked).toContain(`href="/reports?kullanici=${id}"`);
+    expect(linked).toContain(`href="/reports?sikayetci=${id}"`);
+    // Başvuruların listesi yok: sayı bağlantısız kalır.
+    expect(linked).toMatch(/Başvurular<\/dt><dd[^>]*>3</);
+  });
+
+  it("lists memberships and badges, linking the company only to a company.approve holder", async () => {
+    stubMe(READER);
+    stubDetail(detail());
+    const alone = await renderDetail();
+    expect(alone).toContain("Koala Kafe");
+    expect(alone).toContain("Yetkili");
+    expect(alone).not.toContain(`href="/companies/${COMPANY_ID}"`);
+    expect(alone).toContain("Gezgin");
+    expect(alone).toContain("Bronz");
+    expect(alone).toContain("01.03.2026 11:00");
+
+    stubMe(["user.read", "company.approve"]);
+    stubDetail(detail());
+    const linked = await renderDetail();
+    expect(linked).toContain(`href="/companies/${COMPANY_ID}"`);
+  });
+
+  it("says when the lists are empty and hides the sections a SafeUserDto server never sent", async () => {
+    stubMe(READER);
+    stubDetail(detail({ companies: [], badges: [], pendingDeletionRequestId: null }));
+    const empty = await renderDetail();
+    expect(empty).toContain("Bu kullanıcı hiçbir şirkette yetkili değil.");
+    expect(empty).toContain("Bu kullanıcı henüz rozet kazanmamış.");
+    expect(empty).toContain("Bekleyen talep yok");
+
+    stubMe(["user.read", "user.read_pii"]);
+    stubDetail(row());
+    const legacy = await renderDetail();
+    expect(legacy).toContain("Ada Yılmaz");
+    expect(legacy).not.toContain('data-testid="user-history"');
+    expect(legacy).not.toContain('data-testid="user-companies"');
+    expect(legacy).not.toContain('data-testid="user-badges"');
+    expect(legacy).toMatch(/E-posta doğrulandı<\/dt><dd[^>]*>—</);
+    expect(legacy).toMatch(/Kimlik incelemesi<\/dt><dd[^>]*>—</);
+    expect(legacy).toContain('data-testid="user-contact"');
+    expect(legacy).toMatch(/E-posta<\/dt><dd[^>]*><span[^>]*><span[^>]*>—</);
+  });
+});

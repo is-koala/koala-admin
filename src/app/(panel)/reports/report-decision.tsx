@@ -3,7 +3,13 @@ import Link from "next/link";
 import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
 import { Badge, type BadgeTone } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
-import { jobHref, reportsForUserHref, userHref, userHrefOrNull } from "@/lib/panel-href";
+import {
+  assignmentHref,
+  jobHref,
+  reportsForUserHref,
+  userHref,
+  userHrefOrNull,
+} from "@/lib/panel-href";
 import {
   REVIEW_MIN_NOTE_LENGTH,
   reportPartyName,
@@ -57,11 +63,14 @@ export function ReportDecision({
   report,
   content,
   canOpenJob = false,
+  canOpenAssignment = false,
 }: {
   report: Report;
   content: ReportContent | null;
   /** İlan sayfası `job.read` ister; izni olmayana bağlantı 403 ekranı olurdu. */
   canOpenJob?: boolean;
+  /** Atama sayfası `payment.read` ister (koala-backend#283 `jobAssignmentId`). */
+  canOpenAssignment?: boolean;
 }) {
   const targets = reportTargets(report);
   const closed = CLOSED_STATUSES.has(report.status);
@@ -146,6 +155,24 @@ export function ReportDecision({
           </>
         ) : null}
 
+        {report.jobAssignmentId !== null ? (
+          <>
+            <dt className="text-sm text-ink-muted">Atama</dt>
+            <dd className="text-sm">
+              {canOpenAssignment ? (
+                <Link
+                  href={assignmentHref(report.jobAssignmentId)}
+                  className="font-mono text-xs text-brand hover:underline"
+                >
+                  {report.jobAssignmentId}
+                </Link>
+              ) : (
+                <span className="font-mono text-xs break-all">{report.jobAssignmentId}</span>
+              )}
+            </dd>
+          </>
+        ) : null}
+
         {report.messageId !== null ? (
           <>
             <dt className="text-sm text-ink-muted">Mesaj kimliği</dt>
@@ -178,6 +205,13 @@ export function ReportDecision({
           <>
             <dt className="text-sm text-ink-muted">Kararı veren</dt>
             <dd className="text-sm">{reportPartyName(report.reviewedBy)}</dd>
+          </>
+        ) : null}
+
+        {report.reviewedByStaffId !== null ? (
+          <>
+            <dt className="text-sm text-ink-muted">Kararı veren personel</dt>
+            <dd className="font-mono text-xs break-all">{report.reviewedByStaffId}</dd>
           </>
         ) : null}
 

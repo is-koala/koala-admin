@@ -743,3 +743,101 @@ describe("the dispute search box — koala-admin#94", () => {
     expect(html).not.toContain("Uyuşmazlık kuyruğu yüklenemedi.");
   });
 });
+
+/** koala-admin#100 / koala-backend#283: `?kullanici=` → `userId`; açan tarafın rolü ve çözen personel. */
+describe("the user filter, the opener's side and the resolving staff member", () => {
+  const USER_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+
+  it("sends kullanici as userId next to the status and offers to drop the filter", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    const queue = watchDisputes();
+    watchSummary();
+
+    const html = (
+      await renderServerComponent(
+        <DisputesPage searchParams={params({ kullanici: USER_ID, durum: "RESOLVED" })} />,
+      )
+    ).replaceAll("<!-- -->", "");
+
+    expect(queue.url?.searchParams.get("userId")).toBe(USER_ID);
+    expect(queue.url?.searchParams.get("status")).toBe("RESOLVED");
+    expect(html).toContain('data-testid="dispute-user-filter"');
+    expect(html).toContain('href="/disputes?durum=RESOLVED&amp;boyut=25"');
+    // Durum sekmeleri süzgeci taşır.
+    expect(html).toContain(`kullanici=${USER_ID}`);
+  });
+
+  it("drops a user id that is not a UUID before it reaches the backend", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    const queue = watchDisputes();
+    watchSummary();
+
+    const html = await renderServerComponent(
+      <DisputesPage searchParams={params({ kullanici: "not-a-uuid" })} />,
+    );
+
+    expect(queue.url?.searchParams.has("userId")).toBe(false);
+    expect(html).not.toContain('data-testid="dispute-user-filter"');
+  });
+
+  it("draws the opener's side and, once resolved, the staff member who resolved it", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    watchDispute(() =>
+      HttpResponse.json({
+        success: true,
+        message: "Uyuşmazlık getirildi.",
+        httpStatus: "200 OK",
+        path: `/admin/disputes/${DISPUTE}`,
+        requestId: "rid-dispute",
+        timeStamp: "2026-09-06T09:00:00.000000000Z",
+        data: {
+          ...DISPUTE_ROW,
+          openedBySide: "WORKER",
+          status: "RESOLVED",
+          resolution: "DISMISSED",
+          resolutionNote: "Kanıt yetersiz.",
+          resolvedAt: "2026-09-06T10:00:00Z",
+          resolvedByStaffId: "5f000000-0000-4000-8000-000000000055",
+        },
+      }),
+    );
+    watchSummary();
+    watchEvidence();
+
+    const html = (await renderDetail()).replaceAll("<!-- -->", "");
+
+    expect(html).toMatch(/Ayşe Yılmaz<\/a><span[^>]*>İşçi</);
+    expect(html).toMatch(
+      /Çözen personel<\/dt><dd[^>]*><span[^>]*>5f000000-0000-4000-8000-000000000055</,
+    );
+  });
+
+  it("writes neither side nor staff for a #265 server, and the empty value once resolved", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    watchDispute();
+    watchSummary();
+    watchEvidence();
+    const open = (await renderDetail()).replaceAll("<!-- -->", "");
+    expect(open).not.toContain("Çözen personel");
+    expect(open).not.toMatch(/Ayşe Yılmaz<\/a><span[^>]*>İşçi</);
+
+    watchDispute(() =>
+      HttpResponse.json({
+        success: true,
+        message: "Uyuşmazlık getirildi.",
+        httpStatus: "200 OK",
+        path: `/admin/disputes/${DISPUTE}`,
+        requestId: "rid-dispute",
+        timeStamp: "2026-09-06T09:00:00.000000000Z",
+        data: {
+          ...DISPUTE_ROW,
+          status: "RESOLVED",
+          resolution: "DISMISSED",
+          resolvedAt: "2026-09-06T10:00:00Z",
+        },
+      }),
+    );
+    const resolved = (await renderDetail()).replaceAll("<!-- -->", "");
+    expect(resolved).toMatch(/Çözen personel<\/dt><dd[^>]*><span[^>]*>—</);
+  });
+});

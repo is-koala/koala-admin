@@ -148,10 +148,23 @@ const nullableString = z
  * an unrecognised resolution on a screen that decides whether money moved would
  * be worse than a loud schema failure at the boundary.
  */
+/** `entities/DisputeSide.java` — açan tarafın atamadaki rolü (koala-backend#283). */
+export const DISPUTE_SIDES = ["WORKER", "EMPLOYER"] as const;
+export type DisputeSide = (typeof DISPUTE_SIDES)[number];
+
+export const DISPUTE_SIDE_LABELS: Record<DisputeSide, string> = {
+  WORKER: "İşçi",
+  EMPLOYER: "İşveren",
+};
+
 export const disputeSchema = z.object({
   id: z.string(),
   jobAssignmentId: z.string(),
   openedBy: safeUserSchema.nullish().transform((value) => value ?? null),
+  openedBySide: z
+    .enum(DISPUTE_SIDES)
+    .nullish()
+    .transform((value) => value ?? null),
   status: z.enum(DISPUTE_STATUSES),
   reason: z.string(),
   resolution: z
@@ -159,6 +172,8 @@ export const disputeSchema = z.object({
     .nullish()
     .transform((value) => value ?? null),
   resolutionNote: nullableString,
+  /** Çözen personel; yalnız personel görünümünde dolu (koala-backend#283). */
+  resolvedByStaffId: nullableString,
   /** ISO-8601 instant, UTC. */
   resolvedAt: nullableString,
   createdAt: z.string(),
@@ -193,6 +208,8 @@ export interface DisputeQuery {
   status?: DisputeStatus | null;
   /** koala-backend#263: uyuşmazlık id'si, atama id'si ve tarafların ad-soyadı/e-postası. */
   query?: string | null;
+  /** koala-backend#283: işçi, ilan sahibi ya da açan olarak bu kullanıcının uyuşmazlıkları. */
+  userId?: string | null;
 }
 
 /**
@@ -213,6 +230,7 @@ export function getDisputes(
       size: query.size ?? DISPUTE_PAGING.defaultSize ?? 25,
       ...(query.status ? { status: query.status } : {}),
       query: searchQueryParam(query.query),
+      userId: query.userId ?? undefined,
     },
     accessToken,
     cache: "no-store",

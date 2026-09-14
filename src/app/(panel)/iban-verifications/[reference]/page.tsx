@@ -8,7 +8,7 @@ import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
-import { EMPTY_VALUE, formatCurrency, formatDateTime } from "@/lib/format";
+import { EMPTY_VALUE, formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
 import { userHrefOrNull } from "@/lib/panel-href";
 import {
   findPendingIbanVerification,
@@ -36,7 +36,8 @@ const REFERENCE_MAX_LENGTH = 128;
  * olmamış — ortak 404 yüzeyine gider (koala-admin#85); panel bu üçünü
  * ayıramaz, çünkü backend ayırt edecek bir uç vermiyor. Deneme geçmişi de
  * yoktur: backend hesap başına tek bir açık doğrulama tutar ve yalnız
- * başlangıç/bitiş anlarını verir; çizelge onlardan kurulur.
+ * başlangıç/bitiş anlarını verir; çizelge onlardan kurulur. Kalan deneme
+ * hakkı (`attemptsLeft`) koala-backend#283 ile geldi; eski sunucuda "—".
  *
  * Onay mevcut confirm eylemi; kapı ve `guardDecision` aynı
  * `bank.account.verify`.
@@ -136,14 +137,26 @@ async function IbanVerificationObject({ rawReference }: { rawReference: string }
               label="Beklenen tutar"
               value={pending.amount === null ? EMPTY_VALUE : formatCurrency(pending.amount)}
             />
+            <Row
+              label="Kalan deneme"
+              value={
+                pending.attemptsLeft === null ? (
+                  EMPTY_VALUE
+                ) : (
+                  <span data-testid="iban-attempts-left">
+                    {formatInteger(pending.attemptsLeft)}
+                  </span>
+                )
+              }
+            />
           </dl>
         </div>
 
         <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
           <h2 className="text-sm font-semibold">Zaman çizelgesi</h2>
           <p className="max-w-prose text-xs text-ink-muted">
-            Backend hesap başına tek açık doğrulama tutar; deneme sayacı vermez. Görünen, bu
-            doğrulamanın anlarıdır.
+            Backend hesap başına tek açık doğrulama tutar; deneme geçmişi vermez, yalnız kalan hakkı
+            sayar. Görünen, bu doğrulamanın anlarıdır.
           </p>
           <dl className="flex flex-col gap-2 text-sm">
             <Row label="Hesap oluşturulma" value={formatDateTime(pending.createdAt)} />

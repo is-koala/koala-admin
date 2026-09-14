@@ -21,6 +21,7 @@ import {
 import { EMPTY_VALUE, formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
 import { assignmentHref, isUuid, jobHref, paymentHref, userHrefOrNull } from "@/lib/panel-href";
 import {
+  PAYOUT_RELEASE_ORIGIN_LABELS,
   PAYOUT_STATUS_LABELS,
   SETTLEMENT_OPERATION_LABELS,
   SETTLEMENT_TASK_STATUS_LABELS,
@@ -58,6 +59,10 @@ const TASK_TONES: Record<SettlementTaskStatus, BadgeTone> = {
  * sağlayıcı referansı, alıcı, maskeli IBAN, tutar, para birimi — burada ve
  * PROCESSING hakedişte mevcut mutabakat formunu doldurur; operatör yalnız
  * ekstre referansını ve gerçekleşme anını yazar. Yeni yazma eylemi yok.
+ *
+ * koala-backend#283: serbest bırakma kaynağı, ekstredeki gerçekleşme anı,
+ * mutabakatı onaylayan personel ve banka hesabı kimliği (koala-admin#100).
+ * Eski sunucuda "—"; `releaseOrigin` geçmiş satırlarda backfill edilmedi.
  */
 export default async function PayoutDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -148,6 +153,15 @@ async function PayoutObject({ id }: { id: string }) {
               label="Maskeli IBAN"
               value={<span className="font-mono text-xs">{payout.maskedIban ?? EMPTY_VALUE}</span>}
             />
+            <Row label="Banka hesabı" value={<Mono value={payout.bankAccountId} />} />
+            <Row
+              label="Serbest bırakan"
+              value={
+                payout.releaseOrigin === null
+                  ? EMPTY_VALUE
+                  : PAYOUT_RELEASE_ORIGIN_LABELS[payout.releaseOrigin]
+              }
+            />
             <Row
               label="Atama"
               value={
@@ -207,6 +221,11 @@ async function PayoutObject({ id }: { id: string }) {
               <Row label="Oluşturulma" value={formatDateTime(payout.createdAt)} />
               <Row label="İşleme alınma" value={formatDateTime(payout.processingAt)} />
               <Row label="Tamamlanma" value={formatDateTime(payout.completedAt)} />
+              <Row label="Ekstrede gerçekleşme" value={formatDateTime(payout.settledAt)} />
+              <Row
+                label="Mutabakatı onaylayan"
+                value={<Mono value={payout.reconciledByStaffId} />}
+              />
               <Row label="Güncelleme" value={formatDateTime(payout.updatedAt)} />
             </dl>
           </div>

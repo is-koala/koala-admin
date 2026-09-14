@@ -384,3 +384,31 @@ describe("the company's type and website, and the audit pointer", () => {
     expect(html).toContain(`href="/audit-log?resourceId=${JOB_ID}"`);
   });
 });
+
+/** koala-admin#100: `?sirket=` backend'in `companyId` süzgecine gider (koala-backend#283). */
+describe("the company filter — koala-admin#100", () => {
+  const COMPANY = "c1000000-0000-4000-8000-000000000001";
+
+  it("sends sirket as companyId next to status and offers to drop the filter", async () => {
+    stubMe(AGENT);
+    const list = watchList();
+
+    const html = await renderList({ sirket: COMPANY, durum: "OPEN" });
+
+    expect(list.url?.searchParams.get("companyId")).toBe(COMPANY);
+    expect(list.url?.searchParams.get("status")).toBe("OPEN");
+    expect(html).toContain('data-testid="job-company-filter"');
+    expect(html).toContain(COMPANY);
+    expect(html).toContain('href="/jobs?durum=OPEN&amp;sirala=createdAt%2Cdesc&amp;boyut=20"');
+  });
+
+  it("drops a company id that is not a UUID before it reaches the backend", async () => {
+    stubMe(AGENT);
+    const list = watchList();
+
+    const html = await renderList({ sirket: "not-a-uuid" });
+
+    expect(list.url?.searchParams.has("companyId")).toBe(false);
+    expect(html).not.toContain('data-testid="job-company-filter"');
+  });
+});

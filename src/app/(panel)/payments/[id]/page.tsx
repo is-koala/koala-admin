@@ -23,13 +23,22 @@ import {
   formatInteger,
   formatPercent,
 } from "@/lib/format";
-import { assignmentHref, isUuid, jobHref, userHrefOrNull } from "@/lib/panel-href";
+import {
+  assignmentHref,
+  disputeHref,
+  isUuid,
+  jobHref,
+  payoutHref,
+  userHrefOrNull,
+} from "@/lib/panel-href";
 import {
   PAYMENT_ATTEMPT_STATUS_LABELS,
+  REFUND_ORIGIN_LABELS,
   REFUND_STATUS_LABELS,
   getPayment,
   paymentCurrency,
   type AdminPayment,
+  type AdminRefund,
   type RefundStatus,
 } from "@/server/api/payments";
 import { safeUserName, type SafeUser } from "@/server/api/users";
@@ -54,6 +63,11 @@ const REFUND_TONES: Record<RefundStatus, "neutral" | "warning" | "success" | "da
  * `payment.read`. Kart verisi yoktur — backend DTO'da böyle bir alan yok,
  * panelde de yok. Menüde değil: atama detayındaki tablodan açılır.
  * Yazma eylemi yok; iade atama sayfasındaki mevcut düğmeden yapılır.
+ *
+ * koala-backend#283: `payoutId` hakedişe (`payout.reconcile`), iade satırının
+ * `origin`/`originId` çifti kaynağına — uyuşmazlık sayfasına
+ * (`dispute.resolve`) ya da iptal kaydının kimliğine — bağlanır
+ * (koala-admin#100). Eski sunucuda alanlar yok, hücreler "—".
  */
 export default async function PaymentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -101,6 +115,8 @@ async function PaymentObject({ id }: { id: string }) {
 
   const currency = paymentCurrency(payment);
   const canOpenJob = context.has("job.read");
+  const canOpenPayout = context.has("payout.reconcile");
+  const canOpenDispute = context.has("dispute.resolve");
 
   return (
     <div className="flex flex-col gap-6">
@@ -155,6 +171,23 @@ async function PaymentObject({ id }: { id: string }) {
                   <span>
                     <Party user={payment.employer} /> · {payment.companyName}
                   </span>
+                )
+              }
+            />
+            <Row
+              label="Hakediş"
+              value={
+                payment.payoutId === null ? (
+                  EMPTY_VALUE
+                ) : canOpenPayout ? (
+                  <Link
+                    href={payoutHref(payment.payoutId)}
+                    className="font-mono text-xs text-brand hover:underline"
+                  >
+                    {payment.payoutId}
+                  </Link>
+                ) : (
+                  <span className="font-mono text-xs break-all">{payment.payoutId}</span>
                 )
               }
             />
@@ -246,7 +279,7 @@ async function PaymentObject({ id }: { id: string }) {
         </div>
       </section>
 
-      <Refunds payment={payment} currency={currency} />
+      <Refunds payment={payment} currency={currency} canOpenDispute={canOpenDispute} />
 
       <ObjectAuditPointer resourceId={payment.id} linkLabel="Bu ödemenin denetim kayıtlarını aç">
         İade atama sayfasından yapılır ve backend tarafından denetim kaydına yazılır; bu ödeme
@@ -256,7 +289,15 @@ async function PaymentObject({ id }: { id: string }) {
   );
 }
 
-function Refunds({ payment, currency }: { payment: AdminPayment; currency: string }) {
+function Refunds({
+  payment,
+  currency,
+  canOpenDispute,
+}: {
+  payment: AdminPayment;
+  currency: string;
+  canOpenDispute: boolean;
+}) {
   return (
     <section className="flex flex-col gap-3" aria-labelledby="payment-refunds-heading">
       <h2 id="payment-refunds-heading" className="text-lg font-semibold">
@@ -275,6 +316,7 @@ function Refunds({ payment, currency }: { payment: AdminPayment; currency: strin
               <TableHeaderCell>Durum</TableHeaderCell>
               <TableHeaderCell>Tutar</TableHeaderCell>
               <TableHeaderCell>Gerekçe</TableHeaderCell>
+              <TableHeaderCell>Kaynak</TableHeaderCell>
               <TableHeaderCell>Sağlayıcı iade no</TableHeaderCell>
               <TableHeaderCell>Tamamlanma</TableHeaderCell>
               <TableHeaderCell>Güncelleme</TableHeaderCell>
@@ -292,6 +334,9 @@ function Refunds({ payment, currency }: { payment: AdminPayment; currency: strin
                 <TableCell>{formatCurrency(refund.amount, refund.currency ?? currency)}</TableCell>
                 <TableCell>{refund.reason ?? EMPTY_VALUE}</TableCell>
                 <TableCell>
+                  <RefundOrigin refund={refund} canOpenDispute={canOpenDispute} />
+                </TableCell>
+                <TableCell>
                   <Mono value={refund.providerRefundId} />
                 </TableCell>
                 <TableCell>{formatDateTime(refund.completedAt)}</TableCell>
@@ -302,6 +347,36 @@ function Refunds({ payment, currency }: { payment: AdminPayment; currency: strin
         </Table>
       )}
     </section>
+  );
+}
+
+/**
+ * İadenin kaynağı. `DISPUTE` uyuşmazlık sayfasına gider; `CANCELLATION`'ın
+ * kimliği iptal kaydıdır ve ayrı bir sayfası yoktur, atamadaki iptal
+ * kartında okunur; `STAFF` panelden yapılan iadedir, kimlik taşımaz.
+ */
+function RefundOrigin({
+  refund,
+  canOpenDispute,
+}: {
+  refund: AdminRefund;
+  canOpenDispute: boolean;
+}) {
+  if (refund.origin === null) return <>{EMPTY_VALUE}</>;
+  const label = REFUND_ORIGIN_LABELS[refund.origin];
+  if (refund.originId === null) return <>{label}</>;
+  const href = refund.origin === "DISPUTE" && canOpenDispute ? disputeHref(refund.originId) : null;
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span>{label}</span>
+      {href === null ? (
+        <span className="font-mono text-xs break-all">{refund.originId}</span>
+      ) : (
+        <Link href={href} className="font-mono text-xs text-brand hover:underline">
+          {refund.originId}
+        </Link>
+      )}
+    </span>
   );
 }
 

@@ -23,7 +23,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
-import { EMPTY_VALUE, formatCurrency, formatDateTime } from "@/lib/format";
+import { EMPTY_VALUE, formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
 import { ibanVerificationHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   getPendingIbanVerifications,
@@ -169,6 +169,7 @@ async function IbanQueue({ params }: { params: SearchParams }) {
                 <TableHeaderCell>Referans</TableHeaderCell>
                 <TableHeaderCell>Başlangıç</TableHeaderCell>
                 <TableHeaderCell>Bitiş</TableHeaderCell>
+                <TableHeaderCell>Kalan deneme</TableHeaderCell>
                 <TableHeaderCell>Onay</TableHeaderCell>
               </TableRow>
             </TableHead>
@@ -254,6 +255,9 @@ function PendingRow({
       </TableCell>
       <TableCell>{formatDateTime(row.startedAt)}</TableCell>
       <TableCell>{formatDateTime(row.expiresAt)}</TableCell>
+      <TableCell>
+        {row.attemptsLeft === null ? EMPTY_VALUE : formatInteger(row.attemptsLeft)}
+      </TableCell>
       <TableCell>
         {selected ? (
           <Badge tone="brand">Seçili</Badge>

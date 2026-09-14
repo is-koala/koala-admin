@@ -64,6 +64,9 @@ const REPORT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
  * Liste `AdminReportDto`. Detay ve karar `/reports/[id]` üzerinde
  * `GET /admin/reports/{id}`. Kapı kuyruğu sarar: `content.moderate` yoksa GET
  * hiç çıkmaz.
+ *
+ * `?kullanici=` şikayet edilene (`reportedUserId`), `?sikayetci=` şikayet
+ * edene (`reporterId`, koala-backend#283) süzer; ikisi birlikte de gider.
  */
 export default async function ReportsPage({
   searchParams,
@@ -118,6 +121,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
   const status = readEnumParam<ReportStatus>(params, "durum", REPORT_STATUSES, "OPEN");
   const paging = readPaging(params, REPORT_PAGING);
   const reportedUserId = readUuidParam(params, "kullanici");
+  const reporterId = readUuidParam(params, "sikayetci");
   const query = readSearchQuery(readParam(params, SEARCH_PARAM));
   const search = activeSearch(query);
 
@@ -127,7 +131,9 @@ async function ReportQueue({ params }: { params: SearchParams }) {
     boyut: String(paging.size),
   };
   if (reportedUserId !== null) viewState.kullanici = reportedUserId;
+  if (reporterId !== null) viewState.sikayetci = reporterId;
   if (query !== null) viewState[SEARCH_PARAM] = query;
+  const userFiltered = reportedUserId !== null || reporterId !== null;
 
   const filters = (
     <QueueFilters
@@ -151,12 +157,17 @@ async function ReportQueue({ params }: { params: SearchParams }) {
       carry={{
         boyut: String(paging.size),
         ...(reportedUserId !== null ? { kullanici: reportedUserId } : {}),
+        ...(reporterId !== null ? { sikayetci: reporterId } : {}),
         ...(query !== null ? { [SEARCH_PARAM]: query } : {}),
       }}
       notice={
-        reportedUserId !== null ? (
+        userFiltered ? (
           <>
-            Bu görünüm bir kullanıcı hakkındaki şikayetleri süzüyor.{" "}
+            {reportedUserId !== null && reporterId !== null
+              ? "Bu görünüm bir kullanıcının hem hakkındaki hem açtığı şikayetleri süzüyor."
+              : reporterId !== null
+                ? "Bu görünüm bir kullanıcının açtığı şikayetleri süzüyor."
+                : "Bu görünüm bir kullanıcı hakkındaki şikayetleri süzüyor."}{" "}
             <Link
               href={reportsHref({
                 durum: status,
@@ -194,6 +205,7 @@ async function ReportQueue({ params }: { params: SearchParams }) {
     page = await getReports(await getKoalaAccessToken(), {
       status,
       reportedUserId,
+      reporterId,
       paging,
       query,
     });

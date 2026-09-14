@@ -111,6 +111,49 @@ export function reportsForUserHref(userId: string): Route {
   return asRoute(`/reports?kullanici=${encodeURIComponent(userId)}`);
 }
 
+/**
+ * Süzgeçli listeler (koala-admin#100). Anahtarlar panelin Türkçe URL
+ * sözlüğünden: `kullanici` şikayet edilen için zaten vardı; `sikayetci`,
+ * `isci`, `isveren` ve `sirket` aynı kalıpla eklendi. Liste sayfası anahtarı
+ * okur ve backend'in `reporterId` / `workerId` / `employerId` / `companyId`
+ * / `userId` parametresine çevirir; kimlik UUID değilse süzgeç düşer.
+ */
+export function reportsByReporterHref(userId: string): Route {
+  return asRoute(`/reports?sikayetci=${encodeURIComponent(userId)}`);
+}
+
+export function assignmentsHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/assignments", state);
+}
+
+export function assignmentsForWorkerHref(userId: string): Route {
+  return assignmentsHref({ isci: userId });
+}
+
+export function assignmentsForEmployerHref(userId: string): Route {
+  return assignmentsHref({ isveren: userId });
+}
+
+export function payoutsHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/payout-reconciliation", state);
+}
+
+export function payoutsForWorkerHref(userId: string): Route {
+  return payoutsHref({ isci: userId });
+}
+
+export function disputesHref(state: Readonly<Record<string, string>> = {}): Route {
+  return withQuery("/disputes", state);
+}
+
+export function disputesForUserHref(userId: string): Route {
+  return disputesHref({ kullanici: userId });
+}
+
+export function jobsForCompanyHref(companyId: string): Route {
+  return jobsHref({ sirket: companyId });
+}
+
 export function payoutReconcileHref(payoutId: string): Route {
   return asRoute(`/payout-reconciliation?hakedis=${encodeURIComponent(payoutId)}`);
 }

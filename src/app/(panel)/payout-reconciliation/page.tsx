@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { formatCurrency, formatDateTime } from "@/lib/format";
-import { assignmentHref, isUuid, payoutHref } from "@/lib/panel-href";
+import { assignmentHref, isUuid, payoutHref, payoutsHref } from "@/lib/panel-href";
 import { getPayouts, PAYOUT_PAGING, type Payout } from "@/server/api/payout-reconciliation";
 import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
 import {
@@ -46,6 +46,8 @@ export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
  * Onay mevcut reconcile formundan; satır `?hakedis=` ile formu doldurur.
  * Satırın tarihi hakediş nesne sayfasına gider (`/payout-reconciliation/{id}`,
  * koala-admin#95): #80'in kanıt alanları ve settlement geçmişi orada.
+ * `?isci=` kuyruğu bir işçiye süzer — backend `workerId` (koala-backend#283);
+ * kullanıcı sayfasındaki hakediş sayacı buraya gelir (koala-admin#100).
  */
 export default async function PayoutReconciliationPage({
   searchParams,
@@ -79,12 +81,36 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
   const selectedId = selected !== null && isUuid(selected) ? selected : null;
   const query = readSearchQuery(readParam(params, SEARCH_PARAM));
   const search = activeSearch(query);
+  const rawWorker = readParam(params, "isci");
+  const workerId = rawWorker !== null && isUuid(rawWorker) ? rawWorker : null;
 
   const viewState = {
     boyut: String(paging.size),
     ...(selectedId === null ? {} : { hakedis: selectedId }),
     ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+    ...(workerId === null ? {} : { isci: workerId }),
   };
+
+  const workerNotice =
+    workerId === null ? null : (
+      <p
+        className="rounded-md border border-border-subtle bg-surface-sunken px-3 py-2 text-sm text-ink"
+        data-testid="payout-worker-filter"
+      >
+        Bu görünüm işçisi <span className="font-mono text-xs">{workerId}</span> olan bekleyen
+        hakedişleri süzüyor.{" "}
+        <Link
+          href={payoutsHref({
+            boyut: String(paging.size),
+            ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+          })}
+          className="text-brand hover:underline"
+        >
+          Süzgeci kaldır
+        </Link>
+        .
+      </p>
+    );
 
   const searchForm = (error: string | null = null) => (
     <ListSearchForm
@@ -103,7 +129,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
 
   let page;
   try {
-    page = await getPayouts(accessToken, { paging, query });
+    page = await getPayouts(accessToken, { paging, query, workerId });
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return (
@@ -141,6 +167,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
           </p>
         </div>
 
+        {workerNotice}
         {searchForm()}
         <SearchResultSummary search={search} total={page.totalElements} unit="hakediş" />
 

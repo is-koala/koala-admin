@@ -268,3 +268,24 @@ describe("findPendingIbanVerification", () => {
     expect(await findPendingIbanVerification("TOKEN", REFERENCE)).toBeNull();
   });
 });
+
+/** koala-admin#100 / koala-backend#283: `status` ve `attemptsLeft`; eski sunucuda `null`. */
+describe("status and attempts left", () => {
+  it("reads both when present and nulls them for a #265 server", async () => {
+    let content: unknown[] = [{ ...PENDING, status: "PENDING", attemptsLeft: 2 }];
+    server.use(http.get(apiUrl(IBAN_PENDING_PATH), () => pageSuccess(content)));
+
+    const page = await getPendingIbanVerifications("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: IBAN_PENDING_PAGING.defaultSort },
+    });
+    expect(page.content[0]?.status).toBe("PENDING");
+    expect(page.content[0]?.attemptsLeft).toBe(2);
+
+    content = [PENDING];
+    const legacy = await getPendingIbanVerifications("ACCESS-TOKEN", {
+      paging: { page: 0, size: 20, sort: IBAN_PENDING_PAGING.defaultSort },
+    });
+    expect(legacy.content[0]?.status).toBeNull();
+    expect(legacy.content[0]?.attemptsLeft).toBeNull();
+  });
+});

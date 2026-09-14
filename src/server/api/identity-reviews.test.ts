@@ -32,6 +32,7 @@ const PENDING_REVIEW = {
   rejectedAt: null,
   verifiedAt: null,
   reviewedByStaffId: null,
+  reviewedByStaffName: null,
   selfieDocumentId: "e5000000-0000-4000-8000-000000000005",
   frontDocumentId: "c3000000-0000-4000-8000-000000000003",
   backDocumentId: "d4000000-0000-4000-8000-000000000004",

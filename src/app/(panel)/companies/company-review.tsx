@@ -2,14 +2,17 @@ import Link from "next/link";
 
 import { DecisionForm, type DecisionOption } from "@/components/panel/queue";
 import { Badge } from "@/components/ui";
-import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
-import { userHrefOrNull } from "@/lib/panel-href";
+import { httpUrlOrNull } from "@/lib/external-url";
+import { EMPTY_VALUE, formatDateTime, formatInteger } from "@/lib/format";
+import { jobsForCompanyHref, userHrefOrNull } from "@/lib/panel-href";
 import {
   COMPANY_DECISION_MAX_NOTE_LENGTH,
   COMPANY_DECISION_MIN_NOTE_LENGTH,
   companyApprovalStatusLabel,
+  companyContactRoleLabel,
   companyTypeLabel,
   safeUserDisplayName,
+  type CompanyContact,
   type CompanyReview,
 } from "@/server/api/companies";
 
@@ -24,12 +27,16 @@ export function ApprovalStatusBadge({ status }: { status: string }) {
 export function CompanyReviewBody({
   company,
   returnTo,
+  canOpenJobs = false,
 }: {
   company: CompanyReview;
   returnTo: string;
+  /** İlan listesi `job.read` ister; izni olmayana bağlantı 403 ekranı olurdu. */
+  canOpenJobs?: boolean;
 }) {
   const creator = company.createdBy;
   const creatorHref = userHrefOrNull(creator?.id);
+  const website = httpUrlOrNull(company.website);
 
   return (
     <div className="flex flex-col gap-4">
@@ -51,6 +58,32 @@ export function CompanyReviewBody({
 
         <dt className="text-sm text-ink-muted">Telefon</dt>
         <dd className="text-sm">{company.phoneNumber ?? EMPTY_VALUE}</dd>
+
+        <dt className="text-sm text-ink-muted">Web sitesi</dt>
+        <dd className="text-sm break-all">
+          {company.website === null ? (
+            EMPTY_VALUE
+          ) : website === null ? (
+            company.website
+          ) : (
+            <a
+              href={website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand hover:underline"
+            >
+              {company.website}
+            </a>
+          )}
+        </dd>
+
+        <dt className="text-sm text-ink-muted">Açıklama</dt>
+        <dd className="text-sm whitespace-pre-wrap">{company.description ?? EMPTY_VALUE}</dd>
+
+        <dt className="text-sm text-ink-muted">Logo</dt>
+        <dd className="text-sm">
+          <CompanyLogo url={company.logoUrl} name={company.name} />
+        </dd>
 
         <dt className="text-sm text-ink-muted">Kayıtlı adres</dt>
         <dd className="text-sm">
@@ -78,6 +111,35 @@ export function CompanyReviewBody({
           ) : null}
         </dd>
 
+        {company.companyContacts === null ? null : (
+          <>
+            <dt className="text-sm text-ink-muted">Yetkililer</dt>
+            <dd className="text-sm" data-testid="company-contacts">
+              <CompanyContacts contacts={company.companyContacts} />
+            </dd>
+          </>
+        )}
+
+        {company.jobCount === null ? null : (
+          <>
+            <dt className="text-sm text-ink-muted">İlanlar</dt>
+            <dd className="text-sm" data-testid="company-job-count">
+              {canOpenJobs ? (
+                <Link href={jobsForCompanyHref(company.id)} className="text-brand hover:underline">
+                  {formatInteger(company.jobCount)} ilan
+                </Link>
+              ) : (
+                <>
+                  {formatInteger(company.jobCount)} ilan{" "}
+                  <span className="text-ink-muted">
+                    (liste <code className="font-mono">job.read</code> ister)
+                  </span>
+                </>
+              )}
+            </dd>
+          </>
+        )}
+
         <dt className="text-sm text-ink-muted">Başvuru zamanı</dt>
         <dd className="text-sm">{formatDateTime(company.createdAt)}</dd>
 
@@ -88,6 +150,9 @@ export function CompanyReviewBody({
 
         <dt className="text-sm text-ink-muted">Karar zamanı</dt>
         <dd className="text-sm">{formatDateTime(company.approvalDecidedAt)}</dd>
+
+        <dt className="text-sm text-ink-muted">Kararı veren personel</dt>
+        <dd className="font-mono text-xs break-all">{company.approvedByStaffId ?? EMPTY_VALUE}</dd>
 
         <dt className="text-sm text-ink-muted">Kaydedilmiş karar gerekçesi</dt>
         <dd className="text-sm whitespace-pre-wrap">{company.approvalNote ?? EMPTY_VALUE}</dd>
@@ -104,6 +169,53 @@ export function DecisionDeliveryNotice() {
       <p className="text-sm font-semibold text-ink">Karar kaydı ve bildirim</p>
       <DecisionPersistenceNotice />
     </div>
+  );
+}
+
+/**
+ * Yetkililer `CompanyContactDto`: kullanıcı `SafeUserDto` (e-posta yok) ve
+ * şirketteki rolü. Kullanıcı sayfası `user.read` ister; bağlantı
+ * `userHrefOrNull` ile, izin kapısı orada.
+ */
+function CompanyContacts({ contacts }: { contacts: readonly CompanyContact[] }) {
+  if (contacts.length === 0) {
+    return <span className="text-ink-muted">Bu şirkete bağlı yetkili yok.</span>;
+  }
+  return (
+    <ul className="flex flex-col gap-1">
+      {contacts.map((contact) => {
+        const href = userHrefOrNull(contact.user?.id);
+        const name = contact.user === null ? null : safeUserDisplayName(contact.user);
+        return (
+          <li key={contact.id} className="flex flex-wrap items-baseline gap-x-2">
+            {contact.user === null ? (
+              EMPTY_VALUE
+            ) : href === null ? (
+              <span>{name ?? contact.user.id}</span>
+            ) : (
+              <Link href={href} className="text-brand hover:underline">
+                {name ?? contact.user.id}
+              </Link>
+            )}
+            <span className="text-ink-muted">{companyContactRoleLabel(contact.role)}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Logo adresi profil fotoğrafıyla aynı `http(s)` kapısından geçer. */
+function CompanyLogo({ url, name }: { url: string | null; name: string | null }) {
+  const src = httpUrlOrNull(url);
+  if (src === null) return <>{EMPTY_VALUE}</>;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={name === null ? "Şirket logosu" : `${name} logosu`}
+      className="h-16 w-16 rounded-lg border border-border-subtle object-cover"
+    />
   );
 }
 

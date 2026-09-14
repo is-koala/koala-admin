@@ -1,5 +1,9 @@
 import "server-only";
 
+import { z } from "zod";
+
+import { BADGE_FAMILY_LABELS, BADGE_TIER_LABELS } from "@/lib/badges";
+
 import { koalaApi } from "./koala";
 import { pagingQuery, type Paging, type PagingContract } from "./paging";
 import { pageDtoSchema } from "./schemas";
@@ -14,9 +18,16 @@ import { safeUserSchema, type SafeUser } from "./users";
  * GET /admin/users/{userId} user.read
  * ```
  *
- * `query` boşsa herkes; doluysa e-posta ve ad+soyad `LIKE`. Yanıt
+ * `query` boşsa herkes; doluysa e-posta ve ad+soyad `LIKE`. Liste yanıtı
  * `SafeUserDto`: e-posta aramada kullanılır, cevapta yoktur. Sıralama
  * `UserManager.USER_SORTABLE` — bilinmeyen alan 400.
+ *
+ * Nesne ucu koala-backend#283 ile `AdminUserDetailDto` döner: `SafeUserDto`
+ * + iletişim (yalnız `user.read_pii` taşıyan aktöre dolu, diğerine `null`),
+ * doğrulama bayrakları, üyelikler, rozetler, geçmiş sayaçları, kimlik
+ * inceleme durumu ve bekleyen silme talebi. Eski sunucu bu alanları hiç
+ * göndermez; şema hepsini isteğe bağlı okur ki `SafeUserDto` dönen bir
+ * sunucuda sayfa düşmesin, yalnız yeni bölümler gizlensin.
  */
 
 export const MARKETPLACE_USERS_PATH = "/admin/users";
@@ -28,6 +39,122 @@ export const USER_PAGING: PagingContract = {
 };
 
 export type MarketplaceUser = SafeUser;
+
+const nullableString = z
+  .string()
+  .nullish()
+  .transform((value) => value ?? null);
+
+const nullableBoolean = z
+  .boolean()
+  .nullish()
+  .transform((value) => value ?? null);
+
+/** `CompanyContactRole.java`. */
+export const COMPANY_CONTACT_ROLES = ["ADMIN", "STAFF"] as const;
+export type CompanyContactRole = (typeof COMPANY_CONTACT_ROLES)[number];
+
+export const COMPANY_CONTACT_ROLE_LABELS: Record<CompanyContactRole, string> = {
+  ADMIN: "Yetkili",
+  STAFF: "Personel",
+};
+
+/** `IdentityReviewStatus.java`. */
+export const IDENTITY_REVIEW_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
+export type IdentityReviewStatus = (typeof IDENTITY_REVIEW_STATUSES)[number];
+
+export const IDENTITY_REVIEW_STATUS_LABELS: Record<IdentityReviewStatus, string> = {
+  PENDING: "Bekliyor",
+  APPROVED: "Onaylı",
+  REJECTED: "Reddedildi",
+};
+
+/** `AdminUserCompanyDto` — üyelik: şirket ve o şirketteki rol. */
+export const adminUserCompanySchema = z.object({
+  id: z.string(),
+  name: nullableString,
+  role: z
+    .enum(COMPANY_CONTACT_ROLES)
+    .nullish()
+    .transform((value) => value ?? null),
+});
+
+export type AdminUserCompany = z.infer<typeof adminUserCompanySchema>;
+
+/**
+ * `BadgeDto` — kullanıcının kazandığı rozet. `family`/`tier` serbest metin:
+ * katalog yeni bir aile ekleyince kullanıcı sayfası düşmesin, kodu yazsın.
+ */
+export const adminUserBadgeSchema = z.object({
+  code: z.string(),
+  family: nullableString,
+  tier: nullableString,
+  name: nullableString,
+  description: nullableString,
+  iconUrl: nullableString,
+  earnedAt: nullableString,
+});
+
+export type AdminUserBadge = z.infer<typeof adminUserBadgeSchema>;
+
+/** `AdminUserCountsDto` — sekiz geçmiş sayacı. Sayaçlar `long`, JSON sayı. */
+export const adminUserCountsSchema = z.object({
+  applications: z.number().int().nonnegative(),
+  assignmentsAsWorker: z.number().int().nonnegative(),
+  assignmentsAsEmployer: z.number().int().nonnegative(),
+  payments: z.number().int().nonnegative(),
+  payouts: z.number().int().nonnegative(),
+  disputes: z.number().int().nonnegative(),
+  reportsReceived: z.number().int().nonnegative(),
+  reportsMade: z.number().int().nonnegative(),
+});
+
+export type AdminUserCounts = z.infer<typeof adminUserCountsSchema>;
+
+/**
+ * `AdminUserDetailDto`. Diziler `null` ile `[]`'i ayırır: `null` "sunucu bu
+ * alanı vermedi" (eski sürüm), `[]` "kullanıcının hiç yok" demektir; sayfa
+ * ilkinde bölümü gizler, ikincisinde boş cümle yazar.
+ */
+export const adminUserDetailSchema = safeUserSchema.extend({
+  email: nullableString,
+  phoneNumber: nullableString,
+  emailVerified: nullableBoolean,
+  phoneVerified: nullableBoolean,
+  identityVerified: nullableBoolean,
+  isEmployer: nullableBoolean,
+  createdAt: nullableString,
+  companies: z
+    .array(adminUserCompanySchema)
+    .nullish()
+    .transform((value) => value ?? null),
+  badges: z
+    .array(adminUserBadgeSchema)
+    .nullish()
+    .transform((value) => value ?? null),
+  counts: adminUserCountsSchema.nullish().transform((value) => value ?? null),
+  identityReviewStatus: z
+    .enum(IDENTITY_REVIEW_STATUSES)
+    .nullish()
+    .transform((value) => value ?? null),
+  pendingDeletionRequestId: nullableString,
+});
+
+export type MarketplaceUserDetail = z.infer<typeof adminUserDetailSchema>;
+
+const FAMILY_LABELS: Readonly<Record<string, string>> = BADGE_FAMILY_LABELS;
+const TIER_LABELS: Readonly<Record<string, string>> = BADGE_TIER_LABELS;
+
+/** Rozet ailesi/seviyesi katalogdan tanınıyorsa Türkçesi, değilse kodu. */
+export function badgeFamilyLabel(family: string | null): string | null {
+  if (family === null) return null;
+  return FAMILY_LABELS[family] ?? family;
+}
+
+export function badgeTierLabel(tier: string | null): string | null {
+  if (tier === null) return null;
+  return TIER_LABELS[tier] ?? tier;
+}
 
 export interface MarketplaceUserQuery {
   readonly query: string | null;
@@ -54,11 +181,17 @@ export function marketplaceUserPath(userId: string): string {
   return `${MARKETPLACE_USERS_PATH}/${encodeURIComponent(userId)}`;
 }
 
-/** `GET /admin/users/{userId}` — same SafeUserDto as the directory. */
-export function getMarketplaceUser(accessToken: string, userId: string): Promise<MarketplaceUser> {
+/**
+ * `GET /admin/users/{userId}` — `AdminUserDetailDto` (koala-backend#283);
+ * eski sunucuda `SafeUserDto`, yeni alanlar `null`.
+ */
+export function getMarketplaceUser(
+  accessToken: string,
+  userId: string,
+): Promise<MarketplaceUserDetail> {
   return koalaApi.get({
     path: marketplaceUserPath(userId),
-    schema: safeUserSchema,
+    schema: adminUserDetailSchema,
     accessToken,
     cache: "no-store",
   });

@@ -506,3 +506,23 @@ describe("the search box — koala-admin#94", () => {
     expect(html).not.toContain("Kimlik kuyruğu yüklenemedi.");
   });
 });
+
+/** koala-admin#100 / koala-backend#283: kararı veren personelin adı kimliğin yanında. */
+describe("the deciding staff member's name", () => {
+  it("draws the name before the id when the DTO carries it", async () => {
+    stubMe(REVIEWER);
+    watchDetail({
+      ...PENDING_REVIEW,
+      status: "APPROVED",
+      verifiedAt: "2026-09-12T09:30:00Z",
+      reviewedByStaffId: "5f000000-0000-4000-8000-000000000055",
+      reviewedByStaffName: "Zeynep Kaya",
+    });
+
+    const html = await renderDetail();
+
+    expect(html).toMatch(
+      /Kararı veren personel<\/dt><dd[^>]*><span[^>]*><span>Zeynep Kaya<\/span><span[^>]*>5f000000-0000-4000-8000-000000000055</,
+    );
+  });
+});

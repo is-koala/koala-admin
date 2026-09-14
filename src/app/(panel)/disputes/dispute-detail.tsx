@@ -16,6 +16,7 @@ import {
 import { assignmentHref, userHref } from "@/lib/panel-href";
 import {
   DISPUTE_RESOLUTION_SPECS,
+  DISPUTE_SIDE_LABELS,
   type Dispute,
   type DisputeEvidence,
   type DisputeStatus,
@@ -143,13 +144,18 @@ export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailP
           <Row
             label="Açan taraf"
             value={
-              dispute.openedBy === null ? (
-                "—"
-              ) : (
-                <Link href={userHref(dispute.openedBy.id)} className="text-brand hover:underline">
-                  {safeUserName(dispute.openedBy)}
-                </Link>
-              )
+              <span className="flex flex-wrap justify-end gap-x-2">
+                {dispute.openedBy === null ? (
+                  "—"
+                ) : (
+                  <Link href={userHref(dispute.openedBy.id)} className="text-brand hover:underline">
+                    {safeUserName(dispute.openedBy)}
+                  </Link>
+                )}
+                {dispute.openedBySide === null ? null : (
+                  <Badge>{DISPUTE_SIDE_LABELS[dispute.openedBySide]}</Badge>
+                )}
+              </span>
             }
           />
           <Row label="Açılış" value={formatDateTime(dispute.createdAt)} />
@@ -178,6 +184,14 @@ export function DisputeDetail({ dispute, entry, evidence, permissions }: DetailP
               />
               <Row label="Karar gerekçesi" value={dispute.resolutionNote ?? "—"} />
               <Row label="Çözüm zamanı" value={formatDateTime(dispute.resolvedAt)} />
+              <Row
+                label="Çözen personel"
+                value={
+                  <span className="font-mono text-xs break-all">
+                    {dispute.resolvedByStaffId ?? "—"}
+                  </span>
+                }
+              />
             </>
           ) : null}
           {summary === null ? null : (

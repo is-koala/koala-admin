@@ -10,6 +10,7 @@ import { getCompany } from "@/server/api/companies";
 import { readParam, type SearchParams } from "@/server/api/paging";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
+import { getStaffContext } from "@/server/authz/staff-context";
 import { SignedDownloadAllowlistNotice } from "@/server/evidence/signed-download-notice";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
@@ -35,7 +36,8 @@ function queueReturnTo(params: SearchParams): Route {
 /**
  * Şirket nesne sayfası. Onay ve ret burada; kuyruk yalnız listeler.
  * GET /admin/companies/{id}. Kapı `company.approve`: izni olmayan kişide GET
- * çıkmaz.
+ * çıkmaz. Yetkililer, ilan sayısı, web sitesi ve kararı veren personel
+ * koala-backend#283 ile geldi; ilan bağlantısı `job.read` ister (koala-admin#100).
  */
 export default async function CompanyDetailPage({
   params,
@@ -85,6 +87,8 @@ async function CompanyObject({
   // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
   if (!isUuid(id)) notFound();
 
+  const canOpenJobs = (await getStaffContext()).has("job.read");
+
   let company;
   try {
     company = await getCompany(await getKoalaAccessToken(), id);
@@ -108,7 +112,7 @@ async function CompanyObject({
         </p>
       )}
       <DecisionDeliveryNotice />
-      <CompanyReviewBody company={company} returnTo={returnTo} />
+      <CompanyReviewBody company={company} returnTo={returnTo} canOpenJobs={canOpenJobs} />
       <ObjectAuditPointer resourceId={company.id} linkLabel="Bu şirketin denetim kayıtlarını aç">
         Onay, ret ve galeri görseli kaldırma backend tarafından bu şirket kimliğiyle denetim kaydına
         yazılır; personelin bu kaydı açması da kayda düşer.

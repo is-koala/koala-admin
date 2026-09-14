@@ -183,3 +183,20 @@ describe("the search box — koala-admin#94", () => {
     expect(html).not.toContain("Bekleyen IBAN doğrulamaları yüklenemedi.");
   });
 });
+
+/** koala-admin#100 / koala-backend#283: kuyruk satırında kalan deneme sütunu. */
+describe("the attempts-left column", () => {
+  it("draws the remaining attempts per row and the empty value for a #265 server", async () => {
+    stubMe(VERIFIER);
+    watchQueue([{ ...PENDING_ROW, attemptsLeft: 1 }]);
+    const html = await render();
+    expect(html).toContain("Kalan deneme");
+    expect(html).toMatch(/<td[^>]*>1<\/td>/);
+
+    stubMe(VERIFIER);
+    watchQueue([PENDING_ROW]);
+    const legacy = await render();
+    expect(legacy).toContain("Kalan deneme");
+    expect(legacy).toMatch(/<td[^>]*>—<\/td>/);
+  });
+});

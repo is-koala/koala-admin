@@ -26,6 +26,8 @@ const COMPANIES = apiUrl("/admin/companies");
 const APPROVER = ["company.approve"];
 const MODERATOR = ["content.moderate"];
 const CREATOR_ID = "bbbbbbbb-0000-4000-8000-00000000000b";
+const CONTACT_ID = "cc000000-0000-4000-8000-00000000000c";
+const CONTACT_USER_ID = "dddddddd-0000-4000-8000-00000000000d";
 
 beforeEach(() => {
   getKoalaAccessToken.mockResolvedValue("ACCESS-TOKEN");
@@ -61,7 +63,24 @@ function company(overrides: CompanyReviewOverrides = {}) {
             email: "private@koala.test",
             passwordHash: "never-render-this",
           },
-    companyContacts: [{ id: "must-not-render" }],
+    // koala-backend#283: yetkililer artık çizilir; kullanıcı yine SafeUserDto, e-posta düşmeli.
+    companyContacts:
+      overrides.companyContacts === undefined
+        ? [
+            {
+              id: CONTACT_ID,
+              user: {
+                id: CONTACT_USER_ID,
+                firstName: "Ali",
+                lastName: "Kaya",
+                username: "ali",
+                profilePictureUrl: null,
+                email: "contact-must-not-render@koala.test",
+              },
+              role: "ADMIN",
+            },
+          ]
+        : overrides.companyContacts,
     images: [{ storageKey: "s3://must-not-render" }],
   };
 }
@@ -352,6 +371,7 @@ describe("the safe review projection", () => {
     expect(html).not.toContain("never-render-this");
     expect(html).not.toContain("must-not-render");
     expect(html).not.toContain("s3://must-not-render");
+    expect(html).not.toContain("contact-must-not-render@koala.test");
     expect(html).toContain("Caferağa Mah. Moda Cad. No:12, Kadıköy");
     expect(html).toContain("İstanbul");
     expect(html).toContain("Kadıköy");
@@ -580,5 +600,80 @@ describe("a company that does not exist", () => {
 
     expect(detail.calls).toBe(0);
     expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
+  });
+});
+
+/**
+ * koala-admin#100 / koala-backend#283: yetkililer, web sitesi, açıklama, logo,
+ * ilan sayısı ve kararı veren personel. Eski sunucu bu alanları göndermez;
+ * bölüm gizli ya da "—".
+ */
+describe("contacts, website, job count and the deciding staff member", () => {
+  it("lists the contacts with their role and links them to the user page without e-mail", async () => {
+    stubMe(APPROVER);
+    watchDetail();
+
+    const html = await renderDetail();
+
+    expect(html).toContain("Yetkililer");
+    expect(html).toContain("Ali Kaya");
+    expect(html).toContain(`href="/users/${CONTACT_USER_ID}"`);
+    expect(html).toContain("Yetkili");
+    expect(html).not.toContain("contact-must-not-render@koala.test");
+  });
+
+  it("says when the server sent an empty contact list and hides the row when it sent none", async () => {
+    stubMe(APPROVER);
+    watchDetail(company({ companyContacts: [] }));
+    const empty = await renderDetail();
+    expect(empty).toContain("Bu şirkete bağlı yetkili yok.");
+
+    stubMe(APPROVER);
+    watchDetail(company({ companyContacts: null }));
+    const legacy = await renderDetail();
+    expect(legacy).not.toContain("Yetkililer");
+    expect(legacy).not.toContain('data-testid="company-job-count"');
+  });
+
+  it("links the job count to the company-filtered job list only for a job.read holder", async () => {
+    stubMe(APPROVER);
+    watchDetail(company({ jobCount: 7 }));
+    const alone = await renderDetail();
+    expect(alone).toContain("7 ilan");
+    expect(alone).not.toContain(`href="/jobs?sirket=${COMPANY_REVIEW_ID}"`);
+    expect(alone).toContain("job.read");
+
+    stubMe([...APPROVER, "job.read"]);
+    watchDetail(company({ jobCount: 7 }));
+    const html = await renderDetail();
+    expect(html).toContain(`href="/jobs?sirket=${COMPANY_REVIEW_ID}"`);
+  });
+
+  it("draws website, description, logo and the deciding staff id, with empty values when absent", async () => {
+    stubMe(APPROVER);
+    watchDetail(
+      company({
+        website: "https://koalakahve.test",
+        description: "Üçüncü dalga kahve.",
+        logoUrl: "https://storage.koala.test/logos/koala.png",
+        approvedByStaffId: "5f000000-0000-4000-8000-000000000055",
+      }),
+    );
+    const html = await renderDetail();
+    expect(html).toContain('href="https://koalakahve.test"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain("Üçüncü dalga kahve.");
+    expect(html).toContain('src="https://storage.koala.test/logos/koala.png"');
+    expect(html).toMatch(
+      /Kararı veren personel<\/dt><dd[^>]*>5f000000-0000-4000-8000-000000000055</,
+    );
+
+    stubMe(APPROVER);
+    watchDetail(company({ website: "javascript:alert(1)", logoUrl: "data:image/png;base64,AAAA" }));
+    const unsafe = await renderDetail();
+    expect(unsafe).not.toContain('href="javascript:');
+    expect(unsafe).not.toContain('src="data:');
+    expect(unsafe).toContain("javascript:alert(1)");
+    expect(unsafe).toMatch(/Kararı veren personel<\/dt><dd[^>]*>—</);
   });
 });

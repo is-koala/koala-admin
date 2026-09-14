@@ -56,6 +56,17 @@ export const REFUND_STATUS_LABELS: Record<RefundStatus, string> = {
   FAILED: "Başarısız",
 };
 
+/** `entities/RefundOrigin.java` — iadeyi kim doğurdu (koala-backend#283, türetilir). */
+export const REFUND_ORIGINS = ["CANCELLATION", "DISPUTE", "STAFF"] as const;
+
+export type RefundOrigin = (typeof REFUND_ORIGINS)[number];
+
+export const REFUND_ORIGIN_LABELS: Record<RefundOrigin, string> = {
+  CANCELLATION: "İptal",
+  DISPUTE: "Uyuşmazlık",
+  STAFF: "Personel",
+};
+
 const nullableString = z
   .string()
   .nullish()
@@ -76,6 +87,16 @@ export const adminRefundSchema = z.object({
   status: z.enum(REFUND_STATUSES),
   reason: nullableString,
   providerRefundId: nullableString,
+  /**
+   * koala-backend#283: `CANCELLATION` → `originId` iptal kaydı,
+   * `DISPUTE` → uyuşmazlık kimliği, `STAFF` → panelden yapılan iade
+   * (`originId` boş). Eski sunucuda ikisi de `null`, sütun "—".
+   */
+  origin: z
+    .enum(REFUND_ORIGINS)
+    .nullish()
+    .transform((value) => value ?? null),
+  originId: nullableString,
   completedAt: nullableString,
   createdAt: nullableString,
   updatedAt: nullableString,
@@ -109,6 +130,8 @@ export const adminPaymentSchema = z.object({
   completedAt: nullableString,
   createdAt: nullableString,
   updatedAt: nullableString,
+  /** koala-backend#283: bu tahsilattan doğan hakediş; `payout.reconcile` ile açılır. */
+  payoutId: nullableString,
   refunds: z.array(adminRefundSchema).default([]),
 });
 

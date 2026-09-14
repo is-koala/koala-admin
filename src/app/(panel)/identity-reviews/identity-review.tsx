@@ -70,7 +70,14 @@ export function IdentityReviewBody({
         <Row
           label="Kararı veren personel"
           value={
-            <span className="font-mono text-xs">{review.reviewedByStaffId ?? EMPTY_VALUE}</span>
+            review.reviewedByStaffName === null ? (
+              <span className="font-mono text-xs">{review.reviewedByStaffId ?? EMPTY_VALUE}</span>
+            ) : (
+              <span className="flex flex-wrap justify-end gap-x-2">
+                <span>{review.reviewedByStaffName}</span>
+                <span className="font-mono text-xs">{review.reviewedByStaffId ?? EMPTY_VALUE}</span>
+              </span>
+            )
           }
         />
       </dl>

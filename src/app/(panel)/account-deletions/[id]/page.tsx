@@ -31,7 +31,9 @@ function queueReturnTo(params: SearchParams): Route {
 /**
  * Hesap silme nesne sayfası. Ret burada; kuyruk yalnız listeler.
  * GET /admin/account-deletions/{id}. Kapı `user.read_pii`. Ret ayrıca
- * `user.deletion.manage` ister — form ve Server Action.
+ * `user.deletion.manage` ister — form ve Server Action. Ret gerekçesi,
+ * reddeden personel ve canlı engelleyiciler koala-backend#283 ile geldi
+ * (koala-admin#100); eski sunucuda satırlar yok ya da "—".
  */
 export default async function AccountDeletionDetailPage({
   params,
@@ -70,7 +72,8 @@ async function DeletionObject({ id }: { id: string }) {
   // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
   if (!isUuid(id)) notFound();
 
-  const canReject = (await getStaffContext()).has("user.deletion.manage");
+  const context = await getStaffContext();
+  const canReject = context.has("user.deletion.manage");
 
   let row;
   try {
@@ -92,7 +95,11 @@ async function DeletionObject({ id }: { id: string }) {
         <h2 className="font-mono text-lg font-semibold">{row.id.slice(0, 8)}</h2>
         <DeletionStatusBadge status={row.status} />
       </div>
-      <DeletionReviewBody row={row} canReject={canReject} />
+      <DeletionReviewBody
+        row={row}
+        canReject={canReject}
+        permissions={context.staff?.permissions ?? []}
+      />
       <ObjectAuditPointer resourceId={row.id} linkLabel="Bu talebin denetim kayıtlarını aç">
         Ret backend tarafından bu talep kimliğiyle denetim kaydına yazılır; personelin bu kaydı
         açması da kayda düşer.

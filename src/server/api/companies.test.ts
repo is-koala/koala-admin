@@ -34,7 +34,12 @@ afterEach(() => {
 });
 
 const COMPANY_ID = COMPANY_REVIEW_ID;
-const SAFE_REVIEW_COMPANY = reviewCompany();
+const SAFE_CONTACT = {
+  id: "cc000000-0000-4000-8000-000000000001",
+  user: { id: "u2", firstName: "Ali", lastName: "Kaya", username: "ali", profilePictureUrl: null },
+  role: "ADMIN",
+};
+const SAFE_REVIEW_COMPANY = reviewCompany({ companyContacts: [SAFE_CONTACT] });
 const REVIEW_COMPANY = {
   ...SAFE_REVIEW_COMPANY,
   createdBy: {
@@ -42,7 +47,10 @@ const REVIEW_COMPANY = {
     email: "private@koala.test",
     passwordHash: "never-render-this",
   },
-  companyContacts: [{ id: "must-be-stripped" }],
+  // koala-backend#283: yetkililer artık okunur, ama kullanıcı yine SafeUserDto — e-posta düşer.
+  companyContacts: [
+    { ...SAFE_CONTACT, user: { ...SAFE_CONTACT.user, email: "contact@koala.test" } },
+  ],
   images: [{ id: "must-be-stripped", storageKey: "s3://secret", fileUrl: "https://store.test/x" }],
   address: {
     ...SAFE_REVIEW_COMPANY.address,
@@ -143,6 +151,7 @@ describe("the queue asks the backend for the page it is showing", () => {
     });
 
     expect(page.content[0]).toEqual(SAFE_REVIEW_COMPANY);
+    expect(JSON.stringify(page.content[0])).not.toContain("contact@koala.test");
   });
 
   it("survives nullable review metadata", async () => {

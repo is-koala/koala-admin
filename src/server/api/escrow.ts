@@ -163,11 +163,168 @@ export function getEscrowSummary(
  * bilinmeyen alanları düşürür, uyuşmazlık sayfası ve emanet kapısı tek bir
  * alan bile değiştirmeden aynı özeti alır.
  */
+/** `entities/ApplicationStatus.java`. */
+export const APPLICATION_STATUSES = ["APPLIED", "ACCEPTED", "REJECTED", "WITHDRAWN"] as const;
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+
+export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
+  APPLIED: "Başvurdu",
+  ACCEPTED: "Kabul edildi",
+  REJECTED: "Reddedildi",
+  WITHDRAWN: "Geri çekildi",
+};
+
+/** `entities/CancellationParty.java`. */
+export const CANCELLATION_PARTIES = ["WORKER", "EMPLOYER", "ADMIN"] as const;
+export type CancellationParty = (typeof CANCELLATION_PARTIES)[number];
+
+export const CANCELLATION_PARTY_LABELS: Record<CancellationParty, string> = {
+  WORKER: "İşçi",
+  EMPLOYER: "İşveren",
+  ADMIN: "Personel",
+};
+
+/** `entities/JobEmployerType.java`. */
+export const ASSIGNMENT_EMPLOYER_TYPES = ["COMPANY", "INDIVIDUAL"] as const;
+export type AssignmentEmployerType = (typeof ASSIGNMENT_EMPLOYER_TYPES)[number];
+
+export const ASSIGNMENT_EMPLOYER_TYPE_LABELS: Record<AssignmentEmployerType, string> = {
+  COMPANY: "Şirket",
+  INDIVIDUAL: "Bireysel",
+};
+
+/**
+ * `entities/TimesheetPlausibilityFlag.java`. Serbest metin okunur: backend
+ * yeni bir bayrak eklerse mesai satırı düşmesin, kod olduğu gibi yazılsın.
+ */
+export const TIMESHEET_PLAUSIBILITY_FLAG_LABELS: Readonly<Record<string, string>> = {
+  DEVICE_TIME_IMPLAUSIBLE: "Cihaz saati şüpheli",
+  OUTSIDE_JOB_WINDOW: "İş penceresi dışında",
+  NON_MONOTONIC: "Sıra dışı zaman",
+};
+
+export function timesheetFlagLabel(flag: string): string {
+  return TIMESHEET_PLAUSIBILITY_FLAG_LABELS[flag] ?? flag;
+}
+
+const nullableInt = z
+  .number()
+  .int()
+  .nullish()
+  .transform((value) => value ?? null);
+
+/** `BigDecimal` koordinat sayı gelir; panel yalnız yazar, hesaplamaz. */
+const nullableDecimal = z
+  .union([z.number(), z.string()])
+  .nullish()
+  .transform((value) => value ?? null);
+
+/** `AdminApplicationDto` — atamayı doğuran başvuru. */
+export const adminApplicationSchema = z.object({
+  id: z.string(),
+  status: z
+    .enum(APPLICATION_STATUSES)
+    .nullish()
+    .transform((value) => value ?? null),
+  applicationDateTime: nullableString,
+  answeredDateTime: nullableString,
+  rejectionReason: nullableString,
+});
+
+export type AdminApplication = z.infer<typeof adminApplicationSchema>;
+
+/**
+ * `WorkSessionDto` — bir giriş/çıkış çifti. Bayraklar backend'in
+ * plausibility kararıdır; panel yalnız listeler, kendisi bayrak üretmez.
+ */
+export const workSessionSchema = z.object({
+  id: z.string(),
+  checkInAt: nullableString,
+  checkOutAt: nullableString,
+  checkInCapturedAt: nullableString,
+  checkInReceivedAt: nullableString,
+  checkInPlausibilityFlags: z
+    .array(z.string())
+    .nullish()
+    .transform((value) => value ?? []),
+  checkOutCapturedAt: nullableString,
+  checkOutReceivedAt: nullableString,
+  checkOutPlausibilityFlags: z
+    .array(z.string())
+    .nullish()
+    .transform((value) => value ?? []),
+  checkInLatitude: nullableDecimal,
+  checkInLongitude: nullableDecimal,
+  checkOutLatitude: nullableDecimal,
+  checkOutLongitude: nullableDecimal,
+  minutes: nullableInt,
+});
+
+export type WorkSession = z.infer<typeof workSessionSchema>;
+
+/** `AdminCancellationDto`. Para alanları backend metni; `refundId` iade kaydının kimliğidir. */
+export const adminCancellationSchema = z.object({
+  id: z.string(),
+  cancelledByParty: z
+    .enum(CANCELLATION_PARTIES)
+    .nullish()
+    .transform((value) => value ?? null),
+  cancelledBy: safeUserSchema.nullish().transform((value) => value ?? null),
+  reason: nullableString,
+  noticeMinutes: nullableInt,
+  feeRate: nullableString,
+  feeAmount: nullableString,
+  refundAmount: nullableString,
+  refundId: nullableString,
+  cancelledAt: nullableString,
+});
+
+export type AdminCancellation = z.infer<typeof adminCancellationSchema>;
+
+/** `AdminReviewDto` — taraflar yalnız kimlik; ad atama DTO'sundan eşlenir. */
+export const adminReviewSchema = z.object({
+  id: z.string(),
+  authorId: nullableString,
+  subjectId: nullableString,
+  rating: nullableInt,
+  comment: nullableString,
+  anonymous: z
+    .boolean()
+    .nullish()
+    .transform((value) => value ?? false),
+  createdAt: nullableString,
+});
+
+export type AdminReview = z.infer<typeof adminReviewSchema>;
+
+/**
+ * koala-backend#283 zaman çizelgesi alanları. Hepsi isteğe bağlı: #265
+ * sunucusu bunları göndermez ve sayfa o sunucuda da açılmalı — çizelge
+ * yalnız elde olan anlardan kurulur, eksik kart çizilmez.
+ */
 export const assignmentDetailSchema = escrowSummarySchema.extend({
   payments: z.array(linkedRecordSchema).default([]),
   payout: linkedRecordSchema.nullish().transform((value) => value ?? null),
   disputes: z.array(linkedRecordSchema).default([]),
   reports: z.array(linkedRecordSchema).default([]),
+  employerType: z
+    .enum(ASSIGNMENT_EMPLOYER_TYPES)
+    .nullish()
+    .transform((value) => value ?? null),
+  expectedCompletionDateTime: nullableString,
+  notes: nullableString,
+  application: adminApplicationSchema.nullish().transform((value) => value ?? null),
+  workSessions: z
+    .array(workSessionSchema)
+    .nullish()
+    .transform((value) => value ?? null),
+  cancellation: adminCancellationSchema.nullish().transform((value) => value ?? null),
+  reviews: z
+    .array(adminReviewSchema)
+    .nullish()
+    .transform((value) => value ?? null),
+  createdAt: nullableString,
+  updatedAt: nullableString,
 });
 
 export type AssignmentDetail = z.infer<typeof assignmentDetailSchema>;
@@ -193,6 +350,10 @@ export interface AssignmentQueueQuery {
    * ad-soyadı ile e-postasında arar. 2–100 kuralı `searchQueryParam`'da.
    */
   readonly query?: string | null;
+  /** koala-backend#283: yalnız bu işçinin atamaları; `query` ile kesişir. */
+  readonly workerId?: string | null;
+  /** koala-backend#283: yalnız bu işverenin (ilan sahibinin) atamaları. */
+  readonly employerId?: string | null;
 }
 
 export function getAdminAssignments(
@@ -204,6 +365,8 @@ export function getAdminAssignments(
     schema: pageDtoSchema(escrowSummarySchema),
     query: {
       query: searchQueryParam(query.query),
+      workerId: query.workerId ?? undefined,
+      employerId: query.employerId ?? undefined,
       ...pagingQuery(query.paging),
     },
     accessToken,
