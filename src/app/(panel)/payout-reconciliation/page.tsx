@@ -15,6 +15,7 @@ import {
   searchEmptyTitle,
 } from "@/components/panel/queue";
 import { PayoutReconciliationForm } from "@/components/payout-reconciliation/payout-reconciliation-form";
+import { SafeUserLink } from "@/components/panel/safe-user-link";
 import {
   Badge,
   EmptyState,
@@ -25,7 +26,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { EMPTY_VALUE, formatCurrency, formatDateTime } from "@/lib/format";
 import {
   ALL_STATUSES_PARAM,
   assignmentHref,
@@ -36,6 +37,7 @@ import {
 import {
   PAYOUT_PAGING,
   PAYOUT_STATUSES,
+  PAYOUT_STATUS_LABELS,
   getPayouts,
   type Payout,
 } from "@/server/api/payout-reconciliation";
@@ -56,6 +58,7 @@ import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { submitPayoutReconciliation } from "./actions";
+import { PAYOUT_STATUS_TONES } from "./labels";
 
 export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
 
@@ -69,6 +72,9 @@ export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
  * kullanıcı sayfasındaki hakediş sayacı buraya gelir (koala-admin#100).
  * Sayaç her durumu saydığı için o bağlantı `?durum=hepsi` taşır: dört durum
  * birden gönderilir, backend'in PROCESSING varsayılanı devre dışı kalır.
+ * O görünümde satırlar PENDING/COMPLETED/FAILED de olabilir; rozet
+ * `row.status`tan gelir ve "Onayla" yalnız PROCESSING satırında durur —
+ * reconcile ucu başka durumu zaten reddeder (koala-admin#106).
  */
 export default async function PayoutReconciliationPage({
   searchParams,
@@ -201,6 +207,7 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
             <TableHead>
               <TableRow>
                 <TableHeaderCell>Tarih</TableHeaderCell>
+                <TableHeaderCell>İşçi</TableHeaderCell>
                 <TableHeaderCell>Tutar</TableHeaderCell>
                 <TableHeaderCell>Durum</TableHeaderCell>
                 <TableHeaderCell>Atama</TableHeaderCell>
@@ -243,6 +250,7 @@ function PayoutRow({
   /** Satırdan onaya geçmek aramayı silmesin. */
   query: string | null;
 }) {
+  const reconcilable = row.status === "PROCESSING";
   return (
     <TableRow>
       <TableCell>
@@ -250,9 +258,12 @@ function PayoutRow({
           {formatDateTime(row.createdAt)}
         </Link>
       </TableCell>
+      <TableCell>
+        <SafeUserLink user={row.recipient} />
+      </TableCell>
       <TableCell>{formatCurrency(row.amount, row.currency)}</TableCell>
       <TableCell>
-        <Badge tone="warning">İşleniyor</Badge>
+        <Badge tone={PAYOUT_STATUS_TONES[row.status]}>{PAYOUT_STATUS_LABELS[row.status]}</Badge>
       </TableCell>
       <TableCell>
         <Link
@@ -263,7 +274,9 @@ function PayoutRow({
         </Link>
       </TableCell>
       <TableCell>
-        {selected ? (
+        {!reconcilable ? (
+          <span className="text-ink-muted">{EMPTY_VALUE}</span>
+        ) : selected ? (
           <Badge tone="brand">Seçili</Badge>
         ) : (
           <Link

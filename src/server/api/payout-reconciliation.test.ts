@@ -29,6 +29,7 @@ const EVIDENCE: PayoutSettlementEvidence = {
 const PAYOUT = {
   id: PAYOUT_ID,
   jobAssignmentId: "8c000000-0000-4000-8000-000000000034",
+  recipient: null,
   amount: "12345678901234567.89",
   currency: "TRY",
   status: "COMPLETED",
@@ -81,6 +82,47 @@ describe("the staff payout queue", () => {
     expect(seen.url?.searchParams.get("page")).toBe("0");
     expect(seen.url?.searchParams.get("size")).toBe("20");
     expect(page.content[0]?.status).toBe("PROCESSING");
+  });
+
+  /** koala-admin#106: `StaffPayoutDto.recipient`; eski sunucu/silinmiş kullanıcı → null. */
+  it("reads the recipient when the backend sends one and tolerates its absence", async () => {
+    const withRecipient = {
+      ...PAYOUT,
+      recipient: {
+        id: "aaaaaaaa-0000-4000-8000-000000000001",
+        firstName: "Ayşe",
+        lastName: "Yılmaz",
+        username: "ayse",
+        profilePictureUrl: null,
+      },
+    };
+    const { recipient: _dropped, ...withoutRecipient } = PAYOUT;
+    server.use(
+      http.get(apiUrl(PAYOUTS_PATH), () =>
+        HttpResponse.json({
+          success: true,
+          message: "Hakedişler listelendi.",
+          httpStatus: "200 OK",
+          path: PAYOUTS_PATH,
+          requestId: "rid-payouts",
+          timeStamp: "2026-09-09T09:31:00Z",
+          data: {
+            content: [withRecipient, withoutRecipient],
+            page: 0,
+            size: 20,
+            totalElements: 2,
+            totalPages: 1,
+            first: true,
+            last: true,
+          },
+        }),
+      ),
+    );
+
+    const page = await getPayouts("ACCESS-TOKEN", { paging: readPaging({}, PAYOUT_PAGING) });
+
+    expect(page.content[0]?.recipient?.firstName).toBe("Ayşe");
+    expect(page.content[1]?.recipient).toBeNull();
   });
 });
 

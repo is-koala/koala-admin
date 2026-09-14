@@ -27,7 +27,6 @@ import {
   getPayoutDetail,
   payoutReleaseOriginLabel,
   type PayoutDetail,
-  type PayoutStatus,
   type SettlementTaskStatus,
 } from "@/server/api/payout-reconciliation";
 import { staffPartyName, type StaffParty } from "@/server/api/shared/staff-party";
@@ -37,15 +36,9 @@ import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
 import { submitPayoutReconciliation } from "../actions";
+import { PAYOUT_STATUS_TONES } from "../labels";
 
 export const metadata: Metadata = { title: "Hakediş" };
-
-const PAYOUT_TONES: Record<PayoutStatus, BadgeTone> = {
-  PENDING: "neutral",
-  PROCESSING: "warning",
-  COMPLETED: "success",
-  FAILED: "danger",
-};
 
 const TASK_TONES: Record<SettlementTaskStatus, BadgeTone> = {
   PENDING: "warning",
@@ -129,7 +122,7 @@ async function PayoutObject({ id }: { id: string }) {
             <Row
               label="Durum"
               value={
-                <Badge tone={PAYOUT_TONES[payout.status]}>
+                <Badge tone={PAYOUT_STATUS_TONES[payout.status]}>
                   {PAYOUT_STATUS_LABELS[payout.status]}
                 </Badge>
               }

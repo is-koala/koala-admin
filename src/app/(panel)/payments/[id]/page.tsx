@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
+import { SafeUserLink } from "@/components/panel/safe-user-link";
 import {
   Badge,
   EmptyState,
@@ -23,14 +24,7 @@ import {
   formatInteger,
   formatPercent,
 } from "@/lib/format";
-import {
-  assignmentHref,
-  disputeHref,
-  isUuid,
-  jobHref,
-  payoutHref,
-  userHrefOrNull,
-} from "@/lib/panel-href";
+import { assignmentHref, disputeHref, isUuid, jobHref, payoutHref } from "@/lib/panel-href";
 import {
   PAYMENT_ATTEMPT_STATUS_LABELS,
   REFUND_STATUS_LABELS,
@@ -41,7 +35,6 @@ import {
   type AdminRefund,
   type RefundStatus,
 } from "@/server/api/payments";
-import { safeUserName, type SafeUser } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
@@ -161,15 +154,15 @@ async function PaymentObject({ id }: { id: string }) {
                 )
               }
             />
-            <Row label="İşçi" value={<Party user={payment.worker} />} />
+            <Row label="İşçi" value={<SafeUserLink user={payment.worker} />} />
             <Row
               label="İşveren"
               value={
                 payment.companyName === null ? (
-                  <Party user={payment.employer} />
+                  <SafeUserLink user={payment.employer} />
                 ) : (
                   <span>
-                    <Party user={payment.employer} /> · {payment.companyName}
+                    <SafeUserLink user={payment.employer} /> · {payment.companyName}
                   </span>
                 )
               }
@@ -377,17 +370,6 @@ function RefundOrigin({
         </Link>
       )}
     </span>
-  );
-}
-
-function Party({ user }: { user: SafeUser | null }) {
-  if (user === null) return <>{EMPTY_VALUE}</>;
-  const href = userHrefOrNull(user.id);
-  if (href === null) return <>{safeUserName(user)}</>;
-  return (
-    <Link href={href} className="text-brand hover:underline">
-      {safeUserName(user)}
-    </Link>
   );
 }
 
