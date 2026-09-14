@@ -55,6 +55,7 @@ const USER = {
 const PAYOUT = {
   id: "9c000000-0000-4000-8000-000000000033",
   jobAssignmentId: ASSIGNMENT_ID,
+  recipient: { id: USER_ID, firstName: "Ada", lastName: "Yılmaz", username: "ada" },
   amount: "1240.50",
   currency: "TRY",
   status: "COMPLETED",
@@ -383,7 +384,9 @@ describe("the hakedisler tab", () => {
     expect(html).not.toContain("İşleniyor");
     expect(html).toContain(`href="/payout-reconciliation/${PAYOUT.id}"`);
     expect(html).toContain(`href="/payout-reconciliation?isci=${USER_ID}&amp;durum=hepsi"`);
-    // Mutabakat kuyruğunun onay bağlantısı bu tabloda yok.
+    // Kuyrukla aynı tablo bileşeni, işçi sütunu dâhil; onay sütunu yalnız kuyrukta.
+    expect(html).toContain(">İşçi</th>");
+    expect(html).not.toContain(">Onay</th>");
     expect(html).not.toContain("Onayla");
   });
 

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { SEARCH_PARAM } from "@/components/panel/queue";
+import { SafeUserLink } from "@/components/panel/safe-user-link";
 import {
   Badge,
   Table,
@@ -8,44 +10,49 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
-  type BadgeTone,
 } from "@/components/ui";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { EMPTY_VALUE, formatCurrency, formatDateTime } from "@/lib/format";
 import { assignmentHref, payoutHref } from "@/lib/panel-href";
-import {
-  PAYOUT_STATUS_LABELS,
-  type Payout,
-  type PayoutStatus,
-} from "@/server/api/payout-reconciliation";
+import { PAYOUT_STATUS_LABELS, type Payout } from "@/server/api/payout-reconciliation";
 
-const PAYOUT_TONES: Record<PayoutStatus, BadgeTone> = {
-  PENDING: "neutral",
-  PROCESSING: "warning",
-  COMPLETED: "success",
-  FAILED: "danger",
-};
+import { PAYOUT_STATUS_TONES } from "./labels";
 
 /**
- * Salt okunur hakediş tablosu — kullanıcı sayfasının "Hakedişler" sekmesi
- * (koala-admin#103). Mutabakat kuyruğunun kendi satırı (`page.tsx`) "Onayla"
- * bağlantısı taşır ve #106 ile ayrıca ele alınıyor; bu tablo o satıra
- * dokunmaz, rozeti DTO'nun `status` alanından çizer.
+ * Onay sütununun bağlamı. Kuyruk sayfası verir: satırdan onaya geçiş aynı
+ * sayfada `?hakedis=` ile formu doldurur, sayfa ve aramayı taşır. Kullanıcı
+ * sayfasının sekmesi (koala-admin#103) vermez — mutabakat kuyruğun işi.
+ */
+export interface PayoutActionContext {
+  readonly selectedId: string | null;
+  readonly page: number;
+  /** Satırdan onaya geçmek aramayı silmesin. */
+  readonly query: string | null;
+}
+
+/**
+ * Hakediş tablosu; mutabakat kuyruğu ve kullanıcı sayfasının "Hakedişler"
+ * sekmesi aynı satırı çizer. Rozet DTO'nun `status` alanından; "Onayla"
+ * yalnız PROCESSING satırında ve yalnız `action` verildiğinde (koala-admin#106).
  */
 export function PayoutTable({
   rows,
   caption = "Hakedişler",
+  action,
 }: {
   rows: readonly Payout[];
   caption?: string;
+  action?: PayoutActionContext;
 }) {
   return (
     <Table caption={caption}>
       <TableHead>
         <TableRow>
           <TableHeaderCell>Tarih</TableHeaderCell>
+          <TableHeaderCell>İşçi</TableHeaderCell>
           <TableHeaderCell>Tutar</TableHeaderCell>
           <TableHeaderCell>Durum</TableHeaderCell>
           <TableHeaderCell>Atama</TableHeaderCell>
+          {action === undefined ? null : <TableHeaderCell>Onay</TableHeaderCell>}
         </TableRow>
       </TableHead>
       <TableBody>
@@ -56,9 +63,14 @@ export function PayoutTable({
                 {formatDateTime(row.createdAt)}
               </Link>
             </TableCell>
+            <TableCell>
+              <SafeUserLink user={row.recipient} />
+            </TableCell>
             <TableCell>{formatCurrency(row.amount, row.currency)}</TableCell>
             <TableCell>
-              <Badge tone={PAYOUT_TONES[row.status]}>{PAYOUT_STATUS_LABELS[row.status]}</Badge>
+              <Badge tone={PAYOUT_STATUS_TONES[row.status]}>
+                {PAYOUT_STATUS_LABELS[row.status]}
+              </Badge>
             </TableCell>
             <TableCell>
               <Link
@@ -68,9 +80,34 @@ export function PayoutTable({
                 {row.jobAssignmentId}
               </Link>
             </TableCell>
+            {action === undefined ? null : (
+              <TableCell>
+                <ReconcileCell row={row} action={action} />
+              </TableCell>
+            )}
           </TableRow>
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+function ReconcileCell({ row, action }: { row: Payout; action: PayoutActionContext }) {
+  if (row.status !== "PROCESSING") return <span className="text-ink-muted">{EMPTY_VALUE}</span>;
+  if (row.id === action.selectedId) return <Badge tone="brand">Seçili</Badge>;
+  return (
+    <Link
+      href={{
+        pathname: "/payout-reconciliation",
+        query: {
+          hakedis: row.id,
+          ...(action.page > 0 ? { sayfa: String(action.page) } : {}),
+          ...(action.query === null ? {} : { [SEARCH_PARAM]: action.query }),
+        },
+      }}
+      className="text-sm font-medium text-brand hover:underline"
+    >
+      Onayla
+    </Link>
   );
 }
