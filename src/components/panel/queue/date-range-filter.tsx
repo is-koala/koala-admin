@@ -78,10 +78,7 @@ export function DateRangeFilter({ id, pathname, range, state = {} }: DateRangeFi
             />
           )}
         </FormField>
-        <button
-          type="submit"
-          className="rounded-lg border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-muted"
-        >
+        <button type="submit" className="button button--primary button--sm">
           Tarihe göre süz
         </button>
         {active ? (

@@ -19,6 +19,8 @@
     "verify:server-only": "node scripts/verify-server-only-guard.mjs"
   },
   "dependencies": {
+    "@heroui/react": "^3.2.5",
+    "@heroui/styles": "^3.2.5",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",

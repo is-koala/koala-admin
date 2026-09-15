@@ -125,9 +125,7 @@ export function UserTabNav({
             aria-current={active ? "page" : undefined}
             data-testid={`user-tab-${tab}`}
             className={
-              active
-                ? "rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white"
-                : "rounded-md border border-border-subtle px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
+              active ? "button button--primary button--sm" : "button button--secondary button--sm"
             }
           >
             {spec.label}

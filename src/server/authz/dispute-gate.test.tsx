@@ -958,7 +958,7 @@ describe("the user filter, the opener's side and the resolving staff member", ()
 
     const html = (await renderDetail()).replaceAll("<!-- -->", "");
 
-    expect(html).toMatch(/Ayşe Yılmaz<\/a><span[^>]*>İşçi</);
+    expect(html).toMatch(/Ayşe Yılmaz<\/a><span[^>]*>[\s\S]*?İşçi</);
     // staff.read yok: kısa kimlik, tam kimlik title'da, bağlantısız (koala-admin#112).
     expect(html).toMatch(
       /Çözen personel<\/dt><dd[^>]*><span[^>]*title="5f000000-0000-4000-8000-000000000055">5f000000</,

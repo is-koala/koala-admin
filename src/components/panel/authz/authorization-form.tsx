@@ -103,12 +103,7 @@ export interface AuthorizationFormProps {
   disabledReason?: string;
 }
 
-const BUTTON_BASE =
-  "rounded-md px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60";
-
-const CONTROL =
-  "w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink " +
-  "placeholder:text-ink-subtle aria-[invalid=true]:border-danger";
+const CONTROL = "input input--primary input--full-width";
 
 export function AuthorizationForm({
   action,
@@ -260,12 +255,11 @@ export function AuthorizationForm({
           type="submit"
           disabled={pending || requiredSelectionMissing}
           aria-describedby={`${idPrefix}-consequence`}
-          className={cn(
-            BUTTON_BASE,
+          className={
             tone === "danger"
-              ? "border border-danger/40 bg-danger-soft text-danger hover:bg-danger/10"
-              : "bg-brand text-white hover:bg-brand-strong",
-          )}
+              ? "button button--danger-soft button--sm"
+              : "button button--primary button--sm"
+          }
         >
           {pending ? "Gönderiliyor…" : submitLabel}
         </button>

@@ -132,7 +132,7 @@ export function AuditLogTable({ entries, permissionLabels, permissions = [] }: A
                       onClick={() =>
                         setSelectedId((current) => (current === entry.id ? null : entry.id))
                       }
-                      className="rounded-md border border-border-subtle px-2 py-1 text-xs font-medium text-ink hover:bg-surface-sunken"
+                      className="button button--secondary button--sm"
                     >
                       Ayrıntı
                     </button>

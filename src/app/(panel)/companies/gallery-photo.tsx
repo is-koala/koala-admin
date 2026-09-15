@@ -49,7 +49,7 @@ export function GalleryPhoto({ src, alt }: { src: string; alt: string }) {
         <button
           type="button"
           onClick={() => setState({ attempt: state.attempt + 1, status: "loading" })}
-          className="w-fit rounded-md bg-brand px-2 py-1 text-xs font-medium text-white"
+          className="button button--primary button--sm w-fit"
         >
           Tekrar dene
         </button>

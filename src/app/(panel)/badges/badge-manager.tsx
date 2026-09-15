@@ -64,10 +64,8 @@ type ActiveDialog =
   | { readonly kind: "icon"; readonly badge: BadgeRecord }
   | { readonly kind: "activation"; readonly badge: BadgeRecord };
 
-const BUTTON =
-  "rounded-md px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60";
-const PRIMARY = `${BUTTON} bg-brand text-white hover:bg-brand-strong`;
-const SECONDARY = `${BUTTON} border border-border-strong bg-surface text-ink hover:bg-surface-sunken`;
+const PRIMARY = "button button--primary button--sm";
+const SECONDARY = "button button--secondary button--sm";
 
 export function BadgeManager({
   badges,

@@ -103,10 +103,7 @@ export function ListSearchForm({
           maxLength={SEARCH_QUERY_MAX_LENGTH}
           className="min-w-0 flex-1 rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-subtle aria-[invalid=true]:border-danger"
         />
-        <button
-          type="submit"
-          className="rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm font-medium text-ink hover:bg-surface-muted"
-        >
+        <button type="submit" className="button button--primary">
           Ara
         </button>
         {query === null ? null : (

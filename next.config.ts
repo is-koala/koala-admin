@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
   // `NEXT_PUBLIC_*`. The API base URL stays a server-side value.
   poweredByHeader: false,
   typedRoutes: true,
+  transpilePackages: ["@heroui/react", "@heroui/styles"],
 };
 
 export default nextConfig;

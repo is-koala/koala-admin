@@ -75,7 +75,7 @@ export function PanelShell({
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <aside
           className={cn(
-            "flex shrink-0 flex-col border-r border-border-subtle bg-surface",
+            "surface surface--default flex shrink-0 flex-col border-r border-border-subtle",
             "md:sticky md:top-12 md:h-[calc(100dvh-3rem)]",
             collapsed ? "w-full md:w-[4.5rem]" : "w-full md:w-60",
           )}

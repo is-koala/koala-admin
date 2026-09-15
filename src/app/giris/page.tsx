@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { AuthShell } from "@/components/panel/auth-shell";
-import { ErrorState, FormField, TextInput } from "@/components/ui";
+import { Button, ErrorState, FormField, TextInput } from "@/components/ui";
 import { signInWithPassword } from "@/server/auth/actions";
 import { isSignInFailureCode, type SignInFailureCode } from "@/server/auth/errors";
 
@@ -117,12 +117,9 @@ export default async function SignInPage({
             )}
           </FormField>
 
-          <button
-            type="submit"
-            className="mt-2 w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-on-brand hover:bg-brand-strong"
-          >
+          <Button type="submit" variant="primary" fullWidth className="mt-2">
             Giriş yap
-          </button>
+          </Button>
         </form>
 
         <p className="text-xs text-ink-subtle">

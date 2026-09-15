@@ -31,7 +31,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
 
   return (
-    <html lang="tr" className={inter.variable} data-theme={theme} suppressHydrationWarning>
+    <html
+      lang="tr"
+      className={`${inter.variable} ${theme}`}
+      data-theme={theme}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
       </head>

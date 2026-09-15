@@ -18,6 +18,7 @@ afterEach(() => {
   document.cookie = `${THEME_COOKIE}=; Path=/; Max-Age=0`;
   document.documentElement.removeAttribute("data-theme");
   document.documentElement.style.colorScheme = "";
+  document.documentElement.classList.remove("light", "dark");
   window.localStorage.clear();
 });
 
@@ -36,6 +37,7 @@ describe("ThemeToggle", () => {
 
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(document.documentElement.style.colorScheme).toBe("dark");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(document.cookie).toContain(`${THEME_COOKIE}=dark`);
     expect(window.localStorage.getItem(THEME_COOKIE)).toBe("dark");
     expect(screen.getByRole("button", { name: "Açık temaya geç" })).toBeInTheDocument();

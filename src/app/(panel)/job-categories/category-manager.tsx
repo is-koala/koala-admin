@@ -41,11 +41,9 @@ type ActiveDialog =
   | { readonly kind: "edit"; readonly category: CategoryRecord }
   | { readonly kind: "delete"; readonly category: CategoryRecord };
 
-const BUTTON =
-  "rounded-md px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60";
-const PRIMARY = `${BUTTON} bg-brand text-white hover:bg-brand-strong`;
-const SECONDARY = `${BUTTON} border border-border-strong bg-surface text-ink hover:bg-surface-sunken`;
-const DANGER = `${BUTTON} border border-danger/40 bg-danger-soft text-danger hover:bg-danger/10`;
+const PRIMARY = "button button--primary button--sm";
+const SECONDARY = "button button--secondary button--sm";
+const DANGER = "button button--danger-soft button--sm";
 
 export function CategoryManager({
   categories,

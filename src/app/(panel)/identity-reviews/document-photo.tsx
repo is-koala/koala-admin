@@ -69,7 +69,7 @@ export function DocumentPhoto({
             <button
               type="button"
               onClick={() => setState({ attempt: state.attempt + 1, status: "loading" })}
-              className="w-fit rounded-md bg-brand px-3 py-2 text-sm font-medium text-white"
+              className="button button--primary button--sm w-fit"
             >
               Tekrar dene
             </button>

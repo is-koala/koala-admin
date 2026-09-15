@@ -87,7 +87,7 @@ export function StaffNoteComposeForm({
       <button
         type="submit"
         disabled={pending}
-        className="self-start rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken disabled:cursor-wait"
+        className="button button--primary button--sm self-start"
       >
         {pending ? "Kaydediliyor…" : "Notu kaydet"}
       </button>
@@ -134,7 +134,7 @@ export function StaffNoteEditForm({
       <button
         type="submit"
         disabled={pending}
-        className="self-start rounded-md border border-border-subtle px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken disabled:cursor-wait"
+        className="button button--primary button--sm self-start"
       >
         {pending ? "Kaydediliyor…" : "Değişikliği kaydet"}
       </button>
@@ -166,7 +166,7 @@ export function StaffNoteDeleteForm({
       <button
         type="submit"
         disabled={pending}
-        className="self-start rounded-md border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger-soft disabled:cursor-wait"
+        className="button button--danger-soft button--sm self-start"
       >
         {pending ? "Siliniyor…" : "Notu sil"}
       </button>
@@ -235,7 +235,7 @@ export function StaffFlagSetForm({
       <button
         type="submit"
         disabled={pending}
-        className="self-start rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken disabled:cursor-wait"
+        className="button button--primary button--sm self-start"
       >
         {pending ? "Kaydediliyor…" : "İşareti koy"}
       </button>
