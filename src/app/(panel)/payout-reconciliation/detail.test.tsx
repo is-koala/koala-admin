@@ -124,7 +124,9 @@ describe("who can open a payout", () => {
 
     expect(html).toContain("Ekstre onayı");
     expect(html).toContain(`value="${PAYOUT_ID}"`);
+    expect(html).toContain('name="settlementReference" value="iyz-transaction-000033"');
     expect(html).toContain('value="iyz-transaction-000033"');
+    expect(html).toContain('name="settledAt" value="2026-09-02T08:05:00.000000000Z"');
     expect(html).toContain('value="1240.50"');
     expect(html).toContain('value="TRY"');
     expect(html.match(/readOnly=""/g)).toHaveLength(4);

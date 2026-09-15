@@ -56,8 +56,9 @@ const TASK_TONES: Record<SettlementTaskStatus, BadgeTone> = {
  * Hakediş nesne sayfası (koala-admin#95). `GET /admin/payouts/{payoutId}`
  * (`AdminPayoutDetailDto`), `payout.reconcile`. #80'in kanıt alanları —
  * sağlayıcı referansı, alıcı, maskeli IBAN, tutar, para birimi — burada ve
- * PROCESSING hakedişte mevcut mutabakat formunu doldurur; operatör yalnız
- * ekstre referansını ve gerçekleşme anını yazar. Yeni yazma eylemi yok.
+ * PROCESSING hakedişte mevcut mutabakat formunu Iyzico onayındaki referans
+ * ve gerçekleşme anıyla doldurur; operatör yalnız farklı bir ekstre satırı
+ * varsa düzeltir. Yeni hakedişler sağlayıcı onayında kendiliğinden kapanır.
  *
  * koala-backend#283: serbest bırakma kaynağı, ekstredeki gerçekleşme anı,
  * mutabakatı onaylayan personel ve banka hesabı kimliği (koala-admin#100).

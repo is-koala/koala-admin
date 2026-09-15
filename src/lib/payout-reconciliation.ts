@@ -17,6 +17,8 @@ export interface RecordedPayoutEvidence {
   readonly providerReference: string | null;
   readonly amount: string | null;
   readonly currency: string | null;
+  readonly settlementReference: string | null;
+  readonly settledAt: string | null;
 }
 
 export function toRecordedPayoutEvidence(payout: {
@@ -24,13 +26,28 @@ export function toRecordedPayoutEvidence(payout: {
   readonly providerReference: string | null;
   readonly amount: string | null;
   readonly currency: string | null;
+  readonly settlementReference?: string | null;
+  readonly processingAt?: string | null;
+  readonly completedAt?: string | null;
+  readonly createdAt?: string | null;
 }): RecordedPayoutEvidence {
   return {
     payoutId: payout.id,
     providerReference: payout.providerReference,
     amount: payout.amount,
     currency: payout.currency,
+    // Iyzico işçinin IBAN'ına kendisi yatar; Koala ekstresi yoktur. Kuyrukta
+    // kalan satırda sağlayıcı işlem kimliği ve onay anı tek eldeki kanıt.
+    settlementReference: firstNonBlank(payout.settlementReference, payout.providerReference),
+    settledAt: firstNonBlank(payout.processingAt, payout.completedAt, payout.createdAt),
   };
+}
+
+function firstNonBlank(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (value != null && value.trim().length > 0) return value;
+  }
+  return null;
 }
 
 export type PayoutReconciliationStatus = "IDLE" | "SUCCEEDED" | "REFUSED" | "BLOCKED";

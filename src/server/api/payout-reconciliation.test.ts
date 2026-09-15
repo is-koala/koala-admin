@@ -36,6 +36,7 @@ const PAYOUT = {
   currency: "TRY",
   status: "COMPLETED",
   failureReason: null,
+  processingAt: null,
   completedAt: "2026-09-09T09:30:00Z",
   createdAt: "2026-09-01T08:00:00Z",
 };
@@ -92,6 +93,7 @@ describe("the staff payout queue", () => {
       ...PAYOUT,
       maskedIban: "TR18***2315",
       providerReference: "iyz-transaction-000033",
+      processingAt: "2026-09-01T08:05:00Z",
       recipient: {
         id: "aaaaaaaa-0000-4000-8000-000000000001",
         firstName: "Ayşe",
@@ -128,6 +130,7 @@ describe("the staff payout queue", () => {
     expect(page.content[0]?.recipient?.firstName).toBe("Ayşe");
     expect(page.content[0]?.maskedIban).toBe("TR18***2315");
     expect(page.content[0]?.providerReference).toBe("iyz-transaction-000033");
+    expect(page.content[0]?.processingAt).toBe("2026-09-01T08:05:00Z");
     expect(page.content[1]?.recipient).toBeNull();
   });
 

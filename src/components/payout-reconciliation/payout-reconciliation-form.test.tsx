@@ -35,8 +35,14 @@ beforeEach(() => {
 });
 
 async function fillForm() {
-  await user.type(screen.getByLabelText(/^Ekstre satırı referansı/), VALUES.settlementReference);
-  await user.type(screen.getByLabelText(/^Gerçekleşme anı/), VALUES.settledAt);
+  const settlement = screen.getByLabelText(/^Ekstre satırı referansı/);
+  const settledAt = screen.getByLabelText(/^Gerçekleşme anı/);
+  await user.clear(settlement);
+  await user.type(settlement, VALUES.settlementReference);
+  if ((settledAt as HTMLInputElement).value !== VALUES.settledAt) {
+    await user.clear(settledAt);
+    await user.type(settledAt, VALUES.settledAt);
+  }
 }
 
 const idleAction: PayoutReconciliationAction = async () => INITIAL_PAYOUT_RECONCILIATION_STATE;
@@ -45,6 +51,8 @@ const RECORDED_PAYOUT = {
   providerReference: VALUES.providerReference,
   amount: VALUES.amount,
   currency: VALUES.currency,
+  settlementReference: VALUES.providerReference,
+  settledAt: VALUES.settledAt,
 };
 
 function renderForm(action: PayoutReconciliationAction = idleAction) {
@@ -111,9 +119,11 @@ describe("the two-step evidence confirmation", () => {
 
     expect(screen.getByLabelText(/^Ekstre satırı referansı/)).not.toHaveAttribute("readonly");
     expect(screen.getByLabelText(/^Gerçekleşme anı/)).not.toHaveAttribute("readonly");
+    expect(screen.getByLabelText(/^Ekstre satırı referansı/)).toHaveValue(VALUES.providerReference);
+    expect(screen.getByLabelText(/^Gerçekleşme anı/)).toHaveValue(VALUES.settledAt);
     expect(
       screen.getByText(
-        "Hakediş bilgileri kayıttan dolduruldu. Yalnız ekstre satırı referansını ve gerçekleşme anını yazın.",
+        "Sağlayıcı onayı kayıttan dolduruldu. Banka ekstresinde farklı bir satır varsa düzeltin; yoksa gözden geçirip onaylayın.",
       ),
     ).toBeInTheDocument();
     expect(
