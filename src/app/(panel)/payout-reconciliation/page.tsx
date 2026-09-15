@@ -20,7 +20,8 @@ import { EmptyState } from "@/components/ui";
 import { objectQueryFor } from "@/lib/breadcrumb";
 import { hasDateRange } from "@/lib/date-range";
 import { isUuid, payoutsHref } from "@/lib/panel-href";
-import { getPayouts } from "@/server/api/payout-reconciliation";
+import { toRecordedPayoutEvidence } from "@/lib/payout-reconciliation";
+import { getPayouts, type Payout } from "@/server/api/payout-reconciliation";
 import { pageWindow, readParam, type SearchParams } from "@/server/api/paging";
 import { SEARCH_QUERY_TOO_LONG_MESSAGE, isSearchQueryTooLong } from "@/server/api/search-query";
 import { getKoalaAccessToken } from "@/server/auth/session";
@@ -39,11 +40,13 @@ import { PayoutTable } from "./payout-table";
 export const metadata: Metadata = { title: "Hakediş banka mutabakatı" };
 
 /**
- * PROCESSING kuyruğu + UUID yedek. Liste `GET /admin/payouts` (`payout.reconcile`);
+ * PROCESSING kuyruğu. Liste `GET /admin/payouts` (`payout.reconcile`);
  * status gönderilmez ki backend AWAITING_SETTLEMENT (= PROCESSING) dönsün.
  * Onay mevcut reconcile formundan; satır `?hakedis=` ile formu doldurur.
- * Satırın tarihi hakediş nesne sayfasına gider (`/payout-reconciliation/{id}`,
- * koala-admin#95): #80'in kanıt alanları ve settlement geçmişi orada.
+ * Satırdaki kimlik ve tarih hakediş nesne sayfasına gider
+ * (`/payout-reconciliation/{id}`, koala-admin#95); settlement geçmişi orada.
+ * #80'de kayıtlı kanıtları elle yeniden yazmak uyuşmazlık üretebildiğinden
+ * "Onayla" seçimi kimlik/referans/tutar/para birimini forma kilitli taşır.
  * `?isci=` kuyruğu bir işçiye süzer — backend `workerId` (koala-backend#283);
  * kullanıcı sayfasındaki hakediş sayacı buraya gelir (koala-admin#100).
  * Sayaç her durumu saydığı için o bağlantı `?durum=hepsi` taşır: dört durum
@@ -66,10 +69,7 @@ export default async function PayoutReconciliationPage({
       <PageHeader
         title="Hakediş banka mutabakatı"
         description={
-          <>
-            Banka ekstresindeki gerçekleşmiş transferi bekleyen bir hakedişle eşleştirin. Kuyruk
-            boşsa kimliği forma yazın.
-          </>
+          <>Banka ekstresindeki gerçekleşmiş transferi bekleyen bir hakedişle eşleştirin.</>
         }
       />
 
@@ -142,7 +142,6 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
         <div className="flex flex-col gap-6">
           {searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}
           {dateFilter}
-          <ConfirmSection payoutId={selectedId} />
         </div>
       );
     }
@@ -155,12 +154,12 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
           permission="payout.reconcile"
           failure={classifyQueueFailure(error)}
         />
-        <ConfirmSection payoutId={selectedId} />
       </div>
     );
   }
 
   const rows = page.content;
+  const selectedPayout = rows.find((row) => row.id === selectedId) ?? null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -190,13 +189,19 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
                   ? "Bu tarih aralığında hakediş yok."
                   : "Bekleyen hakediş yok."
             }
-            description="Kuyruk boşsa aşağıdaki forma hakediş kimliğini yazabilirsiniz."
+            description="Mutabakat için bekleyen bir hakediş satırından Onayla'yı seçin."
           />
         ) : (
           <PayoutTable
             rows={rows}
             caption="Bekleyen hakedişler"
-            action={{ selectedId, page: paging.page, query }}
+            action={{
+              selectedId,
+              selectionState: {
+                ...listState,
+                ...(paging.page > 0 ? { sayfa: String(paging.page) } : {}),
+              },
+            }}
             objectQuery={objectQuery}
           />
         )}
@@ -206,21 +211,21 @@ async function PayoutQueue({ params }: { params: SearchParams }) {
         ) : null}
       </section>
 
-      <ConfirmSection payoutId={selectedId} />
+      {selectedPayout === null ? null : <ConfirmSection payout={selectedPayout} />}
     </div>
   );
 }
 
-function ConfirmSection({ payoutId }: { payoutId: string | null }) {
+function ConfirmSection({ payout }: { payout: Payout }) {
   return (
     <section className="flex flex-col gap-3" aria-labelledby="payout-confirm-heading">
       <h2 id="payout-confirm-heading" className="text-lg font-semibold">
         Ekstre onayı
       </h2>
       <PayoutReconciliationForm
-        key={payoutId ?? ""}
+        key={payout.id}
         action={submitPayoutReconciliation}
-        defaults={payoutId === null ? undefined : { payoutId }}
+        recordedPayout={toRecordedPayoutEvidence(payout)}
       />
 
       <AuditPointer permission="payout.reconcile" linkLabel="Hakediş mutabakat kayıtlarını aç">

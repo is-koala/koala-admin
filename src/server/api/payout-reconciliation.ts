@@ -17,15 +17,18 @@ export const PAYOUT_STATUSES = ["PENDING", "PROCESSING", "COMPLETED", "FAILED"] 
 export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
 
 /**
- * `core/dtos/payout/response/StaffPayoutDto.java` (koala-backend#211). Money
- * stays decimal text. `recipient` alıcı işçidir (`SafeUserDto`); kullanıcı
- * silinmişse ya da eski sunucu `PayoutDto` dönüyorsa `null` — liste sütunu
- * "—" yazar, satırı düşürmez (koala-admin#106).
+ * `core/dtos/payout/response/StaffPayoutDto.java` (koala-backend#231). Para
+ * ondalık metin kalır. Ekstre eşleştirme alanları koala-admin#80'i besler;
+ * `maskedIban` yanlışlıkla açılan tam IBAN'ı da reddeder. `recipient` alıcı
+ * işçidir (`SafeUserDto`); kullanıcı silinmişse ya da eski sunucu `PayoutDto`
+ * dönüyorsa `null` — liste sütunu "—" yazar, satırı düşürmez.
  */
 export interface Payout {
   readonly id: string;
   readonly jobAssignmentId: string;
   readonly recipient: SafeUser | null;
+  readonly maskedIban: string | null;
+  readonly providerReference: string | null;
   readonly amount: string;
   readonly currency: string;
   readonly status: PayoutStatus;
@@ -49,6 +52,15 @@ const payoutSchema = z.object({
   id: z.uuid(),
   jobAssignmentId: z.uuid(),
   recipient: safeUserSchema.nullish().transform((value) => value ?? null),
+  maskedIban: z
+    .string()
+    .regex(/^[A-Z]{2}\d{2}\*{3}\d{4}$/)
+    .nullish()
+    .transform((value) => value ?? null),
+  providerReference: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? null),
   amount: z.string().regex(/^\d+(?:\.\d+)?$/),
   currency: z.string().length(3),
   status: z.enum(PAYOUT_STATUSES),

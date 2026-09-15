@@ -127,6 +127,7 @@ describe("who can open a payout", () => {
     expect(html).toContain('value="iyz-transaction-000033"');
     expect(html).toContain('value="1240.50"');
     expect(html).toContain('value="TRY"');
+    expect(html.match(/readOnly=""/g)).toHaveLength(4);
   });
 
   it("does not draw the form for a payout that is not PROCESSING", async () => {

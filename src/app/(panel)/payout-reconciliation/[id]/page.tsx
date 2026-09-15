@@ -23,6 +23,7 @@ import {
 import { EMPTY_VALUE, formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
 import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
 import { assignmentHref, isUuid, jobHref, paymentHref, userHrefOrNull } from "@/lib/panel-href";
+import { toRecordedPayoutEvidence } from "@/lib/payout-reconciliation";
 import {
   PAYOUT_STATUS_LABELS,
   SETTLEMENT_OPERATION_LABELS,
@@ -278,24 +279,11 @@ async function PayoutObject({ id }: { id: string }) {
           Ekstre onayı
         </h2>
         {payout.status === "PROCESSING" ? (
-          <>
-            <p className="max-w-prose text-xs text-ink-muted">
-              Hakediş kimliği, sağlayıcı referansı, tutar ve para birimi bu kayıttan dolduruldu.
-              Yalnız ekstredeki satır referansını ve gerçekleşme anını yazın.
-            </p>
-            <PayoutReconciliationForm
-              key={payout.id}
-              action={submitPayoutReconciliation}
-              defaults={{
-                payoutId: payout.id,
-                ...(payout.providerReference === null
-                  ? {}
-                  : { providerReference: payout.providerReference }),
-                ...(payout.amount === null ? {} : { amount: payout.amount }),
-                currency,
-              }}
-            />
-          </>
+          <PayoutReconciliationForm
+            key={payout.id}
+            action={submitPayoutReconciliation}
+            recordedPayout={toRecordedPayoutEvidence({ ...payout, currency })}
+          />
         ) : (
           <p className="max-w-prose text-sm text-ink-muted" data-testid="payout-not-reconcilable">
             Bu hakediş banka mutabakatı beklemiyor (durum: {PAYOUT_STATUS_LABELS[payout.status]}).

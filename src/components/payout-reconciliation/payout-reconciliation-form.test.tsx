@@ -35,19 +35,25 @@ beforeEach(() => {
 });
 
 async function fillForm() {
-  await user.type(screen.getByLabelText(/^Hakediş kimliği/), VALUES.payoutId);
   await user.type(screen.getByLabelText(/^Ekstre satırı referansı/), VALUES.settlementReference);
-  await user.type(screen.getByLabelText(/^Sağlayıcı referansı/), VALUES.providerReference);
-  await user.type(screen.getByLabelText(/^Tutar/), VALUES.amount);
-  await user.type(screen.getByLabelText(/^Para birimi/), VALUES.currency);
   await user.type(screen.getByLabelText(/^Gerçekleşme anı/), VALUES.settledAt);
 }
 
 const idleAction: PayoutReconciliationAction = async () => INITIAL_PAYOUT_RECONCILIATION_STATE;
+const RECORDED_PAYOUT = {
+  payoutId: VALUES.payoutId,
+  providerReference: VALUES.providerReference,
+  amount: VALUES.amount,
+  currency: VALUES.currency,
+};
+
+function renderForm(action: PayoutReconciliationAction = idleAction) {
+  return render(<PayoutReconciliationForm action={action} recordedPayout={RECORDED_PAYOUT} />);
+}
 
 describe("the two-step evidence confirmation", () => {
   it("marks all six inputs as required for forms and assistive technology", () => {
-    render(<PayoutReconciliationForm action={idleAction} />);
+    renderForm();
 
     for (const label of [
       /^Hakediş kimliği/,
@@ -65,7 +71,7 @@ describe("the two-step evidence confirmation", () => {
 
   it("does not submit on review and restates every bank fact before commit", async () => {
     const action = vi.fn(idleAction);
-    render(<PayoutReconciliationForm action={action} />);
+    renderForm(action);
     await fillForm();
 
     await user.click(screen.getByRole("button", { name: "Kanıtı gözden geçir" }));
@@ -82,11 +88,40 @@ describe("the two-step evidence confirmation", () => {
   });
 
   it("uses an ISO instant text field instead of a timezone-losing datetime-local control", () => {
-    render(<PayoutReconciliationForm action={idleAction} />);
+    renderForm();
 
     const settledAt = screen.getByLabelText(/^Gerçekleşme anı/);
     expect(settledAt).toHaveAttribute("type", "text");
     expect(settledAt).toHaveAttribute("placeholder", "2026-09-09T09:30:00Z");
+  });
+
+  it("locks system evidence while leaving the two statement facts editable", () => {
+    renderForm();
+
+    for (const [label, value] of [
+      [/^Hakediş kimliği/, VALUES.payoutId],
+      [/^Sağlayıcı referansı/, VALUES.providerReference],
+      [/^Tutar/, VALUES.amount],
+      [/^Para birimi/, VALUES.currency],
+    ] as const) {
+      const input = screen.getByLabelText(label);
+      expect(input).toHaveValue(value);
+      expect(input).toHaveAttribute("readonly");
+    }
+
+    expect(screen.getByLabelText(/^Ekstre satırı referansı/)).not.toHaveAttribute("readonly");
+    expect(screen.getByLabelText(/^Gerçekleşme anı/)).not.toHaveAttribute("readonly");
+    expect(
+      screen.getByText(
+        "Hakediş bilgileri kayıttan dolduruldu. Yalnız ekstre satırı referansını ve gerçekleşme anını yazın.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Hakedişte kayıtlı tutar; ekstredeki tutarla karşılaştırın."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Hakedişte kayıtlı para birimi; ekstreyle aynı olmalı."),
+    ).toBeInTheDocument();
   });
 });
 
@@ -99,7 +134,7 @@ describe("submitting evidence", () => {
       });
       return INITIAL_PAYOUT_RECONCILIATION_STATE;
     });
-    render(<PayoutReconciliationForm action={action} />);
+    renderForm(action);
     await fillForm();
     await user.click(screen.getByRole("button", { name: "Kanıtı gözden geçir" }));
     await user.click(screen.getByRole("checkbox", { name: /kanıtları doğruladım/ }));
@@ -133,7 +168,7 @@ describe("submitting evidence", () => {
         },
       };
     });
-    render(<PayoutReconciliationForm action={action} />);
+    renderForm(action);
     await fillForm();
     await user.click(screen.getByRole("button", { name: "Kanıtı gözden geçir" }));
     await user.click(screen.getByRole("checkbox", { name: /kanıtları doğruladım/ }));
@@ -163,7 +198,7 @@ describe("submitting evidence", () => {
         completedAt: "2026-09-09T09:30:00Z",
       },
     }));
-    render(<PayoutReconciliationForm action={action} />);
+    renderForm(action);
     await fillForm();
     await user.click(screen.getByRole("button", { name: "Kanıtı gözden geçir" }));
     await user.click(screen.getByRole("checkbox", { name: /kanıtları doğruladım/ }));
@@ -183,7 +218,7 @@ describe("submitting evidence", () => {
       errorCode: "PAYOUT_SETTLEMENT_EVIDENCE_MISMATCH",
       requestId: "rid-mismatch",
     }));
-    render(<PayoutReconciliationForm action={action} />);
+    renderForm(action);
     await fillForm();
     await user.click(screen.getByRole("button", { name: "Kanıtı gözden geçir" }));
     await user.click(screen.getByRole("checkbox", { name: /kanıtları doğruladım/ }));
