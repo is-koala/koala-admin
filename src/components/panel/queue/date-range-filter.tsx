@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { FormField, TextInput } from "@/components/ui";
+import { FormField, TextInput, Button } from "@/components/ui";
 import {
   DATE_FROM_PARAM,
   DATE_TO_PARAM,
@@ -78,9 +78,9 @@ export function DateRangeFilter({ id, pathname, range, state = {} }: DateRangeFi
             />
           )}
         </FormField>
-        <button type="submit" className="button button--primary button--sm">
+        <Button size="sm" type="submit">
           Tarihe göre süz
-        </button>
+        </Button>
         {active ? (
           <Link
             href={listHref(pathname, Object.fromEntries(carried))}

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 
-import { Dialog, FormField, TextInput } from "@/components/ui";
+import { Dialog, FormField, TextInput, Button } from "@/components/ui";
 import {
   INITIAL_PAYOUT_RECONCILIATION_STATE,
   PAYOUT_RECONCILIATION_FIELDS as FIELD,
@@ -225,17 +225,16 @@ export function PayoutReconciliationForm({
       </div>
 
       <div>
-        <button
-          type="button"
+        <Button
+          size="sm"
           disabled={!complete || succeeded}
           onClick={() => {
             setAcknowledged(false);
             setOpen(true);
           }}
-          className="button button--primary button--sm"
         >
           Kanıtı gözden geçir
-        </button>
+        </Button>
       </div>
 
       <Dialog
@@ -285,17 +284,18 @@ export function PayoutReconciliationForm({
         ) : null}
 
         <div className="mt-5 flex justify-end gap-2">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             type="button"
             onClick={closeDialog}
             disabled={pending}
-            className="button button--secondary button--sm"
           >
             {succeeded ? "Kapat" : "Vazgeç"}
-          </button>
-          <button type="submit" disabled={!canSubmit} className="button button--primary button--sm">
+          </Button>
+          <Button size="sm" type="submit" disabled={!canSubmit}>
             {pending ? "Gönderiliyor…" : "Mutabakatı gönder"}
-          </button>
+          </Button>
         </div>
       </Dialog>
     </form>

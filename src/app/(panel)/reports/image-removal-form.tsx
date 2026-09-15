@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { initialDecisionState } from "@/components/panel/queue/decision-state";
 
 import { submitImageRemoval } from "./actions";
+import { Button } from "@/components/ui";
 
 export function ImageRemovalForm({ imageId, reportId }: { imageId: string; reportId: string }) {
   const [state, action, pending] = useActionState(submitImageRemoval, initialDecisionState);
@@ -29,13 +30,14 @@ export function ImageRemovalForm({ imageId, reportId }: { imageId: string; repor
           {state.message}
         </p>
       ) : null}
-      <button
+      <Button
+        variant="danger"
+        size="sm"
         type="submit"
         disabled={pending || state.outcome === "success"}
-        className="button button--danger button--sm"
       >
         Görseli kaldır
-      </button>
+      </Button>
     </form>
   );
 }

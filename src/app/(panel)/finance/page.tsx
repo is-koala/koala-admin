@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
-import { EmptyState, FormField, TextInput } from "@/components/ui";
+import { EmptyState, FormField, TextInput, Button } from "@/components/ui";
 import { financeSummaryQuery, parseFinanceRequest } from "@/lib/finance-summary";
 import { formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
 import { getFinanceSummary, type FinanceSummary } from "@/server/api/finance";
@@ -155,9 +155,9 @@ function PeriodForm({
           />
         )}
       </FormField>
-      <button type="submit" className="button button--primary button--sm">
+      <Button size="sm" type="submit">
         Göster
-      </button>
+      </Button>
     </form>
   );
 }

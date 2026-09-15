@@ -14,6 +14,7 @@ import {
   TableHeaderCell,
   TableRow,
   TextInput,
+  Button,
 } from "@/components/ui";
 import {
   IDLE_AUTHORIZATION_OUTCOME,
@@ -41,10 +42,6 @@ type ActiveDialog =
   | { readonly kind: "edit"; readonly category: CategoryRecord }
   | { readonly kind: "delete"; readonly category: CategoryRecord };
 
-const PRIMARY = "button button--primary button--sm";
-const SECONDARY = "button button--secondary button--sm";
-const DANGER = "button button--danger-soft button--sm";
-
 export function CategoryManager({
   categories,
   createAction,
@@ -60,18 +57,18 @@ export function CategoryManager({
           title="Hiç iş kategorisi yok."
           description="Katalog boşken ilk kategoriyi buradan oluşturabilirsiniz."
           action={
-            <button type="button" className={PRIMARY} onClick={() => setActive({ kind: "create" })}>
+            <Button size="sm" type="button" onClick={() => setActive({ kind: "create" })}>
               İlk kategoriyi ekle
-            </button>
+            </Button>
           }
         />
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-ink-muted">{formatInteger(categories.length)} kategori.</p>
-            <button type="button" className={PRIMARY} onClick={() => setActive({ kind: "create" })}>
+            <Button size="sm" type="button" onClick={() => setActive({ kind: "create" })}>
               Kategori ekle
-            </button>
+            </Button>
           </div>
 
           <Table caption="İş kategorileri">
@@ -99,22 +96,26 @@ export function CategoryManager({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-2">
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         type="button"
-                        className={SECONDARY}
+
                         aria-label={`${category.name} kategorisini düzenle`}
                         onClick={() => setActive({ kind: "edit", category })}
                       >
                         Düzenle
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="danger-soft"
+                        size="sm"
                         type="button"
-                        className={DANGER}
+
                         aria-label={`${category.name} kategorisini sil`}
                         onClick={() => setActive({ kind: "delete", category })}
                       >
                         Sil
-                      </button>
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -272,12 +273,13 @@ function CategoryEditor({
         <Outcome state={state} />
 
         <div className="flex justify-end gap-2">
-          <button type="button" className={SECONDARY} onClick={close} disabled={pending}>
+          <Button variant="secondary" size="sm" type="button" onClick={close} disabled={pending}>
             Vazgeç
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
             type="submit"
-            className={PRIMARY}
+
             disabled={pending || state.status === "SUCCEEDED"}
           >
             {pending
@@ -285,7 +287,7 @@ function CategoryEditor({
               : category === null
                 ? "Kategori oluştur"
                 : "Değişiklikleri kaydet"}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -366,16 +368,25 @@ function CategoryDeleteDialog({
         <Outcome state={state} />
 
         <div className="flex justify-end gap-2">
-          <button type="button" className={SECONDARY} onClick={close} disabled={pending} autoFocus>
+          <Button
+            variant="secondary"
+            size="sm"
+            type="button"
+            onClick={close}
+            disabled={pending}
+            autoFocus
+          >
             Vazgeç
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="danger-soft"
+            size="sm"
             type="submit"
-            className={DANGER}
+
             disabled={!confirmed || pending || state.status === "SUCCEEDED"}
           >
             {pending ? "Siliniyor…" : "Kategoriyi kalıcı olarak sil"}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>

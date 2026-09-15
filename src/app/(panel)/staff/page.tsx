@@ -15,6 +15,8 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
+  Button,
+  TextInput,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
 import { staffMemberAnchor } from "@/lib/panel-href";
@@ -376,18 +378,17 @@ function SearchForm({
         <label htmlFor="personel-ara" className="text-sm font-medium text-ink">
           Ad ya da e-posta ara
         </label>
-        <input
+        <TextInput
           id="personel-ara"
           name="ara"
           type="search"
           defaultValue={query ?? ""}
           placeholder="ör. trust-lead@koala.local"
-          className="w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-subtle"
         />
       </div>
-      <button type="submit" className="button button--primary button--sm">
+      <Button size="sm" type="submit">
         Ara
-      </button>
+      </Button>
     </form>
   );
 }

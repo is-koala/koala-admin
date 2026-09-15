@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { ErrorState } from "@/components/ui";
+import { Button, ErrorState } from "@/components/ui";
 import {
   diagnoseDownload,
   PHOTO_LOAD_FAILURE_TEXT,
@@ -66,13 +66,13 @@ export function DocumentPhoto({
           title="Fotoğraf yüklenemedi."
           description={`${PHOTO_LOAD_FAILURE_TEXT[state.failure ?? "unknown"]} Bu kutu onaylanmış bir fotoğraf değildir.`}
           action={
-            <button
-              type="button"
+            <Button
+              size="sm"
+              className="w-fit"
               onClick={() => setState({ attempt: state.attempt + 1, status: "loading" })}
-              className="button button--primary button--sm w-fit"
             >
               Tekrar dene
-            </button>
+            </Button>
           }
         />
       ) : (

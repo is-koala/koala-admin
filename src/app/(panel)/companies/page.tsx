@@ -12,6 +12,8 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
+  Button,
+  TextInput,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTime } from "@/lib/format";
 import { companyHref, userHrefOrNull } from "@/lib/panel-href";
@@ -270,18 +272,17 @@ function CompanySearch({
         <label htmlFor="sirket-ara" className="text-sm font-medium text-ink">
           Şirket adı ya da vergi numarası ara
         </label>
-        <input
+        <TextInput
           id="sirket-ara"
           name="ara"
           type="search"
           defaultValue={query ?? ""}
           placeholder="ör. Koala Kahve veya 1234567890"
-          className="w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-subtle"
         />
       </div>
-      <button type="submit" className="button button--primary button--sm">
+      <Button size="sm" type="submit">
         Ara
-      </button>
+      </Button>
     </form>
   );
 }

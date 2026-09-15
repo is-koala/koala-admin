@@ -16,7 +16,7 @@ import {
   activeSearch,
   searchEmptyTitle,
 } from "@/components/panel/queue";
-import { EmptyState, ErrorState } from "@/components/ui";
+import { EmptyState, ErrorState, buttonClass } from "@/components/ui";
 import { objectQueryFor } from "@/lib/breadcrumb";
 import { dateRangeState, hasDateRange, type DateRange } from "@/lib/date-range";
 import { formatInteger } from "@/lib/format";
@@ -276,11 +276,10 @@ async function DisputeWorkspace({ view }: { view: DisputeView }) {
                 },
               }}
               aria-current={candidate === filter ? "page" : undefined}
-              className={
-                candidate === filter
-                  ? "button button--primary button--sm"
-                  : "button button--secondary button--sm"
-              }
+              className={buttonClass({
+                variant: candidate === filter ? "primary" : "secondary",
+                size: "sm",
+              })}
             >
               {FILTER_LABELS[candidate]}
             </Link>

@@ -1,5 +1,6 @@
 import { formatInteger } from "@/lib/format";
 import type { PageWindow } from "@/server/api/paging";
+import { Button } from "@/components/ui";
 
 /**
  * Server-side paging, drawn.
@@ -46,24 +47,18 @@ export function QueuePager({ window, state, unit }: QueuePagerProps) {
       </p>
 
       <div className="flex gap-2">
-        <button
+        <Button
+          variant="secondary"
           type="submit"
           name="sayfa"
           value={Math.max(0, page - 1)}
           disabled={first}
-          className="button button--secondary"
         >
           Önceki
-        </button>
-        <button
-          type="submit"
-          name="sayfa"
-          value={page + 1}
-          disabled={last}
-          className="button button--secondary"
-        >
+        </Button>
+        <Button variant="secondary" type="submit" name="sayfa" value={page + 1} disabled={last}>
           Sonraki
-        </button>
+        </Button>
       </div>
     </form>
   );

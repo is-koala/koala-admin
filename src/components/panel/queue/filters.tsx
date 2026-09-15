@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { Button, SelectInput } from "@/components/ui";
+
 /**
  * The filter bar both queues share — and the reason it is a plain
  * `<form method="get">` rather than anything cleverer.
@@ -70,24 +72,23 @@ export function QueueFilters({
             <label htmlFor={`filter-${filter.name}`} className="text-xs font-medium text-ink-muted">
               {filter.label}
             </label>
-            <select
+            <SelectInput
               id={`filter-${filter.name}`}
               name={filter.name}
               defaultValue={filter.value}
-              className="w-full rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 text-sm text-ink"
             >
               {filter.options.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
-            </select>
+            </SelectInput>
           </div>
         ))}
 
-        <button type="submit" className="button button--primary button--sm">
+        <Button size="sm" type="submit">
           {submitLabel}
-        </button>
+        </Button>
       </div>
 
       {notice ? <p className="max-w-prose text-xs text-ink-muted">{notice}</p> : null}

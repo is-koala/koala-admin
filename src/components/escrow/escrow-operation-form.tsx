@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 
-import { Badge, Dialog, FormField, SelectInput } from "@/components/ui";
+import { Badge, Dialog, FormField, SelectInput, TextArea, Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
   ESCROW_FIELD,
@@ -204,28 +204,27 @@ export function EscrowOperationForm({
         }
       >
         {({ id, describedBy }) => (
-          <textarea
+          <TextArea
             id={id}
             aria-describedby={describedBy}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={3}
             maxLength={escrowReasonMaxLength(kind)}
-            className="w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-subtle"
             placeholder="Ne oldu ve neden bu karar verildi?"
           />
         )}
       </FormField>
 
       <div>
-        <button
+        <Button
+          variant={tone === "danger" ? "danger" : "primary"}
           type="button"
           onClick={openDialog}
           disabled={disabledReason !== null || reasonTooShort}
-          className={tone === "danger" ? "button button--danger" : "button button--primary"}
         >
           {triggerLabel}
-        </button>
+        </Button>
       </div>
 
       {disabledReason !== null ? (
@@ -338,25 +337,18 @@ export function EscrowOperationForm({
             ) : null}
 
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeDialog}
-                className="button button--secondary button--sm"
-              >
+              <Button variant="secondary" size="sm" type="button" onClick={closeDialog}>
                 {succeeded ? "Kapat" : "Vazgeç"}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant={tone === "danger" ? "danger" : "primary"}
+                size="sm"
                 type="submit"
                 disabled={!canSubmit}
                 data-testid="escrow-confirm"
-                className={
-                  tone === "danger"
-                    ? "button button--danger button--sm"
-                    : "button button--primary button--sm"
-                }
               >
                 {pending ? "Gönderiliyor…" : "Onayla ve gönder"}
-              </button>
+              </Button>
             </div>
           </form>
         </Dialog>

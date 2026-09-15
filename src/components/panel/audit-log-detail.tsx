@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { Badge } from "@/components/ui";
+import { Badge, Button } from "@/components/ui";
 import { hasDetailRecord, type AuditEntry } from "@/lib/audit-log";
 import { EMPTY_VALUE, formatDateTimeSeconds } from "@/lib/format";
 
@@ -61,9 +61,9 @@ export function AuditEntryDetail({ entry, permissionLabels, onClose }: AuditEntr
           <h2 className="text-sm font-semibold text-ink">Denetim kaydı ayrıntısı</h2>
           <p className="font-mono text-xs break-all text-ink-subtle">{entry.id}</p>
         </div>
-        <button type="button" onClick={onClose} className="button button--secondary button--sm">
+        <Button variant="secondary" size="sm" type="button" onClick={onClose}>
           Kapat
-        </button>
+        </Button>
       </div>
 
       <section className="flex flex-col gap-2">
