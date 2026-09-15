@@ -378,7 +378,8 @@ describe("görev ayrılığı üyelik tarafında: backend kuralının arayüzdek
 
     expect(option).toContain("disabled");
     expect(option).toContain("görev ayrılığını bozar; backend 409 döner");
-    expect(formTail).toMatch(/<button type="submit" disabled/);
+    expect(formTail).toMatch(/<button[^>]*\bdisabled\b[^>]*>/);
+    expect(formTail).toContain('type="submit"');
   });
 
   it("OWNER taşıyan personelde iki dal istisnasını seçilebilir bırakıyor", async () => {

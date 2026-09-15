@@ -2,7 +2,7 @@
 
 import { useActionState, useState, type ReactNode } from "react";
 
-import { Badge, type BadgeTone } from "@/components/ui";
+import { Badge, Button, TextArea, type BadgeTone } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 import { initialDecisionState, type DecisionAction, type DecisionState } from "./decision-state";
@@ -165,7 +165,7 @@ export function DecisionForm({
             {" *"}
           </span>
         </label>
-        <textarea
+        <TextArea
           id={noteId}
           name="note"
           rows={3}
@@ -174,10 +174,6 @@ export function DecisionForm({
           onChange={(event) => setNote(event.target.value)}
           aria-invalid={showNoteError}
           aria-describedby={showNoteError ? noteErrorId : undefined}
-          className={cn(
-            "w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink",
-            "placeholder:text-ink-subtle aria-[invalid=true]:border-danger",
-          )}
         />
         {noteHint ? <p className="text-xs text-ink-subtle">{noteHint}</p> : null}
         {showNoteError ? (
@@ -220,14 +216,14 @@ export function DecisionForm({
       ) : null}
 
       <div className="flex items-center gap-3">
-        <button
+        <Button
+          size="sm"
           type="submit"
           disabled={pending || noteTooShort || decision === ""}
           aria-describedby={summaryId}
-          className="button button--primary button--sm"
         >
           {pending ? "Gönderiliyor…" : submitLabel}
-        </button>
+        </Button>
         {noteTooShort ? (
           <span className="text-xs text-ink-subtle">Gerekçe yazılmadan karar gönderilemez.</span>
         ) : null}

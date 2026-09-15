@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { FormField, SelectInput, TextInput } from "@/components/ui";
+import { FormField, SelectInput, TextInput, Button } from "@/components/ui";
 import {
   AUDIT_FILTER_NAMES,
   AUDIT_PAGE_PARAM,
@@ -141,9 +141,9 @@ export function AuditLogFilterForm({ filters, page }: AuditLogFilterFormProps) {
       <div className="flex flex-wrap items-center gap-2">
         {/* No `name`, so submitting drops `page` and a new filter starts at the
             first page rather than at whatever page the previous filter was on. */}
-        <button type="submit" className="button button--primary button--sm">
+        <Button size="sm" type="submit">
           Filtrele
-        </button>
+        </Button>
 
         {/*
          * The only refresh there is.
@@ -154,15 +154,16 @@ export function AuditLogFilterForm({ filters, page }: AuditLogFilterFormProps) {
          * itself. Carrying the current page means a refresh shows what changed
          * where the operator is looking, not what changed on page one.
          */}
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           type="submit"
           name={AUDIT_PAGE_PARAM}
           value={String(page)}
           data-testid="audit-refresh"
-          className="button button--secondary button--sm"
         >
           Yenile
-        </button>
+        </Button>
 
         {active ? (
           <Link
@@ -219,30 +220,32 @@ export function AuditLogPager({
         ),
       )}
 
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
         type="submit"
         name={AUDIT_PAGE_PARAM}
         value={String(Math.max(0, page - 1))}
         disabled={first}
-        className="button button--secondary button--sm"
       >
         Önceki
-      </button>
+      </Button>
 
       <span className="text-sm text-ink-muted" data-testid="audit-page-position">
         Sayfa {formatInteger(page + 1)} / {formatInteger(Math.max(1, totalPages))} ·{" "}
         {formatInteger(totalElements)} kayıt
       </span>
 
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
         type="submit"
         name={AUDIT_PAGE_PARAM}
         value={String(page + 1)}
         disabled={last}
-        className="button button--secondary button--sm"
       >
         Sonraki
-      </button>
+      </Button>
     </form>
   );
 }

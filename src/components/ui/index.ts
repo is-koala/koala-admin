@@ -12,9 +12,11 @@ export { ErrorState, type ErrorStateDetail, type ErrorStateProps } from "./error
 export {
   FormField,
   SelectInput,
+  TextArea,
   TextInput,
   type FormFieldProps,
   type SelectInputProps,
+  type TextAreaProps,
   type TextInputProps,
 } from "./form-field";
 export {

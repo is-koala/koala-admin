@@ -2,7 +2,7 @@
 
 import { useActionState, useState, type ReactNode } from "react";
 
-import { Badge } from "@/components/ui";
+import { Badge, Button, SelectInput, TextInput } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
   IDLE_AUTHORIZATION_OUTCOME,
@@ -103,8 +103,6 @@ export interface AuthorizationFormProps {
   disabledReason?: string;
 }
 
-const CONTROL = "input input--primary input--full-width";
-
 export function AuthorizationForm({
   action,
   hiddenFields,
@@ -186,10 +184,9 @@ export function AuthorizationForm({
             </label>
 
             {field.type === "select" ? (
-              <select
+              <SelectInput
                 id={id}
                 name={field.name}
-                className={CONTROL}
                 required={field.required}
                 aria-describedby={describedBy}
                 aria-invalid={invalid}
@@ -209,13 +206,12 @@ export function AuthorizationForm({
                       : `${option.label} — ${option.disabledReason}`}
                   </option>
                 ))}
-              </select>
+              </SelectInput>
             ) : (
-              <input
+              <TextInput
                 id={id}
                 name={field.name}
                 type={field.type}
-                className={CONTROL}
                 required={field.required}
                 minLength={field.minLength}
                 autoComplete={field.autoComplete}
@@ -251,18 +247,15 @@ export function AuthorizationForm({
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
+          variant={tone === "danger" ? "danger-soft" : "primary"}
+          size="sm"
           type="submit"
           disabled={pending || requiredSelectionMissing}
           aria-describedby={`${idPrefix}-consequence`}
-          className={
-            tone === "danger"
-              ? "button button--danger-soft button--sm"
-              : "button button--primary button--sm"
-          }
         >
           {pending ? "Gönderiliyor…" : submitLabel}
-        </button>
+        </Button>
 
         {state.status === "SUCCEEDED" ? <Badge tone="success">Yapıldı</Badge> : null}
         {state.status === "REFUSED" ? <Badge tone="danger">Backend reddetti</Badge> : null}

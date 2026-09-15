@@ -1,4 +1,9 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import type {
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -89,5 +94,17 @@ export function SelectInput({ className, children, ...rest }: SelectInputProps) 
     >
       {children}
     </select>
+  );
+}
+
+export type TextAreaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
+
+export function TextArea({ className, ...rest }: TextAreaProps) {
+  return (
+    <textarea
+      {...rest}
+      className={cn(CONTROL_CLASSES, "min-h-24", className)}
+      data-invalid={isInvalid(rest["aria-invalid"]) || undefined}
+    />
   );
 }

@@ -16,7 +16,7 @@ import {
   activeSearch,
   searchEmptyTitle,
 } from "@/components/panel/queue";
-import { Badge, EmptyState, FormField, TextInput } from "@/components/ui";
+import { Badge, EmptyState, FormField, TextInput, Button } from "@/components/ui";
 import { objectQueryFor } from "@/lib/breadcrumb";
 import { dateRangeState, hasDateRange } from "@/lib/date-range";
 import {
@@ -350,9 +350,9 @@ function StatusFilter({
             {ASSIGNMENT_STATUS_LABELS[status]}
           </label>
         ))}
-        <button type="submit" className="button button--primary button--sm">
+        <Button size="sm" type="submit">
           Duruma göre süz
-        </button>
+        </Button>
         {selected.length > 0 ? (
           <Link
             href={assignmentsHref(carry)}
@@ -405,9 +405,9 @@ function LookupForm({
           />
         )}
       </FormField>
-      <button type="submit" className="button button--primary button--sm">
+      <Button size="sm" type="submit">
         Bak
-      </button>
+      </Button>
     </form>
   );
 }

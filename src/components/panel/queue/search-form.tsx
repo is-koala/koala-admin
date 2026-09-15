@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Button, TextInput } from "@/components/ui";
 import { formatInteger } from "@/lib/format";
 import { listHref } from "@/lib/panel-href";
 import {
@@ -90,7 +91,7 @@ export function ListSearchForm({
       <input type="hidden" name="sayfa" value="0" />
 
       <div className="flex flex-wrap items-center gap-3">
-        <input
+        <TextInput
           id={id}
           name={SEARCH_PARAM}
           type="search"
@@ -101,11 +102,9 @@ export function ListSearchForm({
           placeholder={placeholder}
           autoComplete="off"
           maxLength={SEARCH_QUERY_MAX_LENGTH}
-          className="min-w-0 flex-1 rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-subtle aria-[invalid=true]:border-danger"
+          className="min-w-0 flex-1"
         />
-        <button type="submit" className="button button--primary">
-          Ara
-        </button>
+        <Button type="submit">Ara</Button>
         {query === null ? null : (
           <Link
             href={listHref(pathname, Object.fromEntries(carried))}

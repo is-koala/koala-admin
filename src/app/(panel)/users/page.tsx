@@ -12,6 +12,8 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
+  Button,
+  TextInput,
 } from "@/components/ui";
 import { objectQueryFor } from "@/lib/breadcrumb";
 import { EMPTY_VALUE } from "@/lib/format";
@@ -260,18 +262,17 @@ function UserSearch({
         <label htmlFor="kullanici-ara" className="text-sm font-medium text-ink">
           Ad ya da e-posta ara
         </label>
-        <input
+        <TextInput
           id="kullanici-ara"
           name="ara"
           type="search"
           defaultValue={query ?? ""}
           placeholder="ör. ada yılmaz veya ada@example.com"
-          className="w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-subtle"
         />
       </div>
-      <button type="submit" className="button button--primary button--sm">
+      <Button size="sm" type="submit">
         Ara
-      </button>
+      </Button>
     </form>
   );
 }

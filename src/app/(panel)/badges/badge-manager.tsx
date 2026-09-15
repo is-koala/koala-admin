@@ -15,6 +15,7 @@ import {
   TableHeaderCell,
   TableRow,
   TextInput,
+  Button,
 } from "@/components/ui";
 import {
   IDLE_AUTHORIZATION_OUTCOME,
@@ -64,9 +65,6 @@ type ActiveDialog =
   | { readonly kind: "icon"; readonly badge: BadgeRecord }
   | { readonly kind: "activation"; readonly badge: BadgeRecord };
 
-const PRIMARY = "button button--primary button--sm";
-const SECONDARY = "button button--secondary button--sm";
-
 export function BadgeManager({
   badges,
   createAction,
@@ -83,18 +81,18 @@ export function BadgeManager({
           title="Hiç rozet yok."
           description="Katalog boşken ilk rozeti buradan oluşturabilirsiniz."
           action={
-            <button type="button" className={PRIMARY} onClick={() => setActive({ kind: "create" })}>
+            <Button size="sm" type="button" onClick={() => setActive({ kind: "create" })}>
               İlk rozeti ekle
-            </button>
+            </Button>
           }
         />
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-ink-muted">{formatInteger(badges.length)} rozet.</p>
-            <button type="button" className={PRIMARY} onClick={() => setActive({ kind: "create" })}>
+            <Button size="sm" type="button" onClick={() => setActive({ kind: "create" })}>
               Rozet ekle
-            </button>
+            </Button>
           </div>
 
           <Table caption="Rozet kataloğu">
@@ -136,25 +134,31 @@ export function BadgeManager({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-2">
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         type="button"
-                        className={SECONDARY}
+
                         aria-label={`${badge.name} rozetini düzenle`}
                         onClick={() => setActive({ kind: "edit", badge })}
                       >
                         Düzenle
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         type="button"
-                        className={SECONDARY}
+
                         aria-label={`${badge.name} ikonunu değiştir`}
                         onClick={() => setActive({ kind: "icon", badge })}
                       >
                         İkon
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         type="button"
-                        className={SECONDARY}
+
                         aria-label={
                           badge.active
                             ? `${badge.name} rozetini pasifleştir`
@@ -163,7 +167,7 @@ export function BadgeManager({
                         onClick={() => setActive({ kind: "activation", badge })}
                       >
                         {badge.active ? "Pasifleştir" : "Etkinleştir"}
-                      </button>
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -547,16 +551,17 @@ function BadgeEditor({
         <Outcome state={state} />
 
         <div className="flex justify-end gap-2">
-          <button type="button" className={SECONDARY} onClick={close} disabled={pending}>
+          <Button variant="secondary" size="sm" type="button" onClick={close} disabled={pending}>
             Vazgeç
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
             type="submit"
-            className={PRIMARY}
+
             disabled={pending || state.status === "SUCCEEDED"}
           >
             {pending ? "Kaydediliyor…" : badge === null ? "Rozet oluştur" : "Değişiklikleri kaydet"}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -629,16 +634,17 @@ function BadgeIconDialog({
         <Outcome state={state} />
 
         <div className="flex justify-end gap-2">
-          <button type="button" className={SECONDARY} onClick={close} disabled={pending}>
+          <Button variant="secondary" size="sm" type="button" onClick={close} disabled={pending}>
             Vazgeç
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
             type="submit"
-            className={PRIMARY}
+
             disabled={pending || state.status === "SUCCEEDED"}
           >
             {pending ? "Yükleniyor…" : "İkonu kaydet"}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -697,16 +703,24 @@ function BadgeActivationDialog({
         <Outcome state={state} />
 
         <div className="flex justify-end gap-2">
-          <button type="button" className={SECONDARY} onClick={close} disabled={pending} autoFocus>
+          <Button
+            variant="secondary"
+            size="sm"
+            type="button"
+            onClick={close}
+            disabled={pending}
+            autoFocus
+          >
             Vazgeç
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
             type="submit"
-            className={PRIMARY}
+
             disabled={pending || state.status === "SUCCEEDED"}
           >
             {pending ? "Kaydediliyor…" : nextActive ? "Etkinleştir" : "Pasifleştir"}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>

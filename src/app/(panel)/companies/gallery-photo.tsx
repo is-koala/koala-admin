@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { Button } from "@/components/ui";
 import {
   diagnoseDownload,
   PHOTO_LOAD_FAILURE_TEXT,
@@ -46,13 +47,13 @@ export function GalleryPhoto({ src, alt }: { src: string; alt: string }) {
           <span className="font-semibold text-danger">Fotoğraf yüklenemedi. </span>
           {PHOTO_LOAD_FAILURE_TEXT[state.failure ?? "unknown"]}
         </p>
-        <button
-          type="button"
+        <Button
+          size="sm"
+          className="w-fit"
           onClick={() => setState({ attempt: state.attempt + 1, status: "loading" })}
-          className="button button--primary button--sm w-fit"
         >
           Tekrar dene
-        </button>
+        </Button>
       </div>
     );
   }

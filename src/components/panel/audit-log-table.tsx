@@ -11,6 +11,7 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
+  Button,
 } from "@/components/ui";
 import type { AuditEntry } from "@/lib/audit-log";
 import {
@@ -126,16 +127,16 @@ export function AuditLogTable({ entries, permissionLabels, permissions = [] }: A
                     <Badge tone={outcome.tone}>{outcome.label}</Badge>
                   </TableCell>
                   <TableCell>
-                    <button
-                      type="button"
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       aria-expanded={selectedId === entry.id}
                       onClick={() =>
                         setSelectedId((current) => (current === entry.id ? null : entry.id))
                       }
-                      className="button button--secondary button--sm"
                     >
                       Ayrıntı
-                    </button>
+                    </Button>
                   </TableCell>
                 </TableRow>
               );

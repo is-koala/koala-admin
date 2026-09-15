@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { FormField, SelectInput } from "@/components/ui";
+import { Button, FormField, SelectInput, TextArea, TextInput } from "@/components/ui";
 import {
   FLAG_LABEL_MAX_LENGTH,
   NOTE_BODY_MAX_LENGTH,
@@ -71,7 +71,7 @@ export function StaffNoteComposeForm({
         error={state.field === "body" ? state.message : null}
       >
         {({ id, describedBy, invalid }) => (
-          <textarea
+          <TextArea
             id={id}
             name={STAFF_NOTES_FIELD.body}
             required
@@ -79,18 +79,13 @@ export function StaffNoteComposeForm({
             rows={3}
             aria-describedby={describedBy}
             aria-invalid={invalid || undefined}
-            className="w-full rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 text-sm text-ink placeholder:text-ink-subtle"
           />
         )}
       </FormField>
       <Feedback state={state.field === "body" ? { ...state, message: "" } : state} />
-      <button
-        type="submit"
-        disabled={pending}
-        className="button button--primary button--sm self-start"
-      >
+      <Button size="sm" className="self-start" type="submit" disabled={pending}>
         {pending ? "Kaydediliyor…" : "Notu kaydet"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -120,7 +115,7 @@ export function StaffNoteEditForm({
       <label className="sr-only" htmlFor={`staff-note-edit-body-${noteId}`}>
         Notu düzenle
       </label>
-      <textarea
+      <TextArea
         id={`staff-note-edit-body-${noteId}`}
         name={STAFF_NOTES_FIELD.body}
         required
@@ -128,16 +123,11 @@ export function StaffNoteEditForm({
         rows={3}
         defaultValue={initialBody}
         aria-invalid={state.field === "body" || undefined}
-        className="w-full rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 text-sm text-ink"
       />
       <Feedback state={state} />
-      <button
-        type="submit"
-        disabled={pending}
-        className="button button--primary button--sm self-start"
-      >
+      <Button size="sm" className="self-start" type="submit" disabled={pending}>
         {pending ? "Kaydediliyor…" : "Değişikliği kaydet"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -163,13 +153,15 @@ export function StaffNoteDeleteForm({
     >
       <HiddenResource resourceType={resourceType} resourceId={resourceId} noteId={noteId} />
       <Feedback state={state} />
-      <button
+      <Button
+        variant="danger-soft"
+        size="sm"
+        className="self-start"
         type="submit"
         disabled={pending}
-        className="button button--danger-soft button--sm self-start"
       >
         {pending ? "Siliniyor…" : "Notu sil"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -217,13 +209,12 @@ export function StaffFlagSetForm({
         error={state.field === "label" ? state.message : null}
       >
         {({ id, describedBy, invalid }) => (
-          <input
+          <TextInput
             id={id}
             name={STAFF_NOTES_FIELD.label}
             maxLength={FLAG_LABEL_MAX_LENGTH}
             aria-describedby={describedBy}
             aria-invalid={invalid || undefined}
-            className="w-full rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 text-sm text-ink"
           />
         )}
       </FormField>
@@ -232,13 +223,9 @@ export function StaffFlagSetForm({
           state.field === "kind" || state.field === "label" ? { ...state, message: "" } : state
         }
       />
-      <button
-        type="submit"
-        disabled={pending}
-        className="button button--primary button--sm self-start"
-      >
+      <Button size="sm" className="self-start" type="submit" disabled={pending}>
         {pending ? "Kaydediliyor…" : "İşareti koy"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -261,13 +248,9 @@ export function StaffFlagClearForm({
       <HiddenResource resourceType={resourceType} resourceId={resourceId} />
       <input type="hidden" name={STAFF_NOTES_FIELD.kind} value={kind} />
       <Feedback state={state} />
-      <button
-        type="submit"
-        disabled={pending}
-        className="text-xs font-medium text-ink-muted underline hover:text-ink disabled:cursor-wait"
-      >
+      <Button type="submit" variant="ghost" size="sm" disabled={pending}>
         {pending ? "Kaldırılıyor…" : "Kaldır"}
-      </button>
+      </Button>
     </form>
   );
 }

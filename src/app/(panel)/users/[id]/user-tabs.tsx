@@ -15,6 +15,7 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
+  buttonClass,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatBoolean, formatDateTime, formatInteger } from "@/lib/format";
 import { bankAccountVerificationStatusLabel } from "@/lib/iban-verification";
@@ -124,9 +125,7 @@ export function UserTabNav({
             href={userTabHref(userId, tab)}
             aria-current={active ? "page" : undefined}
             data-testid={`user-tab-${tab}`}
-            className={
-              active ? "button button--primary button--sm" : "button button--secondary button--sm"
-            }
+            className={buttonClass({ variant: active ? "primary" : "secondary", size: "sm" })}
           >
             {spec.label}
             {badge}

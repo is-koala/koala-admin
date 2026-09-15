@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { initialDecisionState } from "@/components/panel/queue/decision-state";
-import { Dialog } from "@/components/ui";
+import { Dialog, Button, TextArea } from "@/components/ui";
 
 import { submitIdentityReviewDecision } from "./actions";
 
@@ -69,17 +69,17 @@ export function IdentityReviewDecision({
             Onay kimlik damgasını çip olmadan koyar. Aynı TCKN ikinci kez onaylanamaz. Geri
             alınamaz.
           </p>
-          <button
-            type="button"
+          <Button
+            size="sm"
+            className="w-fit"
             disabled={pending}
             onClick={() => {
               setAcknowledged(false);
               setOpen(true);
             }}
-            className="button button--primary button--sm w-fit"
           >
             Kimliği onayla
-          </button>
+          </Button>
           <Dialog
             open={open}
             onClose={closeDialog}
@@ -96,21 +96,18 @@ export function IdentityReviewDecision({
               <span>Bu onayın geri alınamayacağını anlıyorum.</span>
             </label>
             <div className="mt-5 flex justify-end gap-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 type="button"
                 onClick={closeDialog}
                 disabled={pending}
-                className="button button--secondary button--sm"
               >
                 Vazgeç
-              </button>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className="button button--primary button--sm"
-              >
+              </Button>
+              <Button size="sm" type="submit" disabled={!canSubmit}>
                 {pending ? "Gönderiliyor…" : "Onayı gönder"}
-              </button>
+              </Button>
             </div>
           </Dialog>
         </form>
@@ -128,25 +125,20 @@ export function IdentityReviewDecision({
         <label htmlFor={`reject-${reviewId}`} className="text-sm font-medium text-ink">
           Ret gerekçesi
         </label>
-        <textarea
+        <TextArea
           id={`reject-${reviewId}`}
           name="reason"
           required
           minLength={MIN_REASON}
           maxLength={MAX_REASON}
           rows={3}
-          className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink"
         />
         <p className="text-xs text-ink-muted">
           {MIN_REASON}–{MAX_REASON} karakter. Kullanıcı kimliği damgalanmaz ve yeniden yükleyebilir.
         </p>
-        <button
-          type="submit"
-          disabled={pending}
-          className="w-fit rounded-md border border-danger px-3 py-2 text-sm font-medium text-danger disabled:opacity-60"
-        >
+        <Button type="submit" variant="danger" size="sm" className="w-fit" disabled={pending}>
           İncelemeyi reddet
-        </button>
+        </Button>
       </form>
     </div>
   );

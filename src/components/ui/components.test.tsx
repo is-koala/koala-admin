@@ -7,7 +7,7 @@ import { Button, buttonClass } from "./button";
 import { Dialog } from "./dialog";
 import { EmptyState } from "./empty-state";
 import { ErrorState } from "./error-state";
-import { FormField, TextInput } from "./form-field";
+import { FormField, TextArea, TextInput } from "./form-field";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "./table";
 
 describe("Button", () => {
@@ -80,6 +80,20 @@ describe("FormField", () => {
     const input = screen.getByLabelText(/Kategori adı/);
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(input).toHaveAccessibleDescription("Kullanıcıya görünen ad. Ad boş olamaz.");
+  });
+
+  it("draws a textarea through the same HeroUI control classes", () => {
+    render(
+      <FormField id="reject-reason" label="Gerekçe" required>
+        {({ id, describedBy, invalid }) => (
+          <TextArea id={id} aria-describedby={describedBy} aria-invalid={invalid} />
+        )}
+      </FormField>,
+    );
+
+    const control = screen.getByLabelText(/Gerekçe/);
+    expect(control.tagName).toBe("TEXTAREA");
+    expect(control).toHaveClass("input", "input--primary", "input--full-width");
   });
 });
 

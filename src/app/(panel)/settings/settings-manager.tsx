@@ -11,6 +11,7 @@ import {
   TableHeaderCell,
   TableRow,
   TextInput,
+  Button,
 } from "@/components/ui";
 import {
   IDLE_AUTHORIZATION_OUTCOME,
@@ -24,8 +25,6 @@ interface SettingsManagerProps {
   readonly settings: readonly PresentedSetting[];
   readonly updateAction: AuthorizationChangeAction;
 }
-
-const PRIMARY = "button button--primary button--sm";
 
 export function SettingsManager({ settings, updateAction }: SettingsManagerProps) {
   return (
@@ -130,13 +129,14 @@ function SettingRow({
 
           {state.status !== "IDLE" && state.field === null ? <Outcome state={state} /> : null}
 
-          <button
+          <Button
+            size="sm"
             type="submit"
-            className={PRIMARY}
+
             disabled={pending || state.status === "SUCCEEDED"}
           >
             {pending ? "Kaydediliyor…" : "Kaydet"}
-          </button>
+          </Button>
         </form>
       </TableCell>
     </TableRow>
