@@ -86,6 +86,8 @@ describe("who can see the payout queue", () => {
       {
         id: PAYOUT_ID,
         jobAssignmentId: ASSIGNMENT_ID,
+        maskedIban: "TR18***2315",
+        providerReference: "iyz-transaction-000033",
         amount: "1000.00",
         currency: "TRY",
         status: "PROCESSING",
@@ -109,6 +111,8 @@ describe("who can see the payout queue", () => {
       {
         id: PAYOUT_ID,
         jobAssignmentId: ASSIGNMENT_ID,
+        maskedIban: "TR18***2315",
+        providerReference: "iyz-transaction-000033",
         amount: "1000.00",
         currency: "TRY",
         status: "PROCESSING",
@@ -124,8 +128,56 @@ describe("who can see the payout queue", () => {
     expect(queue.url?.searchParams.has("status")).toBe(false);
     expect(html).toContain("Bekleyen hakedişler");
     expect(html).toContain(ASSIGNMENT_ID);
-    expect(html).toContain('value="' + PAYOUT_ID + '"');
+    expect(html).toContain(`name="payoutId" value="${PAYOUT_ID}"`);
+    expect(html).toContain('name="providerReference" value="iyz-transaction-000033"');
+    expect(html).toContain('name="amount" value="1000.00"');
+    expect(html).toContain('name="currency" value="TRY"');
+    expect(html.match(/readOnly=""/g)).toHaveLength(4);
     expect(html).toContain("Seçili");
+  });
+
+  it("shows every statement-matching fact on the payout row", async () => {
+    stubMe(OFFICER);
+    watchQueue([
+      {
+        id: PAYOUT_ID,
+        jobAssignmentId: ASSIGNMENT_ID,
+        recipient: {
+          id: "aaaaaaaa-0000-4000-8000-000000000001",
+          firstName: "Ayşe",
+          lastName: "Yılmaz",
+          username: "ayse",
+          profilePictureUrl: null,
+        },
+        maskedIban: "TR18***2315",
+        providerReference: "iyz-transaction-000033",
+        amount: "1000.00",
+        currency: "TRY",
+        status: "PROCESSING",
+        failureReason: null,
+        completedAt: null,
+        createdAt: "2026-09-01T08:00:00Z",
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain(`>${PAYOUT_ID}</a>`);
+    expect(html).toContain("iyz-transaction-000033");
+    expect(html).toContain("Ayşe Yılmaz");
+    expect(html).toContain("TR18***2315");
+    expect(html).toContain("₺1.000,00");
+  });
+
+  it("does not expose the raw six-field form without a selected payout", async () => {
+    stubMe(OFFICER);
+    watchQueue([]);
+
+    const html = await render();
+
+    expect(html).not.toContain("Ekstre onayı");
+    expect(html).not.toContain('name="payoutId"');
+    expect(html).not.toContain("Kuyruk boşsa kimliği forma yazın.");
   });
 });
 
@@ -173,7 +225,7 @@ describe("the search box — koala-admin#94", () => {
     expect(html).not.toContain("Bekleyen hakediş yok.");
   });
 
-  it("shows the backend's 400 for an over-long query inline and keeps the confirm form", async () => {
+  it("shows the backend's 400 for an over-long query inline without exposing the raw form", async () => {
     stubMe(OFFICER);
     server.use(
       http.get(PAYOUTS, () =>
@@ -184,7 +236,8 @@ describe("the search box — koala-admin#94", () => {
     const html = await render({ ara: "k".repeat(120) });
 
     expect(html).toContain("Arama metni en fazla 100 karakter olabilir.");
-    expect(html).toContain("Ekstre onayı");
+    expect(html).not.toContain("Ekstre onayı");
+    expect(html).not.toContain('name="payoutId"');
     expect(html).not.toContain("Bekleyen hakedişler yüklenemedi.");
   });
 });
@@ -255,6 +308,36 @@ describe("the worker filter — koala-admin#100", () => {
     expect(html).not.toContain(`hakedis=${PENDING_ID}`);
   });
 
+  it("keeps the complete filtered page when a payout is selected", async () => {
+    stubMe(OFFICER);
+    watchQueue([PROCESSING_ROW]);
+
+    const html = await render({
+      isci: WORKER_ID,
+      durum: "hepsi",
+      ara: "ayşe",
+      baslangic: "2026-09-01",
+      bitis: "2026-09-14",
+      sayfa: "2",
+      boyut: "10",
+    });
+    const href = html.match(/href="([^"]+)"[^>]*>Onayla<\/a>/)?.[1];
+
+    expect(href).toBeDefined();
+    for (const part of [
+      `hakedis=${PAYOUT_ID}`,
+      `isci=${WORKER_ID}`,
+      "durum=hepsi",
+      "ara=ay%C5%9Fe",
+      "baslangic=2026-09-01",
+      "bitis=2026-09-14",
+      "sayfa=2",
+      "boyut=10",
+    ]) {
+      expect(href).toContain(part);
+    }
+  });
+
   it("writes — for the worker when an older backend sends no recipient", async () => {
     stubMe(OFFICER);
     watchQueue([PROCESSING_ROW]);
@@ -262,8 +345,10 @@ describe("the worker filter — koala-admin#100", () => {
     const html = await render();
 
     expect(html).toContain("İşçi");
-    // Tarih hücresinden sonraki İşçi hücresi "—", ardından tutar gelir.
-    expect(html).toMatch(/<\/a><\/td><td[^>]*>—<\/td><td[^>]*>₺1\.000,00/);
+    // Tarih hücresinden sonra işçi, sağlayıcı ve IBAN boş; tutar yine çizilir.
+    expect(html).toMatch(
+      /<\/a><\/td><td[^>]*>—<\/td><td[^>]*><span[^>]*>—<\/span><\/td><td[^>]*><span[^>]*>—<\/span><\/td><td[^>]*>₺1\.000,00/,
+    );
     expect(html).toContain("İşleniyor");
     expect(html).toContain("Onayla");
     expect(html).not.toContain('href="/users/');

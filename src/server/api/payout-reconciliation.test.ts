@@ -30,6 +30,8 @@ const PAYOUT = {
   id: PAYOUT_ID,
   jobAssignmentId: "8c000000-0000-4000-8000-000000000034",
   recipient: null,
+  maskedIban: null,
+  providerReference: null,
   amount: "12345678901234567.89",
   currency: "TRY",
   status: "COMPLETED",
@@ -85,9 +87,11 @@ describe("the staff payout queue", () => {
   });
 
   /** koala-admin#106: `StaffPayoutDto.recipient`; eski sunucu/silinmiş kullanıcı → null. */
-  it("reads the recipient when the backend sends one and tolerates its absence", async () => {
+  it("reads the statement-matching evidence carried by the staff payout row", async () => {
     const withRecipient = {
       ...PAYOUT,
+      maskedIban: "TR18***2315",
+      providerReference: "iyz-transaction-000033",
       recipient: {
         id: "aaaaaaaa-0000-4000-8000-000000000001",
         firstName: "Ayşe",
@@ -122,7 +126,47 @@ describe("the staff payout queue", () => {
     const page = await getPayouts("ACCESS-TOKEN", { paging: readPaging({}, PAYOUT_PAGING) });
 
     expect(page.content[0]?.recipient?.firstName).toBe("Ayşe");
+    expect(page.content[0]?.maskedIban).toBe("TR18***2315");
+    expect(page.content[0]?.providerReference).toBe("iyz-transaction-000033");
     expect(page.content[1]?.recipient).toBeNull();
+  });
+
+  it("rejects a staff row that exposes an unmasked destination IBAN", async () => {
+    server.use(
+      http.get(apiUrl(PAYOUTS_PATH), () =>
+        HttpResponse.json({
+          success: true,
+          message: "Hakedişler listelendi.",
+          httpStatus: "200 OK",
+          path: PAYOUTS_PATH,
+          requestId: "rid-payouts",
+          timeStamp: "2026-09-09T09:31:00Z",
+          data: {
+            content: [
+              {
+                ...PAYOUT,
+                status: "PROCESSING",
+                completedAt: null,
+                maskedIban: "TR180006200119000006672315",
+              },
+            ],
+            page: 0,
+            size: 20,
+            totalElements: 1,
+            totalPages: 1,
+            first: true,
+            last: true,
+          },
+        }),
+      ),
+    );
+
+    await expect(
+      getPayouts("ACCESS-TOKEN", { paging: readPaging({}, PAYOUT_PAGING) }),
+    ).rejects.toMatchObject({
+      errorCode: "RESPONSE_SCHEMA_MISMATCH",
+      requestId: "rid-payouts",
+    });
   });
 });
 

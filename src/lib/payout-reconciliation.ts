@@ -12,6 +12,27 @@ export const PAYOUT_RECONCILIATION_FIELDS = {
 export type PayoutReconciliationField =
   (typeof PAYOUT_RECONCILIATION_FIELDS)[keyof typeof PAYOUT_RECONCILIATION_FIELDS];
 
+export interface RecordedPayoutEvidence {
+  readonly payoutId: string;
+  readonly providerReference: string | null;
+  readonly amount: string | null;
+  readonly currency: string | null;
+}
+
+export function toRecordedPayoutEvidence(payout: {
+  readonly id: string;
+  readonly providerReference: string | null;
+  readonly amount: string | null;
+  readonly currency: string | null;
+}): RecordedPayoutEvidence {
+  return {
+    payoutId: payout.id,
+    providerReference: payout.providerReference,
+    amount: payout.amount,
+    currency: payout.currency,
+  };
+}
+
 export type PayoutReconciliationStatus = "IDLE" | "SUCCEEDED" | "REFUSED" | "BLOCKED";
 
 export interface ReconciledPayoutSummary {

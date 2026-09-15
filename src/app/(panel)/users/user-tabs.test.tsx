@@ -57,6 +57,8 @@ const PAYOUT = {
   id: "9c000000-0000-4000-8000-000000000033",
   jobAssignmentId: ASSIGNMENT_ID,
   recipient: { id: USER_ID, firstName: "Ada", lastName: "Yılmaz", username: "ada" },
+  maskedIban: "TR18***2315",
+  providerReference: "iyz-transaction-000033",
   amount: "1240.50",
   currency: "TRY",
   status: "COMPLETED",
@@ -393,6 +395,10 @@ describe("the hakedisler tab", () => {
     expect(html).toContain(">İşçi</th>");
     expect(html).not.toContain(">Onay</th>");
     expect(html).not.toContain("Onayla");
+    expect(html).not.toContain(">Sağlayıcı referansı</th>");
+    expect(html).not.toContain(">Maskeli IBAN</th>");
+    expect(html).not.toContain("iyz-transaction-000033");
+    expect(html).not.toContain("TR18***2315");
   });
 
   it("tells an empty list from a missing permission", async () => {

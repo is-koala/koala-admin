@@ -9,6 +9,7 @@ import {
   PAYOUT_RECONCILIATION_FIELDS as FIELD,
   type PayoutReconciliationAction,
   type PayoutReconciliationField,
+  type RecordedPayoutEvidence,
 } from "@/lib/payout-reconciliation";
 
 interface EvidenceValues {
@@ -20,24 +21,22 @@ interface EvidenceValues {
   settledAt: string;
 }
 
-const EMPTY: EvidenceValues = {
-  payoutId: "",
-  settlementReference: "",
-  providerReference: "",
-  amount: "",
-  currency: "",
-  settledAt: "",
-};
-
 export function PayoutReconciliationForm({
   action,
-  defaults,
+  recordedPayout,
 }: {
   action: PayoutReconciliationAction;
-  defaults?: Partial<EvidenceValues>;
+  recordedPayout: RecordedPayoutEvidence;
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL_PAYOUT_RECONCILIATION_STATE);
-  const [values, setValues] = useState<EvidenceValues>({ ...EMPTY, ...defaults });
+  const [values, setValues] = useState<EvidenceValues>({
+    payoutId: recordedPayout.payoutId,
+    settlementReference: "",
+    providerReference: recordedPayout.providerReference ?? "",
+    amount: recordedPayout.amount ?? "",
+    currency: recordedPayout.currency ?? "",
+    settledAt: "",
+  });
   const [open, setOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const busy = useRef(false);
@@ -78,6 +77,10 @@ export function PayoutReconciliationForm({
       }}
       className="flex max-w-3xl flex-col gap-5 rounded-xl border border-border-subtle bg-surface p-5"
     >
+      <p className="rounded-md bg-brand-soft px-3 py-2 text-sm text-brand-strong">
+        Hakediş bilgileri kayıttan dolduruldu. Yalnız ekstre satırı referansını ve gerçekleşme anını
+        yazın.
+      </p>
       <div className="grid gap-4 md:grid-cols-2">
         <FormField
           id="payout-reconciliation-payout-id"
@@ -95,6 +98,7 @@ export function PayoutReconciliationForm({
               aria-invalid={invalid}
               aria-required="true"
               required
+              readOnly
               autoComplete="off"
             />
           )}
@@ -140,6 +144,7 @@ export function PayoutReconciliationForm({
               aria-invalid={invalid}
               aria-required="true"
               required
+              readOnly
               maxLength={128}
               autoComplete="off"
             />
@@ -151,7 +156,7 @@ export function PayoutReconciliationForm({
           label="Tutar"
           required
           error={errorFor(FIELD.amount)}
-          hint="Ekstredeki ondalık metni aynen girin; panel tutarı hesaplamaz veya yuvarlamaz."
+          hint="Hakedişte kayıtlı tutar; ekstredeki tutarla karşılaştırın."
         >
           {({ id, describedBy, invalid }) => (
             <TextInput
@@ -163,6 +168,7 @@ export function PayoutReconciliationForm({
               aria-invalid={invalid}
               aria-required="true"
               required
+              readOnly
               inputMode="decimal"
               autoComplete="off"
             />
@@ -174,7 +180,7 @@ export function PayoutReconciliationForm({
           label="Para birimi"
           required
           error={errorFor(FIELD.currency)}
-          hint="Tam üç karakter; örneğin TRY."
+          hint="Hakedişte kayıtlı para birimi; ekstreyle aynı olmalı."
         >
           {({ id, describedBy, invalid }) => (
             <TextInput
@@ -186,6 +192,7 @@ export function PayoutReconciliationForm({
               aria-invalid={invalid}
               aria-required="true"
               required
+              readOnly
               minLength={3}
               maxLength={3}
               autoComplete="off"

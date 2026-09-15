@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { SEARCH_PARAM } from "@/components/panel/queue";
 import { SafeUserLink } from "@/components/panel/safe-user-link";
 import {
   Badge,
@@ -24,9 +23,8 @@ import { PAYOUT_STATUS_TONES } from "./labels";
  */
 export interface PayoutActionContext {
   readonly selectedId: string | null;
-  readonly page: number;
-  /** Satırdan onaya geçmek aramayı silmesin. */
-  readonly query: string | null;
+  /** Seçilen kayıt yeni istekte aynı sonuç kümesinde kalabilsin. */
+  readonly selectionState: Readonly<Record<string, string>>;
 }
 
 /**
@@ -50,8 +48,15 @@ export function PayoutTable({
     <Table caption={caption}>
       <TableHead>
         <TableRow>
+          {action === undefined ? null : <TableHeaderCell>Hakediş</TableHeaderCell>}
           <TableHeaderCell>Tarih</TableHeaderCell>
           <TableHeaderCell>İşçi</TableHeaderCell>
+          {action === undefined ? null : (
+            <>
+              <TableHeaderCell>Sağlayıcı referansı</TableHeaderCell>
+              <TableHeaderCell>Maskeli IBAN</TableHeaderCell>
+            </>
+          )}
           <TableHeaderCell>Tutar</TableHeaderCell>
           <TableHeaderCell>Durum</TableHeaderCell>
           <TableHeaderCell>Atama</TableHeaderCell>
@@ -61,6 +66,16 @@ export function PayoutTable({
       <TableBody>
         {rows.map((row) => (
           <TableRow key={row.id}>
+            {action === undefined ? null : (
+              <TableCell>
+                <Link
+                  href={payoutHref(row.id, objectQuery)}
+                  className="font-mono text-xs text-brand hover:underline"
+                >
+                  {row.id}
+                </Link>
+              </TableCell>
+            )}
             <TableCell>
               <Link href={payoutHref(row.id, objectQuery)} className="text-brand hover:underline">
                 {formatDateTime(row.createdAt)}
@@ -69,6 +84,20 @@ export function PayoutTable({
             <TableCell>
               <SafeUserLink user={row.recipient} />
             </TableCell>
+            {action === undefined ? null : (
+              <>
+                <TableCell>
+                  <span className="font-mono text-xs break-all">
+                    {row.providerReference ?? EMPTY_VALUE}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="font-mono text-xs whitespace-nowrap">
+                    {row.maskedIban ?? EMPTY_VALUE}
+                  </span>
+                </TableCell>
+              </>
+            )}
             <TableCell>{formatCurrency(row.amount, row.currency)}</TableCell>
             <TableCell>
               <Badge tone={PAYOUT_STATUS_TONES[row.status]}>
@@ -103,9 +132,8 @@ function ReconcileCell({ row, action }: { row: Payout; action: PayoutActionConte
       href={{
         pathname: "/payout-reconciliation",
         query: {
+          ...action.selectionState,
           hakedis: row.id,
-          ...(action.page > 0 ? { sayfa: String(action.page) } : {}),
-          ...(action.query === null ? {} : { [SEARCH_PARAM]: action.query }),
         },
       }}
       className="text-sm font-medium text-brand hover:underline"
