@@ -69,7 +69,10 @@ export default async function PayoutReconciliationPage({
       <PageHeader
         title="Hakediş banka mutabakatı"
         description={
-          <>Banka ekstresindeki gerçekleşmiş transferi bekleyen bir hakedişle eşleştirin.</>
+          <>
+            Sağlayıcı işçinin IBAN&apos;ına yatırmayı onayladığında hakediş kendiliğinden kapanır.
+            Bu kuyruk yalnız onay anı veya referansı eksik kalan satırlar içindir.
+          </>
         }
       />
 

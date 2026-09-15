@@ -118,6 +118,7 @@ describe("who can see the payout queue", () => {
         status: "PROCESSING",
         failureReason: null,
         completedAt: null,
+        processingAt: "2026-09-01T08:05:00Z",
         createdAt: "2026-09-01T08:00:00Z",
       },
     ]);
@@ -130,6 +131,8 @@ describe("who can see the payout queue", () => {
     expect(html).toContain(ASSIGNMENT_ID);
     expect(html).toContain(`name="payoutId" value="${PAYOUT_ID}"`);
     expect(html).toContain('name="providerReference" value="iyz-transaction-000033"');
+    expect(html).toContain('name="settlementReference" value="iyz-transaction-000033"');
+    expect(html).toContain('name="settledAt" value="2026-09-01T08:05:00Z"');
     expect(html).toContain('name="amount" value="1000.00"');
     expect(html).toContain('name="currency" value="TRY"');
     expect(html.match(/readOnly=""/g)).toHaveLength(4);

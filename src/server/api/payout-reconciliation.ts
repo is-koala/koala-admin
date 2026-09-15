@@ -33,6 +33,7 @@ export interface Payout {
   readonly currency: string;
   readonly status: PayoutStatus;
   readonly failureReason: string | null;
+  readonly processingAt: string | null;
   readonly completedAt: string | null;
   readonly createdAt: string;
 }
@@ -65,6 +66,10 @@ const payoutSchema = z.object({
   currency: z.string().length(3),
   status: z.enum(PAYOUT_STATUSES),
   failureReason: z.string().nullable(),
+  processingAt: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? null),
   completedAt: z.iso.datetime({ offset: true }).nullable(),
   createdAt: z.iso.datetime({ offset: true }),
 });

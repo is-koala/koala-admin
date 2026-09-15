@@ -31,11 +31,11 @@ export function PayoutReconciliationForm({
   const [state, formAction, pending] = useActionState(action, INITIAL_PAYOUT_RECONCILIATION_STATE);
   const [values, setValues] = useState<EvidenceValues>({
     payoutId: recordedPayout.payoutId,
-    settlementReference: "",
+    settlementReference: recordedPayout.settlementReference ?? "",
     providerReference: recordedPayout.providerReference ?? "",
     amount: recordedPayout.amount ?? "",
     currency: recordedPayout.currency ?? "",
-    settledAt: "",
+    settledAt: recordedPayout.settledAt ?? "",
   });
   const [open, setOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -78,8 +78,8 @@ export function PayoutReconciliationForm({
       className="flex max-w-3xl flex-col gap-5 rounded-xl border border-border-subtle bg-surface p-5"
     >
       <p className="rounded-md bg-brand-soft px-3 py-2 text-sm text-brand-strong">
-        Hakediş bilgileri kayıttan dolduruldu. Yalnız ekstre satırı referansını ve gerçekleşme anını
-        yazın.
+        Sağlayıcı onayı kayıttan dolduruldu. Banka ekstresinde farklı bir satır varsa düzeltin;
+        yoksa gözden geçirip onaylayın.
       </p>
       <div className="grid gap-4 md:grid-cols-2">
         <FormField
@@ -109,7 +109,7 @@ export function PayoutReconciliationForm({
           label="Ekstre satırı referansı"
           required
           error={errorFor(FIELD.settlementReference)}
-          hint="Banka ekstresindeki tekil satır referansı (en çok 128 karakter)."
+          hint="Sağlayıcı işlem kimliği öntanımlı; banka ekstresinde ayrı bir satır varsa onu yazın."
         >
           {({ id, describedBy, invalid }) => (
             <TextInput
@@ -205,7 +205,7 @@ export function PayoutReconciliationForm({
           label="Gerçekleşme anı"
           required
           error={errorFor(FIELD.settledAt)}
-          hint="Saat dilimi zorunlu ISO-8601 instant. datetime-local saat dilimini düşürdüğü için kullanılmaz."
+          hint="Sağlayıcının onay anı. Saat dilimi zorunlu ISO-8601 instant; datetime-local kullanılmaz."
         >
           {({ id, describedBy, invalid }) => (
             <TextInput
