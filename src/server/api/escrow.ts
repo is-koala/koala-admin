@@ -6,6 +6,7 @@ import { pageDtoSchema } from "./schemas";
 import { searchQueryParam } from "./search-query";
 import { linkedRecordSchema } from "./shared/linked-record";
 import { pricingBreakdownSchema } from "./shared/pricing";
+import { assignmentTransportSchema } from "./transport";
 import type { KoalaResultMeta, PageDto } from "./types";
 import { safeUserSchema } from "./users";
 
@@ -335,6 +336,7 @@ export const assignmentDetailSchema = escrowSummarySchema.extend({
     .array(adminReviewSchema)
     .nullish()
     .transform((value) => value ?? null),
+  transport: assignmentTransportSchema.nullish().transform((value) => value ?? null),
   createdAt: nullableString,
   updatedAt: nullableString,
 });

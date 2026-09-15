@@ -8,6 +8,7 @@ import {
   type AssignmentDetail,
 } from "@/server/api/escrow";
 import { PAYMENT_ATTEMPT_STATUS_LABELS, type AdminPayment } from "@/server/api/payments";
+import { TRANSPORT_DIRECTION_LABELS, type AssignmentTransport } from "@/server/api/transport";
 import { safeUserName } from "@/server/api/users";
 
 /**
@@ -15,7 +16,8 @@ import { safeUserName } from "@/server/api/users";
  * (giriş/çıkış) → iptal ya da tamamlanma → değerlendirme → hakediş
  * (koala-admin#100), koala-admin#107 ile `ObjectTimeline`'a taşındı; sıralama
  * ve personel kararları artık orada. Eski sunucu başvuru, mesai, iptal ve
- * değerlendirmeyi göndermez; o satırlar yalnız yoklukla eksilir.
+ * değerlendirmeyi göndermez; o satırlar yalnız yoklukla eksilir. Koltuk
+ * seçimleri (koala-admin#120) `transport.seats[].createdAt` ile eklenir.
  */
 export function assignmentTimelineEvents(
   assignment: AssignmentDetail,
@@ -41,6 +43,11 @@ export function assignmentTimelineEvents(
   }
   timeline.push(assignment.createdAt, "Atama oluşturuldu");
   timeline.push(assignment.assignmentDateTime, "Atama zamanı");
+  for (const seat of assignment.transport?.seats ?? []) {
+    timeline.push(seat.createdAt, "Koltuk seçildi", {
+      detail: seatDetail(assignment.transport, seat.shuttleId, seat.direction),
+    });
+  }
   for (const session of assignment.workSessions ?? []) {
     timeline.push(session.checkInAt, "Mesai girişi", {
       detail: flagSummary(session.checkInPlausibilityFlags),
@@ -94,4 +101,20 @@ export function assignmentTimelineEvents(
 function flagSummary(flags: readonly string[]): string | null {
   if (flags.length === 0) return null;
   return flags.map(timesheetFlagLabel).join(", ");
+}
+
+function seatDetail(
+  transport: AssignmentTransport | null | undefined,
+  shuttleId: string | null,
+  direction: AssignmentTransport["seats"][number]["direction"],
+): string | null {
+  const parts: string[] = [];
+  if (direction !== null) parts.push(TRANSPORT_DIRECTION_LABELS[direction]);
+  const shuttle =
+    shuttleId === null
+      ? undefined
+      : transport?.shuttles.find((candidate) => candidate.id === shuttleId);
+  if (shuttle?.name) parts.push(shuttle.name);
+  if (shuttle?.plate) parts.push(shuttle.plate);
+  return parts.length === 0 ? null : parts.join(" · ");
 }

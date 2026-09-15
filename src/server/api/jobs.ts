@@ -16,6 +16,7 @@ import type { PageDto } from "./types";
  * ```java
  * GET /admin/jobs?status=&query=&page=&size=&sort=   job.read
  * GET /admin/jobs/{jobId}                            job.read
+ * GET /admin/jobs/{jobId}/transport-plan               job.read  (koala-admin#120)
  * ```
  *
  * `status` tekrarlanabilir (`List<JobStatus>`); verilmezse her durum döner.

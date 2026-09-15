@@ -7,7 +7,7 @@ import { StaffNotesSection } from "@/components/panel/staff-notes";
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
-import { Badge } from "@/components/ui";
+import { Badge, EmptyState, ErrorState } from "@/components/ui";
 import { httpUrlOrNull } from "@/lib/external-url";
 import {
   EMPTY_VALUE,
@@ -21,6 +21,7 @@ import {
 import { objectBreadcrumb, readQueueState } from "@/lib/breadcrumb";
 import { companyHref, isUuid, userHrefOrNull } from "@/lib/panel-href";
 import { companyTypeLabel } from "@/server/api/companies";
+import { isKoalaApiError } from "@/server/api/errors";
 import {
   JOB_EMPLOYER_TYPE_LABELS,
   JOB_STATUS_LABELS,
@@ -32,6 +33,12 @@ import {
 } from "@/server/api/jobs";
 import type { SearchParams } from "@/server/api/paging";
 import { staffPartyName } from "@/server/api/shared/staff-party";
+import {
+  TRANSPORT_DIRECTION_LABELS,
+  TRANSPORT_METHOD_LABELS,
+  getAdminTransportPlan,
+  type TransportPlan,
+} from "@/server/api/transport";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
@@ -47,6 +54,9 @@ export const metadata: Metadata = { title: "İlan" };
  * yaklaşık konum kuralı kullanıcı yüzeyi içindir, personel istisnadır ve
  * backend bunu bilerek böyle döner. Görseller backend'in verdiği adresten
  * çizilir; şikayet sayfasındaki kalıp. Yazma eylemi yok.
+ *
+ * Ulaşım (koala-admin#120) ayrı uç: `GET /admin/jobs/{jobId}/transport-plan`.
+ * Pazaryeri plan ucu işveren ister; personel token'ı orada işe yaramaz.
  */
 export default async function JobDetailPage({
   params,
@@ -93,6 +103,16 @@ async function JobObject({ id }: { id: string }) {
         failure={classifyQueueFailure(error)}
       />
     );
+  }
+
+  let plan: TransportPlan | null = null;
+  let planError: { message: string; requestId: string | null; errorCode: string } | null = null;
+  try {
+    plan = await getAdminTransportPlan(accessToken, id);
+  } catch (error) {
+    planError = isKoalaApiError(error)
+      ? { message: error.message, requestId: error.requestId, errorCode: error.errorCode }
+      : { message: "Ulaşım planı yüklenemedi.", requestId: null, errorCode: "UNEXPECTED" };
   }
 
   const employerHref = job.employer === null ? null : userHrefOrNull(job.employer.id);
@@ -296,6 +316,8 @@ async function JobObject({ id }: { id: string }) {
         </dl>
       </section>
 
+      <TransportPlanSection plan={plan} error={planError} />
+
       <Gallery job={job} />
 
       <StaffNotesSection resourceType="JOB" resourceId={job.id} />
@@ -305,6 +327,112 @@ async function JobObject({ id }: { id: string }) {
         denetim kaydına düşer.
       </ObjectAuditPointer>
     </div>
+  );
+}
+
+function TransportPlanSection({
+  plan,
+  error,
+}: {
+  plan: TransportPlan | null;
+  error: { message: string; requestId: string | null; errorCode: string } | null;
+}) {
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="job-transport-heading">
+      <h2 id="job-transport-heading" className="text-lg font-semibold">
+        Ulaşım
+      </h2>
+      {error !== null ? (
+        <ErrorState
+          title="Ulaşım planı yüklenemedi."
+          description={error.message}
+          requestId={error.requestId}
+          errorCode={error.errorCode}
+        />
+      ) : plan === null ? (
+        <EmptyState
+          title="Ulaşım planı yok"
+          description="İşveren bu ilana servis veya yol parası yazmamış."
+        />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
+            <dl className="flex flex-col gap-2 text-sm">
+              <Row
+                label="Gidiş"
+                value={
+                  plan.outboundMethod === null
+                    ? EMPTY_VALUE
+                    : TRANSPORT_METHOD_LABELS[plan.outboundMethod]
+                }
+              />
+              <Row
+                label="Dönüş"
+                value={
+                  plan.returnMethod === null
+                    ? EMPTY_VALUE
+                    : TRANSPORT_METHOD_LABELS[plan.returnMethod]
+                }
+              />
+              <Row
+                label="Yol parası"
+                value={
+                  plan.allowanceAmount === null ? EMPTY_VALUE : formatCurrency(plan.allowanceAmount)
+                }
+              />
+              <Row label="Yol parası notu" value={plan.allowanceNote ?? EMPTY_VALUE} />
+              <Row label="Not" value={plan.notes ?? EMPTY_VALUE} />
+            </dl>
+          </div>
+          {plan.shuttles.length === 0 ? (
+            <p className="text-sm text-ink-muted">Bu planda servis yok.</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {plan.shuttles.map((shuttle, index) => (
+                <li
+                  key={shuttle.id ?? `shuttle-${index}`}
+                  className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-sm font-semibold">
+                      {shuttle.name ?? "Servis"}
+                      {shuttle.direction === null
+                        ? null
+                        : ` · ${TRANSPORT_DIRECTION_LABELS[shuttle.direction]}`}
+                    </p>
+                    <p className="text-xs text-ink-muted">
+                      {formatInteger(shuttle.seatsTaken)}/{formatInteger(shuttle.capacity)} koltuk
+                    </p>
+                  </div>
+                  <dl className="flex flex-col gap-2 text-sm">
+                    <Row label="Plaka" value={shuttle.plate ?? EMPTY_VALUE} />
+                    <Row label="Şoför" value={shuttle.driverName ?? EMPTY_VALUE} />
+                    <Row label="Telefon" value={shuttle.driverPhone ?? EMPTY_VALUE} />
+                  </dl>
+                  {shuttle.stops.length === 0 ? (
+                    <p className="text-sm text-ink-muted">Durak yok.</p>
+                  ) : (
+                    <ol className="flex flex-col gap-2 text-sm">
+                      {shuttle.stops.map((stop, stopIndex) => (
+                        <li key={stop.id ?? `stop-${stopIndex}`}>
+                          <p className="font-medium">{stop.label ?? `Durak ${stopIndex + 1}`}</p>
+                          <p className="text-ink-muted">
+                            {formatDateTime(stop.scheduledAt)}
+                            {stop.address === null
+                              ? null
+                              : ` · ${formatJobAddress(stop.address) ?? EMPTY_VALUE}`}
+                          </p>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
