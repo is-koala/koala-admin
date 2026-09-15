@@ -32,7 +32,7 @@ export function ImageRemovalForm({ imageId, reportId }: { imageId: string; repor
       <button
         type="submit"
         disabled={pending || state.outcome === "success"}
-        className="w-fit rounded-md border border-danger px-3 py-2 text-sm font-medium text-danger disabled:cursor-not-allowed disabled:opacity-60"
+        className="button button--danger button--sm"
       >
         Görseli kaldır
       </button>

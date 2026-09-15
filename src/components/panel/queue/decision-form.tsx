@@ -224,10 +224,7 @@ export function DecisionForm({
           type="submit"
           disabled={pending || noteTooShort || decision === ""}
           aria-describedby={summaryId}
-          className={cn(
-            "rounded-md bg-brand px-3 py-2 text-sm font-medium text-white",
-            "disabled:cursor-not-allowed disabled:opacity-50",
-          )}
+          className="button button--primary button--sm"
         >
           {pending ? "Gönderiliyor…" : submitLabel}
         </button>

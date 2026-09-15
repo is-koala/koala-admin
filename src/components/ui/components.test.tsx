@@ -3,11 +3,33 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { Badge } from "./badge";
+import { Button, buttonClass } from "./button";
 import { Dialog } from "./dialog";
 import { EmptyState } from "./empty-state";
 import { ErrorState } from "./error-state";
 import { FormField, TextInput } from "./form-field";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "./table";
+
+describe("Button", () => {
+  it("defaults to a non-submitting type so a form cannot fire by accident", () => {
+    render(<Button>Kaydet</Button>);
+    expect(screen.getByRole("button", { name: "Kaydet" })).toHaveAttribute("type", "button");
+  });
+
+  it("keeps an explicit submit type when the caller is a form action", () => {
+    render(
+      <Button type="submit" variant="primary">
+        Giriş yap
+      </Button>,
+    );
+    expect(screen.getByRole("button", { name: "Giriş yap" })).toHaveAttribute("type", "submit");
+  });
+
+  it("exposes the HeroUI BEM classes for native links on JS-free pages", () => {
+    expect(buttonClass()).toContain("button--primary");
+    expect(buttonClass({ variant: "danger-soft", size: "sm" })).toContain("button--danger-soft");
+  });
+});
 
 describe("Table", () => {
   it("renders a caption for screen readers and one row per record", () => {

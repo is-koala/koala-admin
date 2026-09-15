@@ -100,12 +100,14 @@ describe("sensitivity is a badge and FINANCIAL is not one of the crowd", () => {
   it("labels all three classes and gives the financial one its own tone", async () => {
     renderTable();
 
-    expect(screen.getAllByText("Normal")).toHaveLength(2);
-    expect(screen.getByText("Finansal")).toBeInTheDocument();
-
-    const normal = screen.getAllByText("Normal")[0] as HTMLElement;
-    const financial = screen.getByText("Finansal");
-    expect(financial.className).not.toBe(normal.className);
+    const normals = screen.getAllByText("Normal");
+    expect(normals).toHaveLength(2);
+    const normal = normals[0]!.closest(".chip");
+    const financial = screen.getByText("Finansal").closest(".chip");
+    expect(normal).not.toBeNull();
+    expect(financial).not.toBeNull();
+    expect(financial?.className).not.toBe(normal?.className);
+    expect(financial?.className).toContain("chip--accent");
 
     expect(rows().map((row) => row.getAttribute("data-sensitivity"))).toEqual([
       "NORMAL",

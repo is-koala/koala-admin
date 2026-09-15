@@ -21,11 +21,13 @@ export function themeCookie(theme: Theme): string {
  * `<head>` içinde çalışır ki ilk boya kayıtlı paletle gelsin.
  * Çerez kazanır; silinmişse localStorage yedek.
  */
-export const THEME_BOOTSTRAP_SCRIPT = `(function(){try{var k=${JSON.stringify(THEME_COOKIE)};var t="";var m=document.cookie.match(new RegExp("(?:^|; )"+k+"=(light|dark)"));if(m)t=m[1];if(!t)t=localStorage.getItem(k)||"";if(t!=="dark")t="light";document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;}catch(e){}})();`;
+export const THEME_BOOTSTRAP_SCRIPT = `(function(){try{var k=${JSON.stringify(THEME_COOKIE)};var t="";var m=document.cookie.match(new RegExp("(?:^|; )"+k+"=(light|dark)"));if(m)t=m[1];if(!t)t=localStorage.getItem(k)||"";if(t!=="dark")t="light";var r=document.documentElement;r.dataset.theme=t;r.style.colorScheme=t;r.classList.remove("light","dark");r.classList.add(t);}catch(e){}})();`;
 
 export function applyTheme(theme: Theme, root: HTMLElement = document.documentElement): void {
   root.dataset.theme = theme;
   root.style.colorScheme = theme;
+  root.classList.remove("light", "dark");
+  root.classList.add(theme);
 }
 
 export function persistTheme(theme: Theme, root: HTMLElement = document.documentElement): void {

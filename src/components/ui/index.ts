@@ -1,3 +1,10 @@
+export {
+  Button,
+  buttonClass,
+  type ButtonProps,
+  type ButtonSize,
+  type ButtonVariant,
+} from "./button";
 export { Badge, type BadgeProps, type BadgeTone } from "./badge";
 export { Dialog, type DialogProps } from "./dialog";
 export { EmptyState, type EmptyStateProps } from "./empty-state";

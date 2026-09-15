@@ -25,9 +25,7 @@ interface SettingsManagerProps {
   readonly updateAction: AuthorizationChangeAction;
 }
 
-const BUTTON =
-  "rounded-md px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60";
-const PRIMARY = `${BUTTON} bg-brand text-white hover:bg-brand-strong`;
+const PRIMARY = "button button--primary button--sm";
 
 export function SettingsManager({ settings, updateAction }: SettingsManagerProps) {
   return (

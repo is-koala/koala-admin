@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { PageHeader } from "@/components/panel/page-header";
-import { ErrorState } from "@/components/ui";
+import { Button, ErrorState } from "@/components/ui";
 
 /**
  * Panelin beklenmeyen hata sınırı (koala-admin#85).
@@ -51,13 +51,9 @@ export default function PanelError({
               </p>
             )}
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => retry()}
-                className="rounded-md bg-brand px-3 py-2 text-sm font-medium text-on-brand hover:bg-brand-strong"
-              >
+              <Button type="button" variant="primary" onClick={() => retry()}>
                 Tekrar dene
-              </button>
+              </Button>
               <Link href="/" className="text-sm font-medium text-brand hover:underline">
                 Güncel duruma dön
               </Link>

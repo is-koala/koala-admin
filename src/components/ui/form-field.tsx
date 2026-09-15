@@ -2,10 +2,11 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react
 
 import { cn } from "@/lib/cn";
 
-const CONTROL_CLASSES =
-  "w-full rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 text-sm text-ink " +
-  "placeholder:text-ink-subtle disabled:cursor-not-allowed disabled:bg-surface-sunken " +
-  "aria-[invalid=true]:border-danger";
+const CONTROL_CLASSES = "input input--primary input--full-width";
+
+function isInvalid(value: InputHTMLAttributes<HTMLInputElement>["aria-invalid"]): boolean {
+  return value === true || value === "true";
+}
 
 export interface FormFieldProps {
   /**
@@ -68,14 +69,24 @@ export function FormField({
 export type TextInputProps = InputHTMLAttributes<HTMLInputElement>;
 
 export function TextInput({ className, ...rest }: TextInputProps) {
-  return <input className={cn(CONTROL_CLASSES, className)} {...rest} />;
+  return (
+    <input
+      {...rest}
+      className={cn(CONTROL_CLASSES, className)}
+      data-invalid={isInvalid(rest["aria-invalid"]) || undefined}
+    />
+  );
 }
 
 export type SelectInputProps = SelectHTMLAttributes<HTMLSelectElement>;
 
 export function SelectInput({ className, children, ...rest }: SelectInputProps) {
   return (
-    <select className={cn(CONTROL_CLASSES, className)} {...rest}>
+    <select
+      {...rest}
+      className={cn(CONTROL_CLASSES, className)}
+      data-invalid={isInvalid(rest["aria-invalid"]) || undefined}
+    >
       {children}
     </select>
   );

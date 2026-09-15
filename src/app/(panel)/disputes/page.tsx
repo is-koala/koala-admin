@@ -278,8 +278,8 @@ async function DisputeWorkspace({ view }: { view: DisputeView }) {
               aria-current={candidate === filter ? "page" : undefined}
               className={
                 candidate === filter
-                  ? "rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white"
-                  : "rounded-md border border-border-subtle px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
+                  ? "button button--primary button--sm"
+                  : "button button--secondary button--sm"
               }
             >
               {FILTER_LABELS[candidate]}

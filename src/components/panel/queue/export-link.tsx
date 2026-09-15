@@ -1,3 +1,4 @@
+import { buttonClass } from "@/components/ui";
 import { EXPORT_ROW_LIMIT, exportHref, type ExportList } from "@/lib/export";
 import { formatInteger } from "@/lib/format";
 
@@ -24,7 +25,7 @@ export function CsvExportLink({
       <a
         href={exportHref(list, state)}
         download
-        className="rounded-md border border-border-subtle px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken"
+        className={buttonClass({ variant: "secondary", size: "sm" })}
       >
         CSV indir
       </a>

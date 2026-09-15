@@ -61,11 +61,7 @@ export function AuditEntryDetail({ entry, permissionLabels, onClose }: AuditEntr
           <h2 className="text-sm font-semibold text-ink">Denetim kaydı ayrıntısı</h2>
           <p className="font-mono text-xs break-all text-ink-subtle">{entry.id}</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-border-subtle px-2 py-1 text-xs font-medium text-ink hover:bg-surface-sunken"
-        >
+        <button type="button" onClick={onClose} className="button button--secondary button--sm">
           Kapat
         </button>
       </div>

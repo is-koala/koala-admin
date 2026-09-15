@@ -222,10 +222,7 @@ export function EscrowOperationForm({
           type="button"
           onClick={openDialog}
           disabled={disabledReason !== null || reasonTooShort}
-          className={cn(
-            "rounded-md px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50",
-            tone === "danger" ? "bg-danger" : "bg-brand",
-          )}
+          className={tone === "danger" ? "button button--danger" : "button button--primary"}
         >
           {triggerLabel}
         </button>
@@ -344,7 +341,7 @@ export function EscrowOperationForm({
               <button
                 type="button"
                 onClick={closeDialog}
-                className="rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-ink"
+                className="button button--secondary button--sm"
               >
                 {succeeded ? "Kapat" : "Vazgeç"}
               </button>
@@ -352,10 +349,11 @@ export function EscrowOperationForm({
                 type="submit"
                 disabled={!canSubmit}
                 data-testid="escrow-confirm"
-                className={cn(
-                  "rounded-md px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50",
-                  tone === "danger" ? "bg-danger" : "bg-brand",
-                )}
+                className={
+                  tone === "danger"
+                    ? "button button--danger button--sm"
+                    : "button button--primary button--sm"
+                }
               >
                 {pending ? "Gönderiliyor…" : "Onayla ve gönder"}
               </button>

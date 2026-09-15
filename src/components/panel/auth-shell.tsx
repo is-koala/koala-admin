@@ -25,9 +25,7 @@ export async function AuthShell({ children }: AuthShellProps) {
         <ThemeToggle initialTheme={theme} />
       </header>
       <div className="flex min-w-0 flex-1 flex-col justify-center px-6 py-16">
-        <div className="mx-auto w-full max-w-md rounded-2xl border border-border-subtle bg-surface p-8 shadow-sm">
-          {children}
-        </div>
+        <div className="surface surface--default mx-auto w-full max-w-md p-8">{children}</div>
       </div>
     </div>
   );

@@ -1,8 +1,11 @@
+/** @vitest-environment jsdom */
+
 import { describe, expect, it } from "vitest";
 
 import {
   THEME_BOOTSTRAP_SCRIPT,
   THEME_COOKIE,
+  applyTheme,
   parseTheme,
   themeCookie,
   toggleTheme,
@@ -51,5 +54,20 @@ describe("THEME_BOOTSTRAP_SCRIPT", () => {
     expect(THEME_BOOTSTRAP_SCRIPT).toContain(THEME_COOKIE);
     expect(THEME_BOOTSTRAP_SCRIPT).toContain("dataset.theme");
     expect(THEME_BOOTSTRAP_SCRIPT).toContain("colorScheme");
+    expect(THEME_BOOTSTRAP_SCRIPT).toContain("classList");
+  });
+});
+
+describe("applyTheme", () => {
+  it("sets the matching html class so HeroUI follows the same palette", () => {
+    const root = document.createElement("html");
+    root.classList.add("light");
+
+    applyTheme("dark", root);
+
+    expect(root.dataset.theme).toBe("dark");
+    expect(root.style.colorScheme).toBe("dark");
+    expect(root.classList.contains("dark")).toBe(true);
+    expect(root.classList.contains("light")).toBe(false);
   });
 });

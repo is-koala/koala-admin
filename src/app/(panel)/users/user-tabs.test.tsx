@@ -238,7 +238,7 @@ describe("the tab strip and the URL parameter", () => {
       expect(html).not.toContain(`href="/users/${USER_ID}?sekme=${tab}"`);
     }
     // İzin olmayınca sayaç rozeti yine yazılır: sayı user.read'in verisi.
-    expect(html).toMatch(/user-tab-atamalar-disabled[^>]*>Atamalar<span[^>]*>3</);
+    expect(html).toMatch(/user-tab-atamalar-disabled[^>]*>Atamalar<span[^>]*>[\s\S]*?3</);
   });
 
   it("explains a disabled tab that was asked for by URL and sends no list request", async () => {

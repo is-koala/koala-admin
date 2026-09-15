@@ -76,7 +76,7 @@ export function IdentityReviewDecision({
               setAcknowledged(false);
               setOpen(true);
             }}
-            className="w-fit rounded-md bg-brand px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+            className="button button--primary button--sm w-fit"
           >
             Kimliği onayla
           </button>
@@ -100,14 +100,14 @@ export function IdentityReviewDecision({
                 type="button"
                 onClick={closeDialog}
                 disabled={pending}
-                className="rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-ink"
+                className="button button--secondary button--sm"
               >
                 Vazgeç
               </button>
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="rounded-md bg-brand px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="button button--primary button--sm"
               >
                 {pending ? "Gönderiliyor…" : "Onayı gönder"}
               </button>

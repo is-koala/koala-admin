@@ -11,26 +11,23 @@ export interface TableProps {
 
 export function Table({ caption, children, className }: TableProps) {
   return (
-    <div
-      className={cn(
-        "overflow-x-auto rounded-xl border border-border-subtle bg-surface shadow-sm",
-        className,
-      )}
-    >
-      <table className="w-full border-collapse text-sm">
-        {caption ? <caption className="sr-only">{caption}</caption> : null}
-        {children}
-      </table>
+    <div className={cn("table-root table-root--primary", className)}>
+      <div className="table__scroll-container">
+        <table className="table__content">
+          {caption ? <caption className="sr-only">{caption}</caption> : null}
+          {children}
+        </table>
+      </div>
     </div>
   );
 }
 
 export function TableHead({ children }: { children: ReactNode }) {
-  return <thead className="bg-surface-sunken">{children}</thead>;
+  return <thead className="table__header">{children}</thead>;
 }
 
 export function TableBody({ children }: { children: ReactNode }) {
-  return <tbody className="divide-y divide-border-subtle">{children}</tbody>;
+  return <tbody className="table__body">{children}</tbody>;
 }
 
 export interface TableRowProps extends HTMLAttributes<HTMLTableRowElement> {
@@ -46,7 +43,7 @@ export interface TableRowProps extends HTMLAttributes<HTMLTableRowElement> {
  */
 export function TableRow({ children, className, ...rest }: TableRowProps) {
   return (
-    <tr className={cn("hover:bg-surface-muted", className)} {...rest}>
+    <tr className={cn("table__row", className)} {...rest}>
       {children}
     </tr>
   );
@@ -66,11 +63,7 @@ export function TableHeaderCell({
   return (
     <th
       scope="col"
-      className={cn(
-        "px-3 py-2 text-xs font-medium text-ink-muted",
-        numeric ? "text-right tabular-nums" : "text-left",
-        className,
-      )}
+      className={cn("table__column", numeric ? "text-right tabular-nums" : "text-left", className)}
       {...rest}
     >
       {children}
@@ -86,11 +79,7 @@ export interface TableCellProps extends TdHTMLAttributes<HTMLTableCellElement> {
 export function TableCell({ children, numeric = false, className, ...rest }: TableCellProps) {
   return (
     <td
-      className={cn(
-        "px-3 py-2 align-middle text-sm",
-        numeric ? "text-right tabular-nums" : "text-left",
-        className,
-      )}
+      className={cn("table__cell", numeric ? "text-right tabular-nums" : "text-left", className)}
       {...rest}
     >
       {children}

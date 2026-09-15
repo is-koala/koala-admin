@@ -1,10 +1,16 @@
-@import "tailwindcss";
+@import "@heroui/styles";
 
 /**
  * Merchant-panel tokens. Light is the default (white canvas, branded top bar);
- * dark is a first-class palette, switched by `[data-theme]` so SSR and the
- * bootstrap script stay in step. No bark rail, no Plex — those were the
- * previous console look.
+ * dark is a first-class palette, switched by `[data-theme]` and the matching
+ * `.light` / `.dark` class so HeroUI components that only look at the class
+ * stay in step with SSR and the bootstrap script. No bark rail, no Plex —
+ * those were the previous console look.
+ *
+ * `@heroui/styles` already pulls Tailwind v4; a second `@import "tailwindcss"`
+ * would duplicate layers. `--accent` is HeroUI's brand token — mapped to
+ * koala green so BEM `.button--primary` / `.chip--accent` keep the panel
+ * colour rather than HeroUI's default blue.
  */
 
 @theme {
@@ -36,7 +42,9 @@
   --color-warning-soft: var(--koala-warning-soft);
 }
 
-:root {
+:root,
+.light,
+[data-theme="light"] {
   color-scheme: light;
   --koala-topbar: #1f6b54;
   --koala-on-brand: #ffffff;
@@ -58,8 +66,13 @@
   --koala-success-soft: #e6f6ee;
   --koala-warning: #9a6700;
   --koala-warning-soft: #faf0d8;
+  --accent: #1f6b54;
+  --accent-foreground: #ffffff;
+  --field-border: #d5dde5;
+  --field-border-width: 1px;
 }
 
+.dark,
 [data-theme="dark"] {
   color-scheme: dark;
   --koala-topbar: #163d32;
@@ -82,6 +95,10 @@
   --koala-success-soft: #163528;
   --koala-warning: #e8b931;
   --koala-warning-soft: #3a2f12;
+  --accent: #3d9a78;
+  --accent-foreground: #ffffff;
+  --field-border: #3a4556;
+  --field-border-width: 1px;
 }
 
 @layer base {
@@ -89,6 +106,7 @@
     color-scheme: light;
   }
 
+  html.dark,
   html[data-theme="dark"] {
     color-scheme: dark;
   }
@@ -103,5 +121,9 @@
   :focus-visible {
     outline: 2px solid var(--koala-brand);
     outline-offset: 2px;
+  }
+
+  dialog::backdrop {
+    background: color-mix(in srgb, var(--koala-ink) 40%, transparent);
   }
 }

@@ -51,7 +51,7 @@ export function QueuePager({ window, state, unit }: QueuePagerProps) {
           name="sayfa"
           value={Math.max(0, page - 1)}
           disabled={first}
-          className="rounded-md border border-border-strong px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-50"
+          className="button button--secondary"
         >
           Önceki
         </button>
@@ -60,7 +60,7 @@ export function QueuePager({ window, state, unit }: QueuePagerProps) {
           name="sayfa"
           value={page + 1}
           disabled={last}
-          className="rounded-md border border-border-strong px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-50"
+          className="button button--secondary"
         >
           Sonraki
         </button>

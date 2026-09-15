@@ -3,7 +3,6 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { Dialog, FormField, TextInput } from "@/components/ui";
-import { cn } from "@/lib/cn";
 import {
   IBAN_VERIFICATION_FIELDS as FIELD,
   INITIAL_IBAN_VERIFICATION_STATE,
@@ -172,7 +171,7 @@ export function IbanVerificationForm({
             setAcknowledged(false);
             setOpen(true);
           }}
-          className="rounded-md bg-brand px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="button button--primary button--sm"
         >
           Kanıtı gözden geçir
         </button>
@@ -229,18 +228,11 @@ export function IbanVerificationForm({
             type="button"
             onClick={closeDialog}
             disabled={pending}
-            className="rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-ink"
+            className="button button--secondary button--sm"
           >
             {succeeded ? "Kapat" : "Vazgeç"}
           </button>
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className={cn(
-              "rounded-md bg-brand px-3 py-2 text-sm font-medium text-white",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-            )}
-          >
+          <button type="submit" disabled={!canSubmit} className="button button--primary button--sm">
             {pending ? "Gönderiliyor…" : "Doğrulamayı gönder"}
           </button>
         </div>

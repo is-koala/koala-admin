@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AuthShell } from "@/components/panel/auth-shell";
-import { ErrorState } from "@/components/ui";
+import { ErrorState, buttonClass } from "@/components/ui";
 import { isAuthFailureCode, type AuthFailureCode } from "@/server/auth/errors";
 
 export const metadata: Metadata = { title: "Giriş yapılamadı" };
@@ -92,19 +92,13 @@ export default async function SignInErrorPage({
         />
 
         {code === "PASSWORD_CHANGE_REQUIRED" ? (
-          <Link
-            href="/giris/parola"
-            className="self-start rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-brand hover:bg-brand-strong"
-          >
+          <Link href="/giris/parola" className={buttonClass({ className: "self-start" })}>
             Parola değiştirme ekranına git
           </Link>
         ) : null}
 
         {explanation.retry ? (
-          <Link
-            href="/giris"
-            className="self-start rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-brand hover:bg-brand-strong"
-          >
+          <Link href="/giris" className={buttonClass({ className: "self-start" })}>
             Giriş sayfasına dön
           </Link>
         ) : null}

@@ -155,10 +155,7 @@ function PeriodForm({
           />
         )}
       </FormField>
-      <button
-        type="submit"
-        className="rounded-md border border-border-subtle px-3 py-2 text-sm font-medium text-ink hover:bg-surface-sunken"
-      >
+      <button type="submit" className="button button--primary button--sm">
         Göster
       </button>
     </form>
