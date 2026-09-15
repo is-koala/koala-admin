@@ -5,9 +5,12 @@ import { apiUrl, server } from "../../../test/msw";
 
 import {
   companyContactRoleLabel,
+  devicePlatformLabel,
   getMarketplaceUser,
+  getUserBankAccounts,
   identityReviewStatusLabel,
   MARKETPLACE_USERS_PATH,
+  userBankAccountsPath,
 } from "./marketplace-users";
 
 const USER_ID = "aaaaaaaa-0000-4000-8000-000000000001";
@@ -65,8 +68,10 @@ describe("the marketplace user object GET", () => {
       companies: null,
       badges: null,
       counts: null,
+      identityReviewId: null,
       identityReviewStatus: null,
       pendingDeletionRequestId: null,
+      sessionSummary: null,
     });
   });
 
@@ -105,8 +110,15 @@ describe("the marketplace user object GET", () => {
               reportsReceived: 1,
               reportsMade: 2,
             },
+            identityReviewId: "1d000000-0000-4000-8000-00000000001d",
             identityReviewStatus: "APPROVED",
             pendingDeletionRequestId: null,
+            sessionSummary: {
+              activeSessionCount: 2,
+              lastLoginAt: "2026-09-13T09:30:00Z",
+              lastDevicePlatform: "IOS",
+              clientDeviceId: "must-be-stripped-too",
+            },
             passwordHash: "must-be-stripped",
           },
         }),
@@ -121,6 +133,12 @@ describe("the marketplace user object GET", () => {
     expect(user.badges).toEqual([]);
     expect(user.counts?.assignmentsAsEmployer).toBe(5);
     expect(user.identityReviewStatus).toBe("APPROVED");
+    expect(user.identityReviewId).toBe("1d000000-0000-4000-8000-00000000001d");
+    expect(user.sessionSummary).toEqual({
+      activeSessionCount: 2,
+      lastLoginAt: "2026-09-13T09:30:00Z",
+      lastDevicePlatform: "IOS",
+    });
     expect(JSON.stringify(user)).not.toContain("must-be-stripped");
   });
 
@@ -165,5 +183,85 @@ describe("the marketplace user object GET", () => {
     await getMarketplaceUser("ACCESS-TOKEN", "../../me").catch(() => undefined);
 
     expect(url).toContain("%2F");
+  });
+
+  it("labels the device platform and leaves an unknown code as is", () => {
+    expect(devicePlatformLabel("IOS")).toBe("iOS");
+    expect(devicePlatformLabel("WEB_BROWSER")).toBe("Web tarayıcı");
+    expect(devicePlatformLabel("VISION")).toBe("VISION");
+  });
+});
+
+/** `GET /admin/users/{id}/bank-accounts` (koala-backend#301), `user.read_pii`. */
+describe("the user's bank accounts", () => {
+  const ACCOUNT = {
+    id: "7c000000-0000-4000-8000-000000000048",
+    maskedIban: "TR18***2315",
+    verificationStatus: "VERIFIED",
+    primary: true,
+    accountHolderNameVerified: true,
+    verifiedAt: "2026-09-02T10:00:00Z",
+    createdAt: "2026-09-01T10:00:00Z",
+  };
+
+  it("reads the masked list with the bearer token and keeps the backend's order", async () => {
+    let url: string | null = null;
+    let authorization: string | null = null;
+    server.use(
+      http.get(apiUrl(userBankAccountsPath(USER_ID)), ({ request }) => {
+        url = request.url;
+        authorization = request.headers.get("authorization");
+        return HttpResponse.json({
+          success: true,
+          message: "Banka hesapları listelendi.",
+          httpStatus: "200 OK",
+          path: userBankAccountsPath(USER_ID),
+          requestId: "rid-bank",
+          timeStamp: "2026-09-12T00:00:00.000000000Z",
+          data: [
+            ACCOUNT,
+            { ...ACCOUNT, id: "7c000000-0000-4000-8000-000000000049", primary: false },
+          ],
+        });
+      }),
+    );
+
+    const accounts = await getUserBankAccounts("ACCESS-TOKEN", USER_ID);
+
+    expect(url).toBe(apiUrl(`${MARKETPLACE_USERS_PATH}/${USER_ID}/bank-accounts`));
+    expect(authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(accounts.map((account) => account.primary)).toEqual([true, false]);
+    expect(accounts[0]).toEqual(ACCOUNT);
+    expect(accounts[0]).not.toHaveProperty("iban");
+  });
+
+  it("nulls the fields an older server leaves out and keeps a status it cannot name", async () => {
+    server.use(
+      http.get(apiUrl(userBankAccountsPath(USER_ID)), () =>
+        HttpResponse.json({
+          success: true,
+          message: "Banka hesapları listelendi.",
+          httpStatus: "200 OK",
+          path: userBankAccountsPath(USER_ID),
+          requestId: "rid-bank",
+          timeStamp: "2026-09-12T00:00:00.000000000Z",
+          data: [
+            {
+              id: ACCOUNT.id,
+              maskedIban: "TR18***2315",
+              verificationStatus: "FROZEN",
+              primary: false,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const [account] = await getUserBankAccounts("ACCESS-TOKEN", USER_ID);
+
+    expect(account?.verificationStatus).toBe("FROZEN");
+    expect(account?.accountHolderNameVerified).toBeNull();
+    expect(account?.verifiedAt).toBeNull();
+    expect(account?.createdAt).toBeNull();
   });
 });

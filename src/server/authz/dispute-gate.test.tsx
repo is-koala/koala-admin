@@ -397,6 +397,29 @@ describe("an OWNER on the queue", () => {
     );
   });
 
+  /** koala-admin#111: ev karosu "eskiden yeniye" bağlantısı verir; sekme, arama ve CSV bu sırayı taşır. */
+  it("forwards ?sirala=createdAt,asc to the backend and carries it into the tabs and export link", async () => {
+    stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
+    const disputes = watchDisputes(emptyQueue);
+    watchSummary();
+
+    const html = await renderServerComponent(
+      <DisputesPage searchParams={params({ sirala: "createdAt,asc" })} />,
+    );
+
+    expect(disputes.url?.searchParams.get("sort")).toBe("createdAt,asc");
+    expect(html).toContain('href="/disputes?durum=OPEN&amp;sirala=createdAt%2Casc"');
+    expect(html).toContain('href="/api/export/disputes?sirala=createdAt%2Casc"');
+
+    // Varsayılan sıra adreslere yazılmaz; sıralanamayan alan varsayılana düşer.
+    const plain = watchDisputes(emptyQueue);
+    const fallback = await renderServerComponent(
+      <DisputesPage searchParams={params({ sirala: "status,asc" })} />,
+    );
+    expect(plain.url?.searchParams.get("sort")).toBe("createdAt,desc");
+    expect(fallback).not.toContain("sirala=");
+  });
+
   it("drops a day that is not a calendar day before it reaches the backend", async () => {
     stubMe(OWNER_REVIEW_PERMISSIONS, ["OWNER"]);
     const disputes = watchDisputes(emptyQueue);

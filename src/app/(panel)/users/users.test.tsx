@@ -563,6 +563,7 @@ describe("a marketplace user that does not exist", () => {
 describe("the user detail's contact, verification, memberships, badges and history", () => {
   const DELETION_ID = "eeeeeeee-0000-4000-8000-00000000000e";
   const COMPANY_ID = "cccccccc-0000-4000-8000-00000000000c";
+  const REVIEW_ID = "1d000000-0000-4000-8000-00000000001d";
 
   function detail(overrides: Record<string, unknown> = {}) {
     return {
@@ -596,8 +597,14 @@ describe("the user detail's contact, verification, memberships, badges and histo
         reportsReceived: 7,
         reportsMade: 8,
       },
+      identityReviewId: REVIEW_ID,
       identityReviewStatus: "APPROVED",
       pendingDeletionRequestId: DELETION_ID,
+      sessionSummary: {
+        activeSessionCount: 2,
+        lastLoginAt: "2026-09-13T09:30:00Z",
+        lastDevicePlatform: "IOS",
+      },
       ...overrides,
     };
   }
@@ -760,5 +767,56 @@ describe("the user detail's contact, verification, memberships, badges and histo
     expect(legacy).toMatch(/Kimlik incelemesi<\/dt><dd[^>]*>—</);
     expect(legacy).toContain('data-testid="user-contact"');
     expect(legacy).toMatch(/E-posta<\/dt><dd[^>]*><span[^>]*><span[^>]*>—</);
+    expect(legacy).not.toContain('data-testid="user-sessions"');
+    expect(legacy).not.toContain('data-testid="user-identity-review-link"');
+  });
+
+  /** koala-admin#108: durum artık incelemeyi açar — yalnız identity.review varken. */
+  it("links the identity review status to the review page only for an identity.review holder", async () => {
+    stubMe(READER);
+    stubDetail(detail());
+    const plain = await renderDetail();
+    expect(plain).toMatch(/Kimlik incelemesi<\/dt><dd[^>]*>Onaylı</);
+    expect(plain).not.toContain(`href="/identity-reviews/${REVIEW_ID}"`);
+
+    stubMe(["user.read", "identity.review"]);
+    stubDetail(detail());
+    const linked = await renderDetail();
+    expect(linked).toContain(
+      `data-testid="user-identity-review-link" href="/identity-reviews/${REVIEW_ID}">Onaylı</a>`,
+    );
+
+    // Durum var ama kimlik yok (0.9.26 öncesi sunucu): düz metin, uydurma bağlantı yok.
+    stubDetail(detail({ identityReviewId: null }));
+    const legacy = await renderDetail();
+    expect(legacy).toMatch(/Kimlik incelemesi<\/dt><dd[^>]*>Onaylı</);
+    expect(legacy).not.toContain("/identity-reviews/");
+  });
+
+  it("draws the session summary on genel and the empty value for a user who never signed in", async () => {
+    stubMe(READER);
+    stubDetail(detail());
+    const html = await renderDetail();
+    const card = html.slice(html.indexOf('data-testid="user-sessions"'));
+    expect(card).toContain("Oturumlar");
+    expect(card).toMatch(/Aktif oturum<\/dt><dd[^>]*>2</);
+    expect(card).toContain("13.09.2026 12:30");
+    expect(card).toContain("iOS");
+    expect(card).not.toContain("clientDeviceId");
+
+    stubDetail(
+      detail({
+        sessionSummary: { activeSessionCount: 0, lastLoginAt: null, lastDevicePlatform: null },
+      }),
+    );
+    const never = await renderDetail();
+    const empty = never.slice(never.indexOf('data-testid="user-sessions"'));
+    expect(empty).toMatch(/Aktif oturum<\/dt><dd[^>]*>0</);
+    expect(empty).toMatch(/Son giriş<\/dt><dd>—</);
+    expect(empty).toMatch(/Son cihaz platformu<\/dt><dd>—</);
+
+    stubDetail(detail({ sessionSummary: { activeSessionCount: 1, lastDevicePlatform: "VISION" } }));
+    const unknown = await renderDetail();
+    expect(unknown).toContain("VISION");
   });
 });

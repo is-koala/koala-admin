@@ -16,6 +16,17 @@ export const FINANCE_SUMMARY_PATH = "/admin/finance/summary";
 
 const moneySchema = z.string().regex(/^\d+(?:\.\d+)?$/);
 
+/**
+ * koala-backend#301 sayaçları; 0.9.26 öncesi sunucu göndermez, `null` —
+ * ev karosu o zaman çizilmez, sıfır uydurulmaz.
+ */
+const optionalCount = z
+  .number()
+  .int()
+  .nonnegative()
+  .nullish()
+  .transform((value) => value ?? null);
+
 const financeSummarySchema = z.object({
   from: z.iso.datetime({ offset: true }),
   to: z.iso.datetime({ offset: true }),
@@ -28,6 +39,10 @@ const financeSummarySchema = z.object({
   completedPayoutCount: z.number().int().nonnegative(),
   awaitingPayoutAmount: moneySchema,
   awaitingPayoutCount: z.number().int().nonnegative(),
+  /** `VERIFY_PENDING` + `next_verification_at is null`: zamanlayıcıdan düşmüş tahsilat. */
+  stuckPaymentCount: optionalCount,
+  /** `findPayoutsAwaitingSettlementLongerThan(overdue-after)` — §2y3 göstergesiyle aynı kuyruk. */
+  overduePayoutCount: optionalCount,
 });
 
 export type FinanceSummary = z.infer<typeof financeSummarySchema>;

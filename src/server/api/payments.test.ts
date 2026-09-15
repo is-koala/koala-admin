@@ -7,13 +7,17 @@ import {
   PAYMENT_ID,
   adminPaymentFixture,
   envelope,
+  pageEnvelope,
 } from "../../../test/fixtures/admin-detail";
 
 import { isKoalaApiError } from "./errors";
 import {
+  PAYMENT_PAGING,
+  PAYMENTS_PATH,
   assignmentPaymentsPath,
   getAssignmentPayments,
   getPayment,
+  getPayments,
   paymentCurrency,
   paymentPath,
   refundOriginLabel,
@@ -184,5 +188,56 @@ describe("payout id and refund origin", () => {
     expect(payment.refunds[0]?.origin).toBe("CHARGEBACK");
     expect(refundOriginLabel("CHARGEBACK")).toBe("CHARGEBACK");
     expect(refundOriginLabel("DISPUTE")).toBe("Uyuşmazlık");
+  });
+});
+
+/** `GET /admin/payments?status=` (koala-backend#301): çoklu durum virgülle tek parametre, sayfalı. */
+describe("getPayments", () => {
+  function watchList() {
+    const seen: { url: URL | null; authorization: string | null } = {
+      url: null,
+      authorization: null,
+    };
+    server.use(
+      http.get(apiUrl(PAYMENTS_PATH), ({ request }) => {
+        seen.url = new URL(request.url);
+        seen.authorization = request.headers.get("authorization");
+        return HttpResponse.json(pageEnvelope(PAYMENTS_PATH, [adminPaymentFixture()]));
+      }),
+    );
+    return seen;
+  }
+  const paging = { page: 0, size: 20, sort: PAYMENT_PAGING.defaultSort };
+
+  it("sends one status, several statuses joined by a comma, and none for every status", async () => {
+    const seen = watchList();
+
+    await getPayments("ACCESS-TOKEN", { status: "VERIFY_PENDING", paging });
+    expect(seen.authorization).toBe("Bearer ACCESS-TOKEN");
+    expect(seen.url?.searchParams.get("status")).toBe("VERIFY_PENDING");
+    expect(seen.url?.searchParams.get("sort")).toBe("createdAt,desc");
+    expect(seen.url?.searchParams.get("size")).toBe("20");
+
+    await getPayments("ACCESS-TOKEN", { status: ["FAILED", "IN_REVIEW"], paging });
+    expect(seen.url?.searchParams.get("status")).toBe("FAILED,IN_REVIEW");
+
+    const page = await getPayments("ACCESS-TOKEN", { status: null, paging });
+    expect(seen.url?.searchParams.has("status")).toBe(false);
+    expect(page.totalElements).toBe(1);
+    expect(page.content[0]?.totalCharged).toBe("1378.33");
+
+    await getPayments("ACCESS-TOKEN", { status: [], paging });
+    expect(seen.url?.searchParams.has("status")).toBe(false);
+  });
+
+  it("rejects a row with an unknown attempt status at the boundary", async () => {
+    server.use(
+      http.get(apiUrl(PAYMENTS_PATH), () =>
+        HttpResponse.json(pageEnvelope(PAYMENTS_PATH, [adminPaymentFixture({ status: "LOST" })])),
+      ),
+    );
+    await expect(getPayments("ACCESS-TOKEN", { status: null, paging })).rejects.toMatchObject({
+      errorCode: "RESPONSE_SCHEMA_MISMATCH",
+    });
   });
 });

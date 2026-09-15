@@ -28,6 +28,12 @@ export const USER_TAB_SPECS = {
     permission: "payout.reconcile",
     count: (counts) => counts.payouts,
   },
+  /**
+   * koala-admin#108: banka hesapları ucu `user.read_pii` (PERSONAL_DATA);
+   * sekmenin ikinci yarısı (bekleyen IBAN doğrulamaları) `bank.account.verify`
+   * ister ve sekmenin içinde ayrıca kapanır. DTO banka sayacı taşımaz.
+   */
+  banka: { label: "Banka", permission: "user.read_pii", count: null },
   uyusmazliklar: {
     label: "Uyuşmazlıklar",
     permission: "dispute.resolve",

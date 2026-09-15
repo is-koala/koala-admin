@@ -311,8 +311,20 @@ export const ROUTES = [
   },
   {
     /**
+     * koala-admin#111 / koala-backend#301. Liste `GET /admin/payments?status=`
+     * — tahsilat denemeleri durumla süzülür; ev karosu takılı ödemeleri
+     * (`VERIFY_PENDING`) buraya indirir. Uç ve kapı `payment.read`.
+     */
+    path: "/payments",
+    title: "Ödemeler",
+    access: "permission",
+    permission: "payment.read",
+    nav: { label: "Ödemeler", order: 46, group: "finans" },
+  },
+  {
+    /**
      * Tek ödeme denemesi, `GET /admin/payments/{paymentId}`; `payment.read`.
-     * Menüde yok — atama detayındaki denemeler tablosundan açılır.
+     * Ödeme listesinden ve atama detayındaki denemeler tablosundan açılır.
      */
     path: "/payments/[id]",
     title: "Ödeme denemesi",

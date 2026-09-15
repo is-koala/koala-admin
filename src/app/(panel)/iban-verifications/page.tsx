@@ -1,10 +1,11 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 
 import { IbanVerificationForm } from "@/components/iban-verification/iban-verification-form";
 import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import {
+  FilterId,
+  FilterNotice,
   ListSearchForm,
   QueueLoadFailure,
   QueuePager,
@@ -13,36 +14,31 @@ import {
   activeSearch,
   searchEmptyTitle,
 } from "@/components/panel/queue";
-import {
-  Badge,
-  EmptyState,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
-} from "@/components/ui";
-import { EMPTY_VALUE, formatCurrency, formatDateTime, formatInteger } from "@/lib/format";
-import { ibanVerificationHref, userHrefOrNull } from "@/lib/panel-href";
+import { EmptyState } from "@/components/ui";
+import { ibanVerificationsHref } from "@/lib/panel-href";
 import {
   getPendingIbanVerifications,
   IBAN_PENDING_PAGING,
   ibanPendingAmountText,
-  type IbanPending,
 } from "@/server/api/iban-verification";
-import { pageWindow, readPaging, readParam, type SearchParams } from "@/server/api/paging";
+import {
+  pageWindow,
+  readPaging,
+  readParam,
+  readUuidParam,
+  type SearchParams,
+} from "@/server/api/paging";
 import {
   SEARCH_QUERY_TOO_LONG_MESSAGE,
   isSearchQueryTooLong,
   readSearchQuery,
 } from "@/server/api/search-query";
-import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { submitIbanVerification } from "./actions";
+import { PendingIbanTable } from "./pending-table";
 
 export const metadata: Metadata = { title: "IBAN doğrulama" };
 
@@ -54,6 +50,9 @@ export const metadata: Metadata = { title: "IBAN doğrulama" };
  * `?referans=` / `?tutar=` ile mevcut confirm formuna düşer. Gönderen IBAN
  * hâlâ ekstreden yazılır — kuyruk onu taşımaz. Satırdaki referans nesne
  * sayfasına gider (`/iban-verifications/{referans}`, koala-admin#95).
+ * `?kullanici=` kuyruğu bir kullanıcıya süzer — backend `userId`
+ * (koala-backend#301); kullanıcı sayfasının banka sekmesi buraya gelir
+ * (koala-admin#108). UUID değilse süzgeç düşer, kuyruk süzgeçsiz açılır.
  */
 export default async function IbanVerificationsPage({
   searchParams,
@@ -87,13 +86,28 @@ async function IbanQueue({ params }: { params: SearchParams }) {
   const selectedAmount = readParam(params, "tutar") ?? "";
   const query = readSearchQuery(readParam(params, SEARCH_PARAM));
   const search = activeSearch(query);
+  const userId = readUuidParam(params, "kullanici");
 
   const viewState = {
     boyut: String(paging.size),
     ...(selectedReference === null ? {} : { referans: selectedReference }),
     ...(selectedAmount.length === 0 ? {} : { tutar: selectedAmount }),
     ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+    ...(userId === null ? {} : { kullanici: userId }),
   };
+
+  const userNotice =
+    userId === null ? null : (
+      <FilterNotice
+        testId="iban-user-filter"
+        clearHref={ibanVerificationsHref({
+          boyut: String(paging.size),
+          ...(query === null ? {} : { [SEARCH_PARAM]: query }),
+        })}
+      >
+        Bu görünüm kullanıcısı <FilterId value={userId} /> olan bekleyen doğrulamaları süzüyor.
+      </FilterNotice>
+    );
 
   const searchForm = (error: string | null = null) => (
     <ListSearchForm
@@ -112,7 +126,7 @@ async function IbanQueue({ params }: { params: SearchParams }) {
 
   let page;
   try {
-    page = await getPendingIbanVerifications(accessToken, { paging, query });
+    page = await getPendingIbanVerifications(accessToken, { paging, query, userId });
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return <div className="flex flex-col gap-6">{searchForm(SEARCH_QUERY_TOO_LONG_MESSAGE)}</div>;
@@ -151,6 +165,7 @@ async function IbanQueue({ params }: { params: SearchParams }) {
           </p>
         </div>
 
+        {userNotice}
         {searchForm()}
         <SearchResultSummary search={search} total={page.totalElements} unit="doğrulama" />
 
@@ -160,31 +175,10 @@ async function IbanQueue({ params }: { params: SearchParams }) {
             description="Kuyruk boşsa ekstredeki referansı yine de aşağıdaki forma yazabilirsiniz."
           />
         ) : (
-          <Table caption="Bekleyen IBAN doğrulamaları">
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Kullanıcı</TableHeaderCell>
-                <TableHeaderCell>IBAN</TableHeaderCell>
-                <TableHeaderCell>Tutar</TableHeaderCell>
-                <TableHeaderCell>Referans</TableHeaderCell>
-                <TableHeaderCell>Başlangıç</TableHeaderCell>
-                <TableHeaderCell>Bitiş</TableHeaderCell>
-                <TableHeaderCell>Kalan deneme</TableHeaderCell>
-                <TableHeaderCell>Onay</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((row) => (
-                <PendingRow
-                  key={row.accountId}
-                  row={row}
-                  selected={row.reference === selectedReference}
-                  page={paging.page}
-                  query={query}
-                />
-              ))}
-            </TableBody>
-          </Table>
+          <PendingIbanTable
+            rows={rows}
+            action={{ selectedReference, page: paging.page, query, userId }}
+          />
         )}
 
         {page.totalElements > 0 ? (
@@ -212,72 +206,5 @@ async function IbanQueue({ params }: { params: SearchParams }) {
         etmez; hata araştırmasında ekrandaki requestId ile backend logları eşleştirilir.
       </AuditPointer>
     </div>
-  );
-}
-
-function PendingRow({
-  row,
-  selected,
-  page,
-  query,
-}: {
-  row: IbanPending;
-  selected: boolean;
-  page: number;
-  /** Satırdan onaya geçmek aramayı silmesin. */
-  query: string | null;
-}) {
-  const amountText = ibanPendingAmountText(row.amount);
-  const personHref = userHrefOrNull(row.user.id);
-
-  return (
-    <TableRow>
-      <TableCell>
-        {personHref === null ? (
-          safeUserName(row.user)
-        ) : (
-          <Link href={personHref} className="text-brand hover:underline">
-            {safeUserName(row.user)}
-          </Link>
-        )}
-      </TableCell>
-      <TableCell>
-        <span className="font-mono text-xs">{row.maskedIban}</span>
-      </TableCell>
-      <TableCell>{row.amount === null ? EMPTY_VALUE : formatCurrency(row.amount)}</TableCell>
-      <TableCell>
-        <Link
-          href={ibanVerificationHref(row.reference)}
-          className="font-mono text-xs text-brand hover:underline"
-        >
-          {row.reference}
-        </Link>
-      </TableCell>
-      <TableCell>{formatDateTime(row.startedAt)}</TableCell>
-      <TableCell>{formatDateTime(row.expiresAt)}</TableCell>
-      <TableCell>
-        {row.attemptsLeft === null ? EMPTY_VALUE : formatInteger(row.attemptsLeft)}
-      </TableCell>
-      <TableCell>
-        {selected ? (
-          <Badge tone="brand">Seçili</Badge>
-        ) : (
-          <Link
-            href={{
-              pathname: "/iban-verifications",
-              query: {
-                referans: row.reference,
-                ...(amountText.length === 0 ? {} : { tutar: amountText }),
-                ...(page > 0 ? { sayfa: String(page) } : {}),
-                ...(query === null ? {} : { [SEARCH_PARAM]: query }),
-              },
-            }}
-            className="text-sm font-medium text-brand hover:underline"
-          >
-            Onayla
-          </Link>
-        )}
-      </TableCell>
-    </TableRow>
   );
 }

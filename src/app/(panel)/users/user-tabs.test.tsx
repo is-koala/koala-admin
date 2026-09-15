@@ -223,6 +223,7 @@ describe("the tab strip and the URL parameter", () => {
     for (const [tab, permission] of [
       ["atamalar", "payment.read"],
       ["hakedisler", "payout.reconcile"],
+      ["banka", "user.read_pii"],
       ["uyusmazliklar", "dispute.resolve"],
       ["sikayetler", "content.moderate"],
     ]) {
@@ -540,6 +541,153 @@ describe("the sikayetler tab", () => {
   });
 });
 
+describe("the banka tab", () => {
+  const ACCOUNT = {
+    id: "7c000000-0000-4000-8000-000000000048",
+    maskedIban: "TR18***2315",
+    verificationStatus: "VERIFIED",
+    primary: true,
+    accountHolderNameVerified: true,
+    verifiedAt: "2026-09-02T10:00:00.000000000Z",
+    createdAt: "2026-09-01T10:00:00.000000000Z",
+  };
+  const PENDING_ACCOUNT = {
+    ...ACCOUNT,
+    id: "7c000000-0000-4000-8000-000000000049",
+    maskedIban: "TR33***9001",
+    verificationStatus: "PENDING",
+    primary: false,
+    accountHolderNameVerified: false,
+    verifiedAt: null,
+  };
+  const PENDING_ROW = {
+    accountId: PENDING_ACCOUNT.id,
+    user: { id: USER_ID, firstName: "Ada", lastName: "Yılmaz", username: "ada" },
+    maskedIban: "TR33***9001",
+    reference: "KOALA-9F3A2C",
+    amount: "0.17",
+    startedAt: "2026-09-11T12:00:00Z",
+    expiresAt: "2026-09-12T12:00:00Z",
+    attemptsLeft: 2,
+    createdAt: "2026-09-11T11:00:00Z",
+  };
+  const BANK_ACCOUNTS = `/admin/users/${USER_ID}/bank-accounts`;
+
+  /**
+   * koala-admin#108: hesaplar `user.read_pii`, bekleyenler `bank.account.verify`.
+   * İkisi de varken iki istek; bekleyenler `userId=` ile süzülür ve "Tümünü aç"
+   * kuyruğu `?kullanici=` ile açar. Tam IBAN hiçbir yerde yok.
+   */
+  it("lists the accounts and the user's pending verifications, and links the filtered queue", async () => {
+    stubMe([...READER, "user.read_pii", "bank.account.verify"]);
+    stubUser();
+    const accounts = watch(BANK_ACCOUNTS, () =>
+      envelope(BANK_ACCOUNTS, [ACCOUNT, PENDING_ACCOUNT]),
+    );
+    const pending = watch("/admin/bank-account-verifications", () =>
+      envelope("/admin/bank-account-verifications", pageOf([PENDING_ROW])),
+    );
+
+    const html = await render({ sekme: "banka" });
+
+    expect(accounts.urls).toHaveLength(1);
+    expect(pending.urls).toHaveLength(1);
+    expect(pending.urls[0]?.searchParams.get("userId")).toBe(USER_ID);
+    expect(pending.urls[0]?.searchParams.get("status")).toBe("PENDING");
+    expect(pending.urls[0]?.searchParams.get("size")).toBe("10");
+    expect(html).toMatch(/<a aria-current="page" data-testid="user-tab-banka"/);
+    expect(html).toContain('data-testid="user-bank-accounts"');
+    expect(html).toContain("TR18***2315");
+    expect(html).toContain("TR33***9001");
+    expect(html).toContain("Doğrulandı");
+    expect(html).toContain("Bekliyor");
+    expect(html).toContain("Birincil");
+    expect(html).toContain("02.09.2026 13:00");
+    expect(html).toContain('data-testid="user-inline-iban-pending"');
+    expect(html).toContain("Toplam 1 doğrulama.");
+    expect(html).toContain('href="/iban-verifications/KOALA-9F3A2C"');
+    expect(html).toContain(`href="/iban-verifications?kullanici=${USER_ID}"`);
+    expect(html).not.toContain("TR180006");
+  });
+
+  it("says when there is no account and no pending verification", async () => {
+    stubMe([...READER, "user.read_pii", "bank.account.verify"]);
+    stubUser();
+    watch(BANK_ACCOUNTS, () => envelope(BANK_ACCOUNTS, []));
+    watch("/admin/bank-account-verifications", () =>
+      envelope("/admin/bank-account-verifications", pageOf([])),
+    );
+
+    const html = await render({ sekme: "banka" });
+
+    expect(html).toContain("Bu kullanıcının kayıtlı banka hesabı yok.");
+    expect(html).toContain("Bu kullanıcının bekleyen IBAN doğrulaması yok.");
+  });
+
+  it("closes the pending half without bank.account.verify and sends no queue request", async () => {
+    stubMe([...READER, "user.read_pii"]);
+    stubUser();
+    watch(BANK_ACCOUNTS, () => envelope(BANK_ACCOUNTS, [ACCOUNT]));
+    const pending = watch("/admin/bank-account-verifications", () =>
+      envelope("/admin/bank-account-verifications", pageOf([PENDING_ROW])),
+    );
+
+    const html = await render({ sekme: "banka" });
+
+    expect(pending.urls).toHaveLength(0);
+    expect(html).toContain("TR18***2315");
+    expect(html).toContain('data-testid="user-inline-iban-pending-disabled"');
+    expect(html).toContain("bank.account.verify");
+    expect(html).not.toContain("KOALA-9F3A2C");
+  });
+
+  it("is disabled without user.read_pii and asks for nothing", async () => {
+    stubMe([...READER, "bank.account.verify"]);
+    stubUser();
+    const accounts = watch(BANK_ACCOUNTS, () => envelope(BANK_ACCOUNTS, [ACCOUNT]));
+    const pending = watch("/admin/bank-account-verifications", () =>
+      envelope("/admin/bank-account-verifications", pageOf([PENDING_ROW])),
+    );
+
+    const html = await render({ sekme: "banka" });
+
+    expect(accounts.urls).toHaveLength(0);
+    expect(pending.urls).toHaveLength(0);
+    expect(html).toContain('data-testid="user-tab-disabled-notice"');
+    expect(html).toContain("user.read_pii");
+    expect(html).not.toContain("TR18***2315");
+  });
+
+  it("shows the backend's answer for the accounts without blanking the pending half", async () => {
+    stubMe([...READER, "user.read_pii", "bank.account.verify"]);
+    stubUser();
+    watch(BANK_ACCOUNTS, () =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Kullanıcı bulunamadı.",
+          httpStatus: "404 NOT_FOUND",
+          errorCode: "USER_NOT_FOUND_BY_ID",
+          errorCategory: "RESOURCE_NOT_FOUND",
+          requestId: "rid-bank-404",
+          path: BANK_ACCOUNTS,
+          timeStamp: "2026-09-11T13:00:00.000000000Z",
+        },
+        { status: 404 },
+      ),
+    );
+    watch("/admin/bank-account-verifications", () =>
+      envelope("/admin/bank-account-verifications", pageOf([PENDING_ROW])),
+    );
+
+    const html = await render({ sekme: "banka" });
+
+    expect(html).toContain("Banka hesapları yüklenemedi.");
+    expect(html).toContain("rid-bank-404");
+    expect(html).toContain("KOALA-9F3A2C");
+  });
+});
+
 describe("the denetim tab", () => {
   const BADGE = {
     code: "PUNCTUAL",
@@ -636,6 +784,47 @@ describe("the denetim tab", () => {
       timeline.indexOf("account-deletions.reject"),
     );
     expect(timeline).toContain("Denetim izinden 2 kayıt.");
+  });
+
+  /** koala-admin#108: son kimlik incelemesinin kararı da inceleme kimliğiyle yazılır. */
+  it("also asks for the identity review's rows when the DTO names one, and not otherwise", async () => {
+    const REVIEW_ID = "1d000000-0000-4000-8000-00000000001d";
+    stubMe([...READER, "audit.read"]);
+    stubUser({
+      ...USER_WITH_HISTORY,
+      identityReviewId: REVIEW_ID,
+      identityReviewStatus: "APPROVED",
+    });
+    const audit = watchAudit({
+      rowsFor: {
+        [USER_ID]: [GRANT_ROW],
+        [REVIEW_ID]: [
+          {
+            ...GRANT_ROW,
+            id: "aa000000-0000-4c00-8000-0000000000id",
+            occurredAt: "2026-09-06T09:00:00.000Z",
+            permission: "identity.review",
+            action: "identity-verifications.approve",
+            resourceType: "identity-verifications",
+            resourceId: REVIEW_ID,
+          },
+        ],
+      },
+    });
+
+    const html = await render({ sekme: "denetim" });
+
+    expect(audit.urls).toHaveLength(2);
+    expect(audit.urlsFor(REVIEW_ID)).toHaveLength(1);
+    const timeline = html.slice(html.indexOf('data-testid="object-timeline"'));
+    expect(timeline).toContain("identity-verifications.approve");
+    expect(timeline).toContain("Denetim izinden 2 kayıt.");
+
+    // Kimliği göndermeyen sunucu: tek sorgu, ikinci uydurulmaz.
+    stubUser({ ...USER_WITH_HISTORY, identityReviewStatus: "APPROVED" });
+    const legacy = watchAudit({ rows: [GRANT_ROW] });
+    await render({ sekme: "denetim" });
+    expect(legacy.urls).toHaveLength(1);
   });
 
   it("links the actor to the staff page for a staff.read holder", async () => {

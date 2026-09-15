@@ -3,7 +3,10 @@ import "server-only";
 import { z } from "zod";
 
 import { koalaApi } from "./koala";
+import { pagingQuery, type Paging, type PagingContract } from "./paging";
+import { pageDtoSchema } from "./schemas";
 import { pricingBreakdownSchema } from "./shared/pricing";
+import type { PageDto } from "./types";
 import { safeUserSchema } from "./users";
 
 /**
@@ -13,7 +16,14 @@ import { safeUserSchema } from "./users";
  * ```java
  * GET /admin/job-assignments/{assignmentId}/payments  payment.read
  * GET /admin/payments/{paymentId}                     payment.read
+ * GET /admin/payments?status=                         payment.read  Pageable
  * ```
+ *
+ * Liste koala-backend#301 ile geldi: `status` çoklu (virgülle tek parametre),
+ * verilmezse her durum; satır tekil detayla aynı `AdminPaymentDto`. İşçisi
+ * anonimleştirilmiş atamanın FAILED denemesi listeden düşer (backend INNER
+ * join, CLAUDE.md'de yazılı); bekleyen denemeler hesap silmeyi engellediği
+ * için takılı ödeme kaybolmaz.
  *
  * `AdminPaymentDto` tek bir tahsilat denemesidir: durum, tutar dökümü,
  * sağlayıcı referansları, doğrulama sayacı ve iade kayıtları. Kart verisi ve
@@ -143,6 +153,42 @@ export const adminPaymentSchema = z.object({
 });
 
 export type AdminPayment = z.infer<typeof adminPaymentSchema>;
+
+export const PAYMENTS_PATH = "/admin/payments";
+
+/** `AdminDetailManager.PAYMENT_SORTABLE`; varsayılan yeniden eskiye. */
+export const PAYMENT_PAGING: PagingContract = {
+  sortable: ["createdAt", "updatedAt", "status", "nextVerificationAt"],
+  defaultSort: { field: "createdAt", direction: "desc" },
+};
+
+export interface PaymentListQuery {
+  /** `null`/boş: her durum. Birden çok değer `status=A,B` olarak tek parametre gider. */
+  readonly status: PaymentAttemptStatus | readonly PaymentAttemptStatus[] | null;
+  readonly paging: Paging;
+}
+
+export function getPayments(
+  accessToken: string,
+  query: PaymentListQuery,
+): Promise<PageDto<AdminPayment>> {
+  return koalaApi.get({
+    path: PAYMENTS_PATH,
+    schema: pageDtoSchema(adminPaymentSchema),
+    query: {
+      status: paymentStatusParam(query.status),
+      ...pagingQuery(query.paging),
+    },
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+function paymentStatusParam(status: PaymentListQuery["status"]): string | undefined {
+  if (status === null) return undefined;
+  if (typeof status === "string") return status;
+  return status.length === 0 ? undefined : status.join(",");
+}
 
 export function assignmentPaymentsPath(assignmentId: string): string {
   return `/admin/job-assignments/${encodeURIComponent(assignmentId)}/payments`;

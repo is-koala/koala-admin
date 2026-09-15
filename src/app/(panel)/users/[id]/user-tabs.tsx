@@ -6,13 +6,24 @@ import { AuditPointer } from "@/components/panel/authz/audit-pointer";
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { ObjectTimeline } from "@/components/panel/object-timeline";
 import { QueueLoadFailure, type QueueFailure } from "@/components/panel/queue";
-import { Badge, EmptyState } from "@/components/ui";
-import { formatInteger } from "@/lib/format";
+import {
+  Badge,
+  EmptyState,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from "@/components/ui";
+import { EMPTY_VALUE, formatBoolean, formatDateTime, formatInteger } from "@/lib/format";
+import { bankAccountVerificationStatusLabel } from "@/lib/iban-verification";
 import { TimelineBuilder, type TimelineEvent } from "@/lib/object-timeline";
 import {
   assignmentsForEmployerHref,
   assignmentsForWorkerHref,
   disputesForUserHref,
+  ibanVerificationsForUserHref,
   payoutsForWorkerHref,
   reportsAboutUserHref,
   reportsByReporterHref,
@@ -22,8 +33,14 @@ import {
 import { USER_TABS, USER_TAB_SPECS, isTabEnabled, type UserTab } from "@/lib/user-tabs";
 import { getDisputes, type Dispute } from "@/server/api/disputes";
 import { ASSIGNMENT_PAGING, getAdminAssignments } from "@/server/api/escrow";
+import { IBAN_PENDING_PAGING, getPendingIbanVerifications } from "@/server/api/iban-verification";
 import { getMarketplaceUserRoles } from "@/server/api/marketplace-user-roles";
-import type { AdminUserCounts, MarketplaceUserDetail } from "@/server/api/marketplace-users";
+import {
+  getUserBankAccounts,
+  type AdminBankAccount,
+  type AdminUserCounts,
+  type MarketplaceUserDetail,
+} from "@/server/api/marketplace-users";
 import { firstPage } from "@/server/api/paging";
 import { PAYOUT_PAGING, PAYOUT_STATUSES, getPayouts } from "@/server/api/payout-reconciliation";
 import { REPORT_PAGING, getReports } from "@/server/api/reports";
@@ -35,6 +52,7 @@ import { AssignmentTable } from "../../assignments/assignment-table";
 import type { SummaryEntry } from "../../disputes/dispute-detail";
 import { DisputeTable } from "../../disputes/dispute-table";
 import { loadSummaries } from "../../disputes/load-summaries";
+import { PendingIbanTable } from "../../iban-verifications/pending-table";
 import { PayoutTable } from "../../payout-reconciliation/payout-table";
 import { ReportTable } from "../../reports/report-table";
 import { UserRoleDetail, type UserGrants } from "../user-roles";
@@ -286,6 +304,148 @@ export async function PayoutsTab({ accessToken, userId }: { accessToken: string;
 }
 
 /**
+ * Banka sekmesi (koala-admin#108). İki yarı, iki izin: hesaplar
+ * `GET /admin/users/{id}/bank-accounts` (`user.read_pii`, sekmenin kendi
+ * kapısı); bekleyen IBAN doğrulamaları `GET /admin/bank-account-verifications
+ * ?userId=` (`bank.account.verify`) — izin yoksa o yarı gerekçesiyle kapanır
+ * ve istek çıkmaz, hesaplar yine çizilir. Tam IBAN hiçbir uçta yok; maskeli
+ * değer olduğu gibi yazılır. Hesap listesi sayfasız (`List`), bekleyenler
+ * ilk on satır ve "Tümünü aç".
+ */
+export async function BankTab({
+  accessToken,
+  userId,
+  canReadPending,
+}: {
+  accessToken: string;
+  userId: string;
+  canReadPending: boolean;
+}) {
+  const [accounts, pending] = await Promise.all([
+    loadBankAccounts(accessToken, userId),
+    canReadPending
+      ? inline(() =>
+          getPendingIbanVerifications(accessToken, {
+            paging: firstPage(IBAN_PENDING_PAGING, INLINE_ROWS),
+            userId,
+          }),
+        )
+      : Promise.resolve(null),
+  ]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section
+        className="flex flex-col gap-3"
+        aria-labelledby="user-bank-accounts-heading"
+        data-testid="user-bank-accounts"
+      >
+        <div className="flex flex-col gap-0.5">
+          <h2 id="user-bank-accounts-heading" className="text-sm font-semibold">
+            Banka hesapları
+          </h2>
+          <p className="max-w-prose text-xs text-ink-muted">
+            Maskeli IBAN ve etkin doğrulama durumu; tam IBAN backend&apos;den hiç gelmez. Bu okuma
+            kişisel veri denetim kaydına düşer.
+          </p>
+        </div>
+        {!accounts.ok ? (
+          <QueueLoadFailure
+            subject="Banka hesapları"
+            permission="user.read_pii"
+            failure={accounts.failure}
+          />
+        ) : accounts.accounts.length === 0 ? (
+          <EmptyState title="Bu kullanıcının kayıtlı banka hesabı yok." />
+        ) : (
+          <BankAccountTable accounts={accounts.accounts} />
+        )}
+      </section>
+
+      {pending === null ? (
+        <section
+          className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4"
+          data-testid="user-inline-iban-pending-disabled"
+        >
+          <h2 className="text-sm font-semibold">Bekleyen IBAN doğrulamaları</h2>
+          <p className="max-w-prose text-sm text-ink-muted">
+            Bu bölüm <code className="font-mono">bank.account.verify</code> ister; liste isteği
+            gönderilmedi.
+          </p>
+        </section>
+      ) : (
+        <InlineSection
+          id="iban-pending"
+          title="Bekleyen IBAN doğrulamaları"
+          unit="doğrulama"
+          permission="bank.account.verify"
+          allHref={ibanVerificationsForUserHref(userId)}
+          result={pending}
+          emptyTitle="Bu kullanıcının bekleyen IBAN doğrulaması yok."
+        >
+          {(rows) => <PendingIbanTable rows={rows} showUser={false} />}
+        </InlineSection>
+      )}
+    </div>
+  );
+}
+
+type BankAccountsResult =
+  { ok: true; accounts: readonly AdminBankAccount[] } | { ok: false; failure: QueueFailure };
+
+async function loadBankAccounts(accessToken: string, userId: string): Promise<BankAccountsResult> {
+  try {
+    return { ok: true, accounts: await getUserBankAccounts(accessToken, userId) };
+  } catch (error) {
+    return { ok: false, failure: classifyQueueFailure(error) };
+  }
+}
+
+const BANK_STATUS_TONES: Readonly<Record<string, "neutral" | "warning" | "success" | "danger">> = {
+  UNVERIFIED: "neutral",
+  PENDING: "warning",
+  VERIFIED: "success",
+  EXPIRED: "danger",
+};
+
+function BankAccountTable({ accounts }: { accounts: readonly AdminBankAccount[] }) {
+  return (
+    <Table caption="Banka hesapları">
+      <TableHead>
+        <TableRow>
+          <TableHeaderCell>IBAN</TableHeaderCell>
+          <TableHeaderCell>Doğrulama</TableHeaderCell>
+          <TableHeaderCell>Birincil</TableHeaderCell>
+          <TableHeaderCell>Hesap sahibi adı</TableHeaderCell>
+          <TableHeaderCell>Doğrulanma</TableHeaderCell>
+          <TableHeaderCell>Eklenme</TableHeaderCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {accounts.map((account) => (
+          <TableRow key={account.id}>
+            <TableCell>
+              <span className="font-mono text-xs">{account.maskedIban}</span>
+            </TableCell>
+            <TableCell>
+              <Badge tone={BANK_STATUS_TONES[account.verificationStatus] ?? "neutral"}>
+                {bankAccountVerificationStatusLabel(account.verificationStatus)}
+              </Badge>
+            </TableCell>
+            <TableCell>
+              {account.primary ? <Badge tone="brand">Birincil</Badge> : EMPTY_VALUE}
+            </TableCell>
+            <TableCell>{formatBoolean(account.accountHolderNameVerified)}</TableCell>
+            <TableCell>{formatDateTime(account.verifiedAt)}</TableCell>
+            <TableCell>{formatDateTime(account.createdAt)}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+/**
  * Uyuşmazlık ucu tek `status` alır ve verilmezse bekleyenleri (OPEN,
  * UNDER_REVIEW) döner; "hepsi" yok. Bekleyen ve çözülmüş iki ayrı bölüm.
  * Tutarlar atama özetinden gelir ve `payment.read` ister; izin yoksa sütun
@@ -431,16 +591,14 @@ export async function AuditTab({
 
       <ObjectTimeline
         resourceId={user.id}
-        relatedResourceIds={
-          user.pendingDeletionRequestId === null ? [] : [user.pendingDeletionRequestId]
-        }
+        relatedResourceIds={relatedResourceIds(user)}
         subject="Bu kullanıcı"
         events={userTimelineEvents(user)}
       >
         Kaydın kendi anları DTO&apos;dan (hesap açılışı, rozetler); rol yazımı ve bu kullanıcı
-        kimliğiyle kayıtlı personel işlemleri denetim izinden. Bekleyen silme talebi varsa onun
-        kimliğiyle yazılan karar da eklenir; kimlik incelemesi kararları kendi kimliğiyle yazılır ve
-        burada görünmez.
+        kimliğiyle kayıtlı personel işlemleri denetim izinden. Bekleyen silme talebi ve son kimlik
+        incelemesi varsa onların kimliğiyle yazılan kararlar da eklenir; kimliğini göndermeyen eski
+        sunucuda kimlik incelemesi kararları burada görünmez.
       </ObjectTimeline>
 
       <ObjectAuditPointer resourceId={user.id} linkLabel="Bu kullanıcının denetim kayıtlarını aç">
@@ -456,10 +614,16 @@ export async function AuditTab({
  * göndermez; o satırlar yalnız yoklukla eksilir. Kimlik incelemesi ve silme
  * talebi tarih taşımaz, çizelgeye giremez. Backend `resourceId`'ye yalnız
  * ilk yol değişkenini yazdığı için (`AuditScope.resourceIdOf`) silme talebi
- * kararı kullanıcı kimliğiyle gelmez; `pendingDeletionRequestId` ikinci bir
- * sorgu olarak `ObjectTimeline`'a verilir. Kimlik incelemesinin kimliği
- * DTO'da yok (koala-backend#301 ile gelecek), o karar burada görünmez.
+ * kararı kullanıcı kimliğiyle gelmez; `pendingDeletionRequestId` ve
+ * `identityReviewId` (koala-backend#301) ikincil sorgular olarak
+ * `ObjectTimeline`'a verilir.
  */
+function relatedResourceIds(user: MarketplaceUserDetail): readonly string[] {
+  return [user.pendingDeletionRequestId, user.identityReviewId].filter(
+    (id): id is string => id !== null,
+  );
+}
+
 function userTimelineEvents(user: MarketplaceUserDetail): readonly TimelineEvent[] {
   const timeline = new TimelineBuilder();
   timeline.push(user.createdAt, "Hesap oluşturuldu");

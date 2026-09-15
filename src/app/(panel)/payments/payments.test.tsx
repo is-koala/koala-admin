@@ -318,18 +318,35 @@ describe("the payout link and the refund origin", () => {
   });
 });
 
-/** koala-admin#112: ödemenin listesi yok; kırıntı atamayı `?atama=` ile tanır. */
+/**
+ * koala-admin#112/#111: `?atama=` taşıyan adres atamadan gelmiştir ve atama
+ * kırıntısını yazar; taşımayan adres ödeme listesine döner ve liste
+ * görünümünü (`durum`, `sirala`, …) geri taşır.
+ */
 describe("the payment page's breadcrumb", () => {
-  it("writes Atama özeti › payment when the address carries no assignment", async () => {
+  it("writes Ödemeler › payment with the list view when the address carries no assignment", async () => {
     stubMe(ANALYST);
     watch();
 
     const html = await render();
-
     expect(html).toContain('<nav aria-label="Konum">');
-    expect(html).toContain('href="/assignments"><span>Atama özeti</span></a>');
+    expect(html).toContain('href="/payments"><span>Ödemeler</span></a>');
     expect(html).toContain(`title="${PAYMENT_ID}">${PAYMENT_ID.slice(0, 8)}<`);
     expect(html).not.toContain(`title="${ASSIGNMENT_ID}">${ASSIGNMENT_ID.slice(0, 8)}</span></a>`);
+    expect(html).not.toContain("Atama özeti");
+
+    watch();
+    const filtered = (
+      await renderServerComponent(
+        <PaymentDetailPage
+          params={Promise.resolve({ id: PAYMENT_ID })}
+          searchParams={Promise.resolve({ durum: "VERIFY_PENDING", sirala: "createdAt,asc" })}
+        />,
+      )
+    ).replaceAll("<!-- -->", "");
+    expect(filtered).toContain(
+      'href="/payments?durum=VERIFY_PENDING&amp;sirala=createdAt%2Casc"><span>Ödemeler</span></a>',
+    );
   });
 
   it("inserts the assignment as a linked middle crumb when ?atama= is a UUID", async () => {
@@ -367,7 +384,8 @@ describe("the payment page's breadcrumb", () => {
     ).replaceAll("<!-- -->", "");
 
     expect(html).not.toContain("javascript:");
-    expect(html).toContain('href="/assignments"><span>Atama özeti</span></a>');
+    expect(html).toContain('href="/payments"><span>Ödemeler</span></a>');
+    expect(html).not.toContain("Atama özeti");
   });
 });
 

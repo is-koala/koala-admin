@@ -27,9 +27,24 @@ export { companyContactRoleLabel } from "./shared/company-contact-role";
  * Nesne ucu koala-backend#283 ile `AdminUserDetailDto` döner: `SafeUserDto`
  * + iletişim (yalnız `user.read_pii` taşıyan aktöre dolu, diğerine `null`),
  * doğrulama bayrakları, üyelikler, rozetler, geçmiş sayaçları, kimlik
- * inceleme durumu ve bekleyen silme talebi. Eski sunucu bu alanları hiç
- * göndermez; şema hepsini isteğe bağlı okur ki `SafeUserDto` dönen bir
+ * inceleme durumu ve bekleyen silme talebi. koala-backend#301 son kimlik
+ * incelemesinin kimliğini (`identityReviewId`) ve oturum özetini
+ * (`sessionSummary`: aktif oturum sayısı, son giriş, son cihaz platformu;
+ * cihaz/oturum kimliği, IP ya da token yok) ekledi. Eski sunucu bu alanları
+ * hiç göndermez; şema hepsini isteğe bağlı okur ki `SafeUserDto` dönen bir
  * sunucuda sayfa düşmesin, yalnız yeni bölümler gizlensin.
+ *
+ * ```java
+ * GET /admin/users/{userId}/bank-accounts  user.read_pii
+ * ```
+ *
+ * Banka hesapları ayrı uç ve ayrı izin (koala-backend#301): maskeli IBAN
+ * (ilk 4 + *** + son 4; tam IBAN hiçbir zaman dönmez), etkin doğrulama
+ * durumu (süresi dolan PENDING EXPIRED gelir), birincil bayrağı, hesap
+ * sahibi adı doğrulaması, `verifiedAt`, `createdAt`. Her okuma backend'de
+ * PERSONAL_DATA denetim satırı yazar; panel yalnız `banka` sekmesi
+ * açıkken ister. Bekleyen doğrulamanın referansı ve tutarı burada yok —
+ * `bank-account-verifications?userId=` (`bank.account.verify`).
  */
 
 export const MARKETPLACE_USERS_PATH = "/admin/users";
@@ -69,6 +84,54 @@ const IDENTITY_REVIEW_STATUS_LABELS: Readonly<Record<string, string>> = {
 export function identityReviewStatusLabel(status: string): string {
   return IDENTITY_REVIEW_STATUS_LABELS[status] ?? status;
 }
+
+/**
+ * `DeviceType.java`. Yalnız gösterim: serbest dize okunur, bilinmeyen kod
+ * olduğu gibi yazılır.
+ */
+export const DEVICE_PLATFORMS = ["IOS", "ANDROID", "WEB_BROWSER", "UNKNOWN", "OTHER"] as const;
+export type DevicePlatform = (typeof DEVICE_PLATFORMS)[number];
+
+const DEVICE_PLATFORM_LABELS: Readonly<Record<string, string>> = {
+  IOS: "iOS",
+  ANDROID: "Android",
+  WEB_BROWSER: "Web tarayıcı",
+  UNKNOWN: "Bilinmiyor",
+  OTHER: "Diğer",
+} satisfies Record<DevicePlatform, string>;
+
+export function devicePlatformLabel(platform: string): string {
+  return DEVICE_PLATFORM_LABELS[platform] ?? platform;
+}
+
+/**
+ * `AdminSessionSummaryDto` (koala-backend#301). Sayı `long`; son giriş ve
+ * platform hiç oturum açmamış kullanıcıda `null`.
+ */
+export const adminSessionSummarySchema = z.object({
+  activeSessionCount: z.number().int().nonnegative(),
+  lastLoginAt: nullableString,
+  lastDevicePlatform: nullableString,
+});
+
+export type AdminSessionSummary = z.infer<typeof adminSessionSummarySchema>;
+
+/**
+ * `AdminBankAccountDto` (koala-backend#301). `verificationStatus` serbest
+ * dize: etiket `bankAccountVerificationStatusLabel` ile, bilinmeyen kod
+ * olduğu gibi. `accountHolderNameVerified` eski sunucuda yok, `null`.
+ */
+export const adminBankAccountSchema = z.object({
+  id: z.string(),
+  maskedIban: z.string(),
+  verificationStatus: z.string(),
+  primary: z.boolean(),
+  accountHolderNameVerified: nullableBoolean,
+  verifiedAt: nullableString,
+  createdAt: nullableString,
+});
+
+export type AdminBankAccount = z.infer<typeof adminBankAccountSchema>;
 
 /** `AdminUserCompanyDto` — üyelik: şirket ve o şirketteki rol (`CompanyContactRole`, serbest dize). */
 export const adminUserCompanySchema = z.object({
@@ -131,8 +194,10 @@ export const adminUserDetailSchema = safeUserSchema.extend({
     .nullish()
     .transform((value) => value ?? null),
   counts: adminUserCountsSchema.nullish().transform((value) => value ?? null),
+  identityReviewId: nullableString,
   identityReviewStatus: nullableString,
   pendingDeletionRequestId: nullableString,
+  sessionSummary: adminSessionSummarySchema.nullish().transform((value) => value ?? null),
 });
 
 export type MarketplaceUserDetail = z.infer<typeof adminUserDetailSchema>;
@@ -187,6 +252,28 @@ export function getMarketplaceUser(
   return koalaApi.get({
     path: marketplaceUserPath(userId),
     schema: adminUserDetailSchema,
+    accessToken,
+    cache: "no-store",
+  });
+}
+
+export function userBankAccountsPath(userId: string): string {
+  return `${marketplaceUserPath(userId)}/bank-accounts`;
+}
+
+/**
+ * `GET /admin/users/{userId}/bank-accounts` — birincil önce, sonra eskiden
+ * yeniye (backend sırası korunur). İzinsiz personel var olan ve olmayan
+ * kullanıcıya aynı 403 zarfını alır; izinli personel olmayan kullanıcıya
+ * `USER_NOT_FOUND_BY_ID`.
+ */
+export function getUserBankAccounts(
+  accessToken: string,
+  userId: string,
+): Promise<AdminBankAccount[]> {
+  return koalaApi.get({
+    path: userBankAccountsPath(userId),
+    schema: z.array(adminBankAccountSchema),
     accessToken,
     cache: "no-store",
   });

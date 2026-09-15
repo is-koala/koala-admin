@@ -288,3 +288,29 @@ describe("attempts left", () => {
     expect(legacy.content[0]?.attemptsLeft).toBeNull();
   });
 });
+
+/** koala-backend#301: `userId` yalnız verildiğinde gider. */
+describe("the user filter on the pending queue", () => {
+  it("forwards userId and omits it when null", async () => {
+    let url: URL | null = null;
+    server.use(
+      http.get(apiUrl(IBAN_PENDING_PATH), ({ request }) => {
+        url = new URL(request.url);
+        return pageSuccess();
+      }),
+    );
+    const paging = { page: 0, size: 10, sort: IBAN_PENDING_PAGING.defaultSort };
+
+    await getPendingIbanVerifications("ACCESS-TOKEN", {
+      paging,
+      userId: "b2000000-0000-4000-8000-000000000002",
+    });
+    expect((url as unknown as URL).searchParams.get("userId")).toBe(
+      "b2000000-0000-4000-8000-000000000002",
+    );
+    expect((url as unknown as URL).searchParams.get("status")).toBe("PENDING");
+
+    await getPendingIbanVerifications("ACCESS-TOKEN", { paging, userId: null });
+    expect((url as unknown as URL).searchParams.has("userId")).toBe(false);
+  });
+});

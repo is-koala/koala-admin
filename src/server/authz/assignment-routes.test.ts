@@ -22,7 +22,10 @@ describe("assignment lookup is gated on payment.read", () => {
     );
   });
 
-  it("is the only entry someone holding just payment.read sees", () => {
-    expect(navigationFor(["payment.read"]).map((entry) => entry.href)).toEqual(["/assignments"]);
+  it("shares payment.read's menu only with the payments list (koala-admin#111)", () => {
+    expect(navigationFor(["payment.read"]).map((entry) => entry.href)).toEqual([
+      "/assignments",
+      "/payments",
+    ]);
   });
 });

@@ -64,7 +64,7 @@ const REFUND_TONES: Record<RefundStatus, "neutral" | "warning" | "success" | "da
 /**
  * Tek ödeme denemesi (koala-admin#95). `GET /admin/payments/{paymentId}`,
  * `payment.read`. Kart verisi yoktur — backend DTO'da böyle bir alan yok,
- * panelde de yok. Menüde değil: atama detayındaki tablodan açılır.
+ * panelde de yok. Ödeme listesinden ve atama detayındaki tablodan açılır.
  * Yazma eylemi yok; iade atama sayfasındaki mevcut düğmeden yapılır.
  *
  * koala-backend#283: `payoutId` hakedişe (`payout.reconcile`), iade satırının
@@ -103,16 +103,17 @@ export default async function PaymentDetailPage({
 }
 
 /**
- * Ödemenin listesi yok; atama detayından açılır ve adres `?atama=` ile atama
- * kimliğini taşır: "Atamalar › atama › ödeme". Taşımayan bir adres (yer imi,
- * ⌘K) iki kırıntıyla kalır.
+ * İki giriş, iki kırıntı (koala-admin#111): atama detayından `?atama=` ile
+ * gelen adres "Atama özeti › atama › ödeme" yazar; ödeme listesinden gelen
+ * (ya da yer imi, ⌘K) "Ödemeler › ödeme" ve liste süzgecini geri taşır.
  */
 function paymentBreadcrumb(paymentId: string, query: SearchParams): readonly BreadcrumbItem[] {
   const assignmentId = readUuidParam(query, PAYMENT_ASSIGNMENT_PARAM);
-  const list = listCrumb("/assignments", readQueueState(query));
-  if (assignmentId === null) return [list, objectCrumb(paymentId)];
+  if (assignmentId === null) {
+    return [listCrumb("/payments", readQueueState(query)), objectCrumb(paymentId)];
+  }
   return [
-    list,
+    listCrumb("/assignments", readQueueState(query)),
     { ...objectCrumb(assignmentId), href: assignmentHref(assignmentId) },
     objectCrumb(paymentId),
   ];

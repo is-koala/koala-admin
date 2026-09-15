@@ -12,6 +12,7 @@ import { EMPTY_VALUE, formatBoolean, formatDateTime, formatInteger } from "@/lib
 import {
   accountDeletionHref,
   companyHref,
+  identityReviewHref,
   isUuid,
   reportHref,
   reportsForUserHref,
@@ -23,8 +24,10 @@ import {
   badgeFamilyLabel,
   badgeTierLabel,
   companyContactRoleLabel,
+  devicePlatformLabel,
   getMarketplaceUser,
   identityReviewStatusLabel,
+  type AdminSessionSummary,
   type AdminUserBadge,
   type AdminUserCompany,
   type AdminUserCounts,
@@ -41,6 +44,7 @@ import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decision
 import {
   AssignmentsTab,
   AuditTab,
+  BankTab,
   DisabledTabPanel,
   DisputesTab,
   PayoutsTab,
@@ -64,9 +68,15 @@ export const metadata: Metadata = { title: "Kullanıcı" };
  * varken okunur. Kapı `user.read`: izni olmayan kişide GET hiç çıkmaz.
  *
  * Kimlik kartlarının altı sekmeli (koala-admin#103): `?sekme=` ile
- * `genel | atamalar | hakedisler | uyusmazliklar | sikayetler | denetim`.
+ * `genel | atamalar | hakedisler | banka | uyusmazliklar | sikayetler | denetim`.
  * Yalnız seçili sekmenin listesi istenir; sekme tanımları `@/lib/user-tabs`,
  * içerikleri `user-tabs.tsx`.
+ *
+ * koala-admin#108 / koala-backend#301: "Kimlik incelemesi" satırı
+ * `identityReviewId` ile inceleme sayfasına bağlanır (`identity.review`
+ * varken), `genel` oturum özetini çizer (aktif oturum, son giriş, platform;
+ * cihaz kimliği yok), `banka` sekmesi hesapları ve bekleyen IBAN
+ * doğrulamalarını listeler.
  */
 export default async function UserDetailPage({
   params,
@@ -144,7 +154,11 @@ async function UserObject({ id, tab }: { id: string; tab: UserTab }) {
 
         <div className="flex flex-col gap-4">
           <ContactCard user={user} canReadPii={canReadPii} />
-          <VerificationCard user={user} canOpenDeletion={canReadPii} />
+          <VerificationCard
+            user={user}
+            canOpenDeletion={canReadPii}
+            canOpenIdentityReview={context.has("identity.review")}
+          />
         </div>
       </section>
 
@@ -158,6 +172,12 @@ async function UserObject({ id, tab }: { id: string; tab: UserTab }) {
         <AssignmentsTab accessToken={accessToken} userId={user.id} />
       ) : tab === "hakedisler" ? (
         <PayoutsTab accessToken={accessToken} userId={user.id} />
+      ) : tab === "banka" ? (
+        <BankTab
+          accessToken={accessToken}
+          userId={user.id}
+          canReadPending={held.has("bank.account.verify")}
+        />
       ) : tab === "uyusmazliklar" ? (
         <DisputesTab
           accessToken={accessToken}
@@ -173,7 +193,7 @@ async function UserObject({ id, tab }: { id: string; tab: UserTab }) {
   );
 }
 
-/** Sayaçlar, üyelikler, rozetler ve moderasyon bağlamı için açık şikayetler. */
+/** Sayaçlar, oturum özeti, üyelikler, rozetler ve moderasyon bağlamı için açık şikayetler. */
 async function GeneralTab({
   user,
   held,
@@ -190,6 +210,8 @@ async function GeneralTab({
   return (
     <div className="flex flex-col gap-4">
       {user.counts === null ? null : <HistoryCounts user={user} counts={user.counts} held={held} />}
+
+      {user.sessionSummary === null ? null : <SessionCard summary={user.sessionSummary} />}
 
       {user.companies === null && user.badges === null ? null : (
         <section className="grid gap-4 md:grid-cols-2">
@@ -250,12 +272,60 @@ function ContactCard({ user, canReadPii }: { user: MarketplaceUserDetail; canRea
   );
 }
 
+/**
+ * Oturum özeti (koala-admin#108). Backend `sessions` tablosundan yalnız
+ * sayı, son giriş ve son cihaz platformunu verir; cihaz/oturum kimliği, IP
+ * ya da token DTO'da yok, panelde de yok. Eski sunucu alanı göndermez, kart
+ * çizilmez. Hiç oturum açmamış kullanıcıda son giriş ve platform "—".
+ */
+function SessionCard({ summary }: { summary: AdminSessionSummary }) {
+  return (
+    <section
+      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4"
+      aria-labelledby="user-sessions-heading"
+      data-testid="user-sessions"
+    >
+      <h2 id="user-sessions-heading" className="text-sm font-semibold">
+        Oturumlar
+      </h2>
+      <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+        <div className="flex flex-col gap-0.5">
+          <dt className="text-xs text-ink-muted">Aktif oturum</dt>
+          <dd className="text-lg font-semibold">{formatInteger(summary.activeSessionCount)}</dd>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <dt className="text-xs text-ink-muted">Son giriş</dt>
+          <dd>{formatDateTime(summary.lastLoginAt)}</dd>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <dt className="text-xs text-ink-muted">Son cihaz platformu</dt>
+          <dd>
+            {summary.lastDevicePlatform === null
+              ? EMPTY_VALUE
+              : devicePlatformLabel(summary.lastDevicePlatform)}
+          </dd>
+        </div>
+      </dl>
+      <p className="text-xs text-ink-muted">
+        Sayı süresi dolmamış oturumlardır; cihaz kimliği ve IP bu ekranda yoktur.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * "Kimlik incelemesi" satırı durumun yanında incelemeyi açar (koala-admin#108):
+ * `identityReviewId` yeni sunucudan gelir, bağlantı yalnız `identity.review`
+ * varken — izinsiz kişiyi 403 ekranına göndermek yerine durum düz metin kalır.
+ */
 function VerificationCard({
   user,
   canOpenDeletion,
+  canOpenIdentityReview,
 }: {
   user: MarketplaceUserDetail;
   canOpenDeletion: boolean;
+  canOpenIdentityReview: boolean;
 }) {
   return (
     <section
@@ -272,9 +342,19 @@ function VerificationCard({
         <Row
           label="Kimlik incelemesi"
           value={
-            user.identityReviewStatus === null
-              ? EMPTY_VALUE
-              : identityReviewStatusLabel(user.identityReviewStatus)
+            user.identityReviewStatus === null ? (
+              EMPTY_VALUE
+            ) : user.identityReviewId !== null && canOpenIdentityReview ? (
+              <Link
+                href={identityReviewHref(user.identityReviewId)}
+                className="text-brand hover:underline"
+                data-testid="user-identity-review-link"
+              >
+                {identityReviewStatusLabel(user.identityReviewStatus)}
+              </Link>
+            ) : (
+              identityReviewStatusLabel(user.identityReviewStatus)
+            )
           }
         />
         <Row

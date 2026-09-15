@@ -49,8 +49,11 @@ describe("the job list is gated on job.read", () => {
     expect(navigationFor(["user.read"]).map((entry) => entry.href)).toEqual(["/users"]);
   });
 
-  it("does not add a menu entry for payment.read or payout.reconcile holders", () => {
-    expect(navigationFor(["payment.read"]).map((entry) => entry.href)).toEqual(["/assignments"]);
+  it("shows payment.read the assignment and payment lists and payout.reconcile only reconciliation", () => {
+    expect(navigationFor(["payment.read"]).map((entry) => entry.href)).toEqual([
+      "/assignments",
+      "/payments",
+    ]);
     expect(navigationFor(["payout.reconcile"]).map((entry) => entry.href)).toEqual([
       "/payout-reconciliation",
     ]);
