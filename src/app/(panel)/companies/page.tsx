@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { StaffFlagBadges } from "@/components/panel/staff-flag-badges";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
@@ -33,6 +34,7 @@ import {
 } from "@/server/api/paging";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
+import { loadListFlags } from "@/server/notes/load-flags";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { ApprovalStatusBadge } from "./company-review";
@@ -128,9 +130,11 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
     />
   );
 
+  const accessToken = await getKoalaAccessToken();
+
   let page;
   try {
-    page = await getCompanies(await getKoalaAccessToken(), { status, query, paging });
+    page = await getCompanies(accessToken, { status, query, paging });
   } catch (error) {
     return (
       <div className="flex flex-col gap-4">
@@ -147,6 +151,11 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
   }
 
   const companies = page.content;
+  const flagsByCompany = await loadListFlags(
+    accessToken,
+    "COMPANY",
+    companies.map((company) => company.id),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -186,12 +195,15 @@ async function CompanyQueue({ params }: { params: SearchParams }) {
               return (
                 <TableRow key={company.id}>
                   <TableCell>
-                    <Link
-                      href={companyHref(company.id, objectQuery)}
-                      className="text-brand hover:underline"
-                    >
-                      {company.name ?? EMPTY_VALUE}
-                    </Link>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={companyHref(company.id, objectQuery)}
+                        className="text-brand hover:underline"
+                      >
+                        {company.name ?? EMPTY_VALUE}
+                      </Link>
+                      <StaffFlagBadges flags={flagsByCompany.get(company.id) ?? []} />
+                    </span>
                   </TableCell>
                   <TableCell>{companyTypeLabel(company.type) ?? EMPTY_VALUE}</TableCell>
                   <TableCell>

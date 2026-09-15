@@ -24,7 +24,8 @@
  * `user.deletion.manage`, `bank.account.verify` ve `staff.read`. Banka
  * mutabakatı da `payout.reconcile` ile ayrı bir finans kapısıdır. Kimlik
  * belge kuyruğu `identity.review` ile yirmi bir; koala-backend#265'in ilan
- * okuması `job.read` ile yirmi iki.
+ * okuması `job.read` ile yirmi iki. Personel notları `note.read` + `note.write`,
+ * işaretler `flag.manage` — koala-backend#302 / koala-admin#109 ile yirmi beş.
  *
  * Eksik kalan bir ad, "izin verilmiş gibi görünmek" değil, **adlandırılamamak**
  * demekti: `partitionPermissions` onu `unknownPermissions`'a atıyor, yani o izne
@@ -165,6 +166,24 @@ const CATALOGUE = [
     mutating: false,
     sensitivity: "PERSONAL_DATA",
     label: "Denetim kaydını görüntüle",
+  },
+  {
+    name: "note.read",
+    mutating: false,
+    sensitivity: "PERSONAL_DATA",
+    label: "Personel notlarını görüntüle",
+  },
+  {
+    name: "note.write",
+    mutating: true,
+    sensitivity: "PERSONAL_DATA",
+    label: "Personel notlarını yaz",
+  },
+  {
+    name: "flag.manage",
+    mutating: true,
+    sensitivity: "NORMAL",
+    label: "İşaretleri yönet",
   },
 ] as const satisfies readonly PermissionSpecShape[];
 

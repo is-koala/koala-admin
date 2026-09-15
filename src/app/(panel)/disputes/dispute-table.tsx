@@ -14,6 +14,9 @@ import { assignmentHref, disputeHref, userHrefOrNull } from "@/lib/panel-href";
 import type { Dispute } from "@/server/api/disputes";
 import { safeUserName } from "@/server/api/users";
 
+import { StaffFlagBadges } from "@/components/panel/staff-flag-badges";
+import type { StaffFlag } from "@/server/api/staff-notes";
+
 import { DISPUTE_STATUS_LABELS, DISPUTE_STATUS_TONES, type SummaryEntry } from "./dispute-detail";
 
 /**
@@ -27,12 +30,14 @@ export function DisputeTable({
   summaries,
   caption,
   objectQuery = {},
+  flagsById,
 }: {
   disputes: readonly Dispute[];
   summaries: ReadonlyMap<string, SummaryEntry>;
   caption: string;
   /** Satır bağlantısına eklenen liste görünümü; nesne sayfasının kırıntısı geri okur. */
   objectQuery?: Readonly<Record<string, string>>;
+  flagsById?: ReadonlyMap<string, readonly StaffFlag[]>;
 }) {
   return (
     <Table caption={caption}>
@@ -84,12 +89,15 @@ export function DisputeTable({
               </TableCell>
               <TableCell>{formatDateTime(dispute.createdAt)}</TableCell>
               <TableCell>
-                <Link
-                  href={disputeHref(dispute.id, objectQuery)}
-                  className="text-sm font-medium text-brand hover:underline"
-                >
-                  İncele
-                </Link>
+                <span className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={disputeHref(dispute.id, objectQuery)}
+                    className="text-sm font-medium text-brand hover:underline"
+                  >
+                    İncele
+                  </Link>
+                  <StaffFlagBadges flags={flagsById?.get(dispute.id) ?? []} />
+                </span>
               </TableCell>
             </TableRow>
           );

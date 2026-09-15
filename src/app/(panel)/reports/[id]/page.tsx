@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
+import { StaffNotesSection } from "@/components/panel/staff-notes";
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
@@ -98,6 +99,7 @@ async function ReportObject({ id }: { id: string }) {
         canOpenAssignment={context.has("payment.read")}
         staffRefs={staffRefs}
       />
+      <StaffNotesSection resourceType="REPORT" resourceId={report.id} />
       <ObjectAuditPointer resourceId={report.id} linkLabel="Bu şikayetin denetim kayıtlarını aç">
         Karar ve görsel kaldırma backend tarafından bu şikayet kimliğiyle denetim kaydına yazılır;
         personelin bu kaydı açması da kayda düşer.

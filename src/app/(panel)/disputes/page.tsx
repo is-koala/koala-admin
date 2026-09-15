@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { loadListFlags } from "@/server/notes/load-flags";
 import { RecentOperationsList } from "@/components/escrow/recent-operations-list";
 import { PageHeader } from "@/components/panel/page-header";
 import {
@@ -212,9 +213,16 @@ async function DisputeWorkspace({ view }: { view: DisputeView }) {
 
   const visible = queue.disputes;
   const canReadSummaries = context.has("payment.read");
-  const summaries = canReadSummaries
-    ? await loadSummaries(accessToken, queue.disputes)
-    : new Map<string, SummaryEntry>();
+  const [summaries, flagsById] = await Promise.all([
+    canReadSummaries
+      ? loadSummaries(accessToken, queue.disputes)
+      : Promise.resolve(new Map<string, SummaryEntry>()),
+    loadListFlags(
+      accessToken,
+      "DISPUTE",
+      visible.map((dispute) => dispute.id),
+    ),
+  ]);
 
   const everySummaryFailed =
     canReadSummaries &&
@@ -313,6 +321,7 @@ async function DisputeWorkspace({ view }: { view: DisputeView }) {
               summaries={summaries}
               caption={filter === "RESOLVED" ? "Çözülmüş uyuşmazlıklar" : "Etkin uyuşmazlıklar"}
               objectQuery={objectQuery}
+              flagsById={flagsById}
             />
           </>
         )}

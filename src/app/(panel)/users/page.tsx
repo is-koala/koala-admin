@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { StaffFlagBadges } from "@/components/panel/staff-flag-badges";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueFilters, QueueLoadFailure, QueuePager } from "@/components/panel/queue";
 import {
@@ -28,6 +29,7 @@ import { safeUserName, type SafeUser } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
+import { loadListFlags } from "@/server/notes/load-flags";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { type UserGrants } from "./user-roles";
@@ -138,7 +140,14 @@ async function UserDirectory({ params }: { params: SearchParams }) {
   }
 
   const users = page.content;
-  const grantsByUser = await loadGrants(accessToken, users);
+  const [grantsByUser, flagsByUser] = await Promise.all([
+    loadGrants(accessToken, users),
+    loadListFlags(
+      accessToken,
+      "USER",
+      users.map((user) => user.id),
+    ),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -177,12 +186,15 @@ async function UserDirectory({ params }: { params: SearchParams }) {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
-                    <Link
-                      href={userHref(user.id, objectQuery)}
-                      className="text-brand hover:underline"
-                    >
-                      {safeUserName(user)}
-                    </Link>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={userHref(user.id, objectQuery)}
+                        className="text-brand hover:underline"
+                      >
+                        {safeUserName(user)}
+                      </Link>
+                      <StaffFlagBadges flags={flagsByUser.get(user.id) ?? []} />
+                    </span>
                   </TableCell>
                   <TableCell>{user.username ?? EMPTY_VALUE}</TableCell>
                   <TableCell>

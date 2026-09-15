@@ -24,6 +24,7 @@ import { SEARCH_QUERY_TOO_LONG_MESSAGE, isSearchQueryTooLong } from "@/server/ap
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
 import { readReportView, reportListQuery, reportViewState } from "@/server/lists/reports";
+import { loadListFlags } from "@/server/notes/load-flags";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
 import { ReportTable } from "./report-table";
@@ -166,9 +167,11 @@ async function ReportQueue({ params }: { params: SearchParams }) {
     <DateRangeFilter id="sikayet-tarih" pathname="/reports" range={range} state={viewState} />
   );
 
+  const accessToken = await getKoalaAccessToken();
+
   let page;
   try {
-    page = await getReports(await getKoalaAccessToken(), reportListQuery(view));
+    page = await getReports(accessToken, reportListQuery(view));
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return (
@@ -222,7 +225,15 @@ async function ReportQueue({ params }: { params: SearchParams }) {
         />
       ) : (
         <>
-          <ReportTable reports={page.content} objectQuery={objectQuery} />
+          <ReportTable
+            reports={page.content}
+            objectQuery={objectQuery}
+            flagsById={await loadListFlags(
+              accessToken,
+              "REPORT",
+              page.content.map((report) => report.id),
+            )}
+          />
 
           <QueuePager window={pageWindow(page)} state={viewState} unit="şikayet" />
         </>

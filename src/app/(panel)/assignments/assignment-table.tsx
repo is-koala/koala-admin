@@ -15,6 +15,9 @@ import { EMPTY_VALUE, formatCurrency, formatDateTime } from "@/lib/format";
 import { assignmentHref, jobHref } from "@/lib/panel-href";
 import type { EscrowSummary } from "@/server/api/escrow";
 
+import { StaffFlagBadges } from "@/components/panel/staff-flag-badges";
+import type { StaffFlag } from "@/server/api/staff-notes";
+
 import { ASSIGNMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONES } from "./labels";
 
 /**
@@ -34,6 +37,7 @@ export function AssignmentTable({
   objectQuery = {},
   canOpenJob = false,
   canOpenCompany = false,
+  flagsById,
 }: {
   rows: readonly EscrowSummary[];
   caption?: string;
@@ -43,6 +47,7 @@ export function AssignmentTable({
   canOpenJob?: boolean;
   /** `company.approve` — şirket adı `/companies/{id}`'ye bağlanır (kimlik geldiyse). */
   canOpenCompany?: boolean;
+  flagsById?: ReadonlyMap<string, readonly StaffFlag[]>;
 }) {
   return (
     <Table caption={caption}>
@@ -99,12 +104,15 @@ export function AssignmentTable({
             </TableCell>
             <TableCell>{formatCurrency(row.pricing.employerTotal, row.pricing.currency)}</TableCell>
             <TableCell>
-              <Link
-                href={assignmentHref(row.id, objectQuery)}
-                className="text-sm font-medium text-brand hover:underline"
-              >
-                Aç
-              </Link>
+              <span className="flex flex-wrap items-center gap-2">
+                <Link
+                  href={assignmentHref(row.id, objectQuery)}
+                  className="text-sm font-medium text-brand hover:underline"
+                >
+                  Aç
+                </Link>
+                <StaffFlagBadges flags={flagsById?.get(row.id) ?? []} />
+              </span>
             </TableCell>
           </TableRow>
         ))}

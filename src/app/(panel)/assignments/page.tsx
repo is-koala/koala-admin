@@ -50,6 +50,8 @@ import {
 } from "@/server/lists/assignments";
 import { classifyQueueFailure } from "@/server/queue/decisions";
 
+import { loadListFlags } from "@/server/notes/load-flags";
+
 import { AssignmentTable } from "./assignment-table";
 import { ASSIGNMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONES } from "./labels";
 
@@ -283,6 +285,11 @@ async function AssignmentWorkspace({ params }: { params: SearchParams }) {
             objectQuery={objectQuery}
             canOpenJob={context.has("job.read")}
             canOpenCompany={context.has("company.approve")}
+            flagsById={await loadListFlags(
+              accessToken,
+              "JOB_ASSIGNMENT",
+              list.content.map((row) => row.id),
+            )}
           />
         )}
 

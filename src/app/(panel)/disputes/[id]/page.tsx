@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
+import { StaffNotesSection } from "@/components/panel/staff-notes";
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { ObjectTimeline } from "@/components/panel/object-timeline";
 import { PageHeader } from "@/components/panel/page-header";
@@ -122,6 +123,7 @@ async function DisputeObject({ id }: { id: string }) {
         permissions={context.staff?.permissions ?? []}
         staffRefs={staffRefs}
       />
+      <StaffNotesSection resourceType="DISPUTE" resourceId={dispute.id} />
       <ObjectTimeline
         resourceId={dispute.id}
         subject="Bu uyuşmazlık"
