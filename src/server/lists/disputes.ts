@@ -15,8 +15,7 @@ import { SEARCH_PARAM, readSearchQuery } from "@/server/api/search-query";
  * Uyuşmazlık listesinin görünümü; sayfa ve `/api/export/disputes` aynı
  * okuyucu (koala-admin#110). `ALL` bekleyen kuyruktur: backend'e `status`
  * gitmez ve OPEN + UNDER_REVIEW döner; `RESOLVED` kapalı arşiv. `?sirala=`
- * `DISPUTE_PAGING.sortable` içinden (`createdAt`); ev karosunun "eskiden
- * yeniye" bağlantısı sayfalama ve süzgeç geçişlerinde korunur (koala-admin#111).
+ * `DISPUTE_PAGING.sortable` içinden (`createdAt`, koala-admin#111).
  */
 export const DISPUTE_STATUS_FILTERS = ["ALL", "OPEN", "UNDER_REVIEW", "RESOLVED"] as const;
 
@@ -40,10 +39,20 @@ export function readDisputeView(params: SearchParams): DisputeView {
   };
 }
 
+/**
+ * `sirala` yalnız varsayılandan sapınca taşınır: ev karosunun "eskiden
+ * yeniye" bağlantısı sayfalama, arama ve durum sekmelerinde kaybolmasın;
+ * varsayılan görünümün adresleri de değişmesin.
+ */
+export function disputeSortState(view: DisputeView): Readonly<Record<string, string>> {
+  const sort = sortParam(view.paging.sort);
+  return sort === sortParam(DISPUTE_PAGING.defaultSort) ? {} : { sirala: sort };
+}
+
 export function disputeViewState(view: DisputeView): Readonly<Record<string, string>> {
   return {
     ...(view.filter === "ALL" ? {} : { durum: view.filter }),
-    sirala: sortParam(view.paging.sort),
+    ...disputeSortState(view),
     boyut: String(view.paging.size),
     ...(view.query === null ? {} : { [SEARCH_PARAM]: view.query }),
     ...(view.userId === null ? {} : { kullanici: view.userId }),

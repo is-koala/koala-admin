@@ -31,6 +31,7 @@ import { recentOperations } from "@/server/escrow/recent-operations";
 import {
   DISPUTE_STATUS_FILTERS,
   disputeListQuery,
+  disputeSortState,
   disputeViewState,
   readDisputeView,
   type DisputeStatusFilter,
@@ -261,7 +262,10 @@ async function DisputeWorkspace({ view }: { view: DisputeView }) {
               key={candidate}
               href={{
                 pathname: "/disputes",
-                query: filterQuery(candidate, queue.window.page, query, userId, range),
+                query: {
+                  ...filterQuery(candidate, queue.window.page, query, userId, range),
+                  ...disputeSortState(view),
+                },
               }}
               aria-current={candidate === filter ? "page" : undefined}
               className={
