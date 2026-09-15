@@ -515,6 +515,50 @@ describe("the extended timeline and its cards", () => {
     expect(html).toContain("Beklenen tamamlanma");
   });
 
+  it("draws a seat selection on the timeline with shuttle name and plate", async () => {
+    stubMe(ANALYST);
+    watch(
+      extended({
+        transport: {
+          outboundMethod: "SHUTTLE",
+          returnMethod: "NONE",
+          allowanceAmount: null,
+          allowanceNote: null,
+          notes: null,
+          shuttles: [
+            {
+              id: "sh000000-0000-4000-8000-000000000001",
+              direction: "OUTBOUND",
+              name: "Anadolu servisi",
+              plate: "34 ABC 12",
+              capacity: 12,
+              seatsTaken: 1,
+              driverName: "Ahmet Şoför",
+              driverPhone: "+905551112233",
+              sortOrder: 0,
+              stops: [],
+            },
+          ],
+          seats: [
+            {
+              id: "sa000000-0000-4000-8000-000000000001",
+              direction: "OUTBOUND",
+              shuttleId: "sh000000-0000-4000-8000-000000000001",
+              stopId: "st000000-0000-4000-8000-000000000001",
+              createdAt: "2026-08-30T12:00:00Z",
+            },
+          ],
+        },
+      }),
+    );
+
+    const html = await render();
+    const timeline = html.slice(html.indexOf("Zaman çizelgesi"));
+    expect(timeline).toContain("Koltuk seçildi");
+    expect(timeline).toContain("Gidiş · Anadolu servisi · 34 ABC 12");
+    expect(timeline.indexOf("Atama oluşturuldu")).toBeLessThan(timeline.indexOf("Koltuk seçildi"));
+  });
+
   it("orders the timeline from application through cancellation and review", async () => {
     stubMe(ANALYST);
     watch(extended());

@@ -30,6 +30,7 @@ const { default: JobDetailPage } = await import("./[id]/page");
 const ADMIN_ME = apiUrl("/admin/me");
 const JOBS = apiUrl("/admin/jobs");
 const JOB = apiUrl(`/admin/jobs/${JOB_ID}`);
+const PLAN = apiUrl(`/admin/jobs/${JOB_ID}/transport-plan`);
 
 const AGENT = ["job.read"];
 
@@ -69,12 +70,32 @@ function watchList(rows: unknown[] = [adminJobFixture()]) {
   return seen;
 }
 
-function watchDetail(job: unknown = adminJobDetailFixture()) {
-  const seen = { calls: 0 };
+function planNotFoundBody() {
+  return {
+    ...resourceNotFoundBody,
+    errorCode: "TRANSPORT_PLAN_NOT_FOUND",
+    path: `/admin/jobs/${JOB_ID}/transport-plan`,
+    resource: "transport-plan",
+    resourceId: JOB_ID,
+  };
+}
+
+function watchDetail(
+  job: unknown = adminJobDetailFixture(),
+  plan: unknown | "missing" = "missing",
+) {
+  const seen = { calls: 0, planCalls: 0 };
   server.use(
     http.get(JOB, () => {
       seen.calls += 1;
       return HttpResponse.json(envelope(`/admin/jobs/${JOB_ID}`, job));
+    }),
+    http.get(PLAN, () => {
+      seen.planCalls += 1;
+      if (plan === "missing") {
+        return HttpResponse.json(planNotFoundBody(), { status: 404 });
+      }
+      return HttpResponse.json(envelope(`/admin/jobs/${JOB_ID}/transport-plan`, plan));
     }),
   );
   return seen;
@@ -264,6 +285,7 @@ describe("the job object page", () => {
     const html = await renderDetail();
 
     expect(seen.calls).toBe(0);
+    expect(seen.planCalls).toBe(0);
     expect(html).toContain("403 — Bu sayfa için yetkiniz yok");
     expect(html).not.toContain("Caferağa");
   });
@@ -275,7 +297,8 @@ describe("the job object page", () => {
     const html = await renderDetail();
 
     expect(seen.calls).toBe(1);
-    expect(html).toContain("job-full-address");
+    expect(seen.planCalls).toBe(1);
+    expect(html).toContain("Ulaşım planı yok");
     expect(html).toContain(
       "Caferağa Mah., Moda Cad., No 12, Kat 2, Daire 5, 34710, Kadıköy, İstanbul, Türkiye",
     );
@@ -292,6 +315,60 @@ describe("the job object page", () => {
     // Başvuru 12, atama 2, kişi 3 — sayılar tablodan değil DTO'dan.
     expect(html).toMatch(/Başvuru<\/dt><dd[^>]*>12</);
     expect(html).toMatch(/Atama<\/dt><dd[^>]*>2</);
+  });
+
+  it("shows shuttle plates and driver when the staff plan endpoint returns them", async () => {
+    stubMe(AGENT);
+    const seen = watchDetail(adminJobDetailFixture(), {
+      id: "tp000000-0000-4000-8000-000000000001",
+      jobId: JOB_ID,
+      outboundMethod: "SHUTTLE",
+      returnMethod: "CASH_ALLOWANCE",
+      allowanceAmount: 150,
+      allowanceNote: "İş çıkışı elden",
+      notes: "Servis kapıda bekler",
+      shuttles: [
+        {
+          id: "sh000000-0000-4000-8000-000000000001",
+          direction: "OUTBOUND",
+          name: "Anadolu servisi",
+          plate: "34 ABC 12",
+          capacity: 12,
+          seatsTaken: 3,
+          driverName: "Ahmet Şoför",
+          driverPhone: "+905551112233",
+          sortOrder: 0,
+          stops: [
+            {
+              id: "st000000-0000-4000-8000-000000000001",
+              label: "Kadıköy İskele",
+              scheduledAt: "2026-09-20T03:40:00.000Z",
+              sortOrder: 0,
+              address: {
+                displayAddress: "Barbaros Bulvarı 45, Beşiktaş",
+                districtName: "Beşiktaş",
+                cityName: "İstanbul",
+                countryName: "Türkiye",
+              },
+              seatsTaken: 3,
+            },
+          ],
+        },
+      ],
+      updatedAt: "2026-09-15T10:00:00Z",
+    });
+
+    const html = await renderDetail();
+
+    expect(seen.planCalls).toBe(1);
+    expect(html).toContain("Anadolu servisi");
+    expect(html).toContain("34 ABC 12");
+    expect(html).toContain("Ahmet Şoför");
+    expect(html).toContain("+905551112233");
+    expect(html).toContain("Kadıköy İskele");
+    expect(html).toContain("Barbaros Bulvarı 45, Beşiktaş");
+    expect(html).toContain("Yol parası");
+    expect(html).not.toContain("Ulaşım planı yok");
   });
 
   it("prefers the backend's displayAddress when it exists", async () => {
@@ -370,6 +447,7 @@ describe("a job that does not exist", () => {
     );
 
     expect(seen.calls).toBe(0);
+    expect(seen.planCalls).toBe(0);
     expect((thrown as { digest?: string } | null)?.digest).toBe("NEXT_HTTP_ERROR_FALLBACK;404");
   });
 });
