@@ -3,7 +3,7 @@ import "server-only";
 import type { Permission } from "@/server/authz/permissions";
 
 import { koalaApi } from "./koala";
-import type { PagingContract } from "./paging";
+import { sortParam, type PagingContract, type SortSpec } from "./paging";
 import { pageDtoSchema } from "./schemas";
 import { searchQueryParam } from "./search-query";
 import type { PageDto } from "./types";
@@ -39,11 +39,13 @@ import { z } from "zod";
 export const DISPUTES_PATH = "/admin/disputes";
 
 /**
- * Liste ucu `sort` kabul etmez; `readPaging` yine de `sayfa`/`boyut` için
- * kullanılır. Varsayılan 25, emanetteki N+1 özet okumasını sınırlamak için.
+ * `DisputeManager.SORTABLE` = `createdAt`, `status`; varsayılan `createdAt,desc`.
+ * Panel yalnız `createdAt`i açar (durum zaten süzgeç). Varsayılan boyut 25,
+ * emanetteki N+1 özet okumasını sınırlamak için. `sort` yalnız istendiğinde
+ * gider; verilmezse backend kendi varsayılanına düşer.
  */
 export const DISPUTE_PAGING: PagingContract = {
-  sortable: [],
+  sortable: ["createdAt"],
   defaultSort: { field: "createdAt", direction: "desc" },
   defaultSize: 25,
 };
@@ -219,6 +221,8 @@ export interface DisputeQuery {
   /** koala-backend#301: `createdAt` aralığı, dilimli ISO, iki sınır dahil. */
   from?: string | null;
   to?: string | null;
+  /** `DISPUTE_PAGING.sortable` içinden; ev karosu ve `?sirala=` için (koala-admin#111). */
+  sort?: SortSpec | null;
 }
 
 /**
@@ -242,6 +246,7 @@ export function getDisputes(
       userId: query.userId ?? undefined,
       from: query.from ?? undefined,
       to: query.to ?? undefined,
+      sort: query.sort ? sortParam(query.sort) : undefined,
     },
     accessToken,
     cache: "no-store",

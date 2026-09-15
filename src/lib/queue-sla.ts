@@ -9,9 +9,10 @@
 export const SLA_HOURS = 48;
 
 /**
- * Bir karo isteğinin satır sayısı. Yedi kuyruk için yedi istek; `1`'den
- * büyük tek maliyet gövde boyutu. Hakediş ucunun tavanı 50 (PageableSanitizer
- * değil), o yüzden 100 değil.
+ * Bir karo isteğinin satır sayısı. Kuyruk başına bir istek (şikayet karosu
+ * iki durumu ayrı ayrı ister, takılı ödeme karosu yedek yolda bir tane daha);
+ * `1`'den büyük tek maliyet gövde boyutu. Hakediş ucunun tavanı 50
+ * (PageableSanitizer değil), o yüzden 100 değil.
  */
 export const SLA_SAMPLE_SIZE = 50;
 
@@ -22,20 +23,16 @@ export interface OverdueSummary {
 }
 
 /**
- * Örneklemin sırası sonucu belirler:
- *
- * - `asc` (eskiden yeniye): aşanlar baştadır. Örneklemin tamamı aşmışsa ve
- *   kuyruk örneklemden büyükse sayı alt sınırdır (`capped`).
- * - `desc` (yeniden eskiye): aşanlar sondadır ve örneklem dışında kalan her
- *   satır örneklemdekilerden eskidir, yani sayı kesindir:
- *   örneklemdeki aşanlar + (toplam − örneklem).
+ * Örneklem eskiden yeniye gelir, aşanlar baştadır. Örneklemin tamamı aşmışsa
+ * ve kuyruk örneklemden büyükse sayı alt sınırdır (`capped`); aksi hâlde
+ * kesindir, çünkü örneklemde aşmayan bir satır görüldüyse ondan sonrakiler
+ * de aşmamıştır.
  *
  * Zaman damgası okunamayan satır aşmamış sayılır: eksik veri alarm üretmez.
  */
 export function overdueSummary(
   timestamps: readonly (string | null)[],
   totalElements: number,
-  order: "asc" | "desc",
   now: Date,
   thresholdHours: number = SLA_HOURS,
 ): OverdueSummary {
@@ -45,10 +42,6 @@ export function overdueSummary(
     if (isOverdue(value, cutoff)) inSample += 1;
   }
   const beyondSample = Math.max(0, totalElements - timestamps.length);
-
-  if (order === "desc") {
-    return { count: inSample + beyondSample, capped: false };
-  }
   // Boş örneklem hiçbir şey söylemez; "0+" yazmak sıfırı alarma çevirirdi.
   const exhausted = inSample > 0 && inSample === timestamps.length && beyondSample > 0;
   return { count: inSample, capped: exhausted };

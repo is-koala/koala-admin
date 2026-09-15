@@ -16,20 +16,13 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui";
-import {
-  EMPTY_VALUE,
-  formatBoolean,
-  formatCurrency,
-  formatDateTime,
-  formatInteger,
-} from "@/lib/format";
+import { EMPTY_VALUE, formatBoolean, formatDateTime, formatInteger } from "@/lib/format";
 import { bankAccountVerificationStatusLabel } from "@/lib/iban-verification";
 import { TimelineBuilder, type TimelineEvent } from "@/lib/object-timeline";
 import {
   assignmentsForEmployerHref,
   assignmentsForWorkerHref,
   disputesForUserHref,
-  ibanVerificationHref,
   ibanVerificationsForUserHref,
   payoutsForWorkerHref,
   reportsAboutUserHref,
@@ -40,11 +33,7 @@ import {
 import { USER_TABS, USER_TAB_SPECS, isTabEnabled, type UserTab } from "@/lib/user-tabs";
 import { getDisputes, type Dispute } from "@/server/api/disputes";
 import { ASSIGNMENT_PAGING, getAdminAssignments } from "@/server/api/escrow";
-import {
-  IBAN_PENDING_PAGING,
-  getPendingIbanVerifications,
-  type IbanPending,
-} from "@/server/api/iban-verification";
+import { IBAN_PENDING_PAGING, getPendingIbanVerifications } from "@/server/api/iban-verification";
 import { getMarketplaceUserRoles } from "@/server/api/marketplace-user-roles";
 import {
   getUserBankAccounts,
@@ -63,6 +52,7 @@ import { AssignmentTable } from "../../assignments/assignment-table";
 import type { SummaryEntry } from "../../disputes/dispute-detail";
 import { DisputeTable } from "../../disputes/dispute-table";
 import { loadSummaries } from "../../disputes/load-summaries";
+import { PendingIbanTable } from "../../iban-verifications/pending-table";
 import { PayoutTable } from "../../payout-reconciliation/payout-table";
 import { ReportTable } from "../../reports/report-table";
 import { UserRoleDetail, type UserGrants } from "../user-roles";
@@ -393,7 +383,7 @@ export async function BankTab({
           result={pending}
           emptyTitle="Bu kullanıcının bekleyen IBAN doğrulaması yok."
         >
-          {(rows) => <PendingIbanTable rows={rows} />}
+          {(rows) => <PendingIbanTable rows={rows} showUser={false} />}
         </InlineSection>
       )}
     </div>
@@ -448,47 +438,6 @@ function BankAccountTable({ accounts }: { accounts: readonly AdminBankAccount[] 
             <TableCell>{formatBoolean(account.accountHolderNameVerified)}</TableCell>
             <TableCell>{formatDateTime(account.verifiedAt)}</TableCell>
             <TableCell>{formatDateTime(account.createdAt)}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
-/** Kuyruk tablosunun kullanıcı sütunsuz hâli; referans nesne sayfasına gider, onay orada. */
-function PendingIbanTable({ rows }: { rows: readonly IbanPending[] }) {
-  return (
-    <Table caption="Bekleyen IBAN doğrulamaları">
-      <TableHead>
-        <TableRow>
-          <TableHeaderCell>Referans</TableHeaderCell>
-          <TableHeaderCell>IBAN</TableHeaderCell>
-          <TableHeaderCell>Tutar</TableHeaderCell>
-          <TableHeaderCell>Başlangıç</TableHeaderCell>
-          <TableHeaderCell>Bitiş</TableHeaderCell>
-          <TableHeaderCell>Kalan deneme</TableHeaderCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.accountId}>
-            <TableCell>
-              <Link
-                href={ibanVerificationHref(row.reference)}
-                className="font-mono text-xs text-brand hover:underline"
-              >
-                {row.reference}
-              </Link>
-            </TableCell>
-            <TableCell>
-              <span className="font-mono text-xs">{row.maskedIban}</span>
-            </TableCell>
-            <TableCell>{row.amount === null ? EMPTY_VALUE : formatCurrency(row.amount)}</TableCell>
-            <TableCell>{formatDateTime(row.startedAt)}</TableCell>
-            <TableCell>{formatDateTime(row.expiresAt)}</TableCell>
-            <TableCell>
-              {row.attemptsLeft === null ? EMPTY_VALUE : formatInteger(row.attemptsLeft)}
-            </TableCell>
           </TableRow>
         ))}
       </TableBody>

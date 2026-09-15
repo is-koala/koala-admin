@@ -131,15 +131,15 @@ function QueueTile({ tile }: { tile: OpsQueueTile }) {
         {tile.label}
       </Link>
       {tile.loadError !== null ? (
-        <>
-          <span className="text-sm font-semibold tracking-tight text-ink">{tile.loadError}</span>
-          <span className="text-xs text-ink-subtle">Sayfayı yenileyerek yeniden deneyin.</span>
-        </>
+        <TileError message={tile.loadError} />
       ) : (
         <>
           <Link href={tile.href} className="text-2xl font-semibold tracking-tight text-ink">
             {tile.count === null ? "—" : formatInteger(tile.count)}
           </Link>
+          {tile.description !== null ? (
+            <span className="text-xs text-ink-subtle">{tile.description}</span>
+          ) : null}
           {tile.oldestAt !== null ? (
             <span className="text-xs text-ink-subtle">En eski {formatDate(tile.oldestAt)}</span>
           ) : (
@@ -163,14 +163,24 @@ function QueueTile({ tile }: { tile: OpsQueueTile }) {
   );
 }
 
-/** Finans özetinden gelen alarm: sıfır sessiz, sıfırdan büyük kırmızı; bağlantı yalnız liste izniyle. */
+/** Karo yüklenemedi: sayı yerine hata ve yenileme ipucu; kuyruk ve alarm karoları aynı parçayı çizer. */
+function TileError({ message }: { message: string }) {
+  return (
+    <>
+      <span className="text-sm font-semibold tracking-tight text-ink">{message}</span>
+      <span className="text-xs text-ink-subtle">Sayfayı yenileyerek yeniden deneyin.</span>
+    </>
+  );
+}
+
+/**
+ * Ödeme/hakediş alarmı: sıfır sessiz, sıfırdan büyük kırmızı; bağlantı yalnız
+ * liste izniyle. `capped` sayı örneklemden geldiğinde "12+" yazar.
+ */
 function AlertTile({ tile }: { tile: OpsAlertTile }) {
   const body =
     tile.loadError !== null ? (
-      <>
-        <span className="text-sm font-semibold tracking-tight text-ink">{tile.loadError}</span>
-        <span className="text-xs text-ink-subtle">Sayfayı yenileyerek yeniden deneyin.</span>
-      </>
+      <TileError message={tile.loadError} />
     ) : (
       <>
         <span
@@ -179,7 +189,9 @@ function AlertTile({ tile }: { tile: OpsAlertTile }) {
             tile.count !== null && tile.count > 0 ? "text-danger" : "text-ink",
           )}
         >
-          {tile.count === null ? "—" : formatInteger(tile.count)}
+          {tile.count === null
+            ? "—"
+            : overdueCountText({ count: tile.count, capped: tile.capped }, formatInteger)}
         </span>
         <span className="text-xs text-ink-subtle">{tile.description}</span>
       </>

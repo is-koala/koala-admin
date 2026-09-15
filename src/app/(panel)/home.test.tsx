@@ -1,6 +1,9 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { formatDate } from "@/lib/format";
+
+import { adminPaymentFixture, envelope, pageEnvelope } from "../../../test/fixtures/admin-detail";
 import { auditPageBody, categoryCreatedEntry } from "../../../test/fixtures/audit-log";
 import { reviewCompany } from "../../../test/fixtures/companies";
 import { adminMeSuccessBody } from "../../../test/fixtures/envelopes";
@@ -69,6 +72,36 @@ function reportRow(status: string, createdAt: string, id: string) {
     reviewedAt: null,
     createdAt,
     reportedUserReportCount: 0,
+  };
+}
+
+/** `pageEnvelope` sayfa toplamını içerikten türetir; örneklemden büyük kuyruk için toplam ayrı verilir. */
+function pageOfEnvelope(path: string, content: readonly unknown[], totalElements: number) {
+  return envelope(path, pageOf(content, totalElements));
+}
+
+function financeBody(data: Record<string, unknown>) {
+  return {
+    success: true,
+    message: "ok",
+    httpStatus: "200 OK",
+    path: "/admin/finance/summary",
+    requestId: "rid-fin",
+    timeStamp: "2026-09-11T12:00:00.000000000Z",
+    data: {
+      from: "2026-02-28T21:00:00Z",
+      to: "2026-03-31T21:00:00Z",
+      currency: "TRY",
+      employerVolume: "1075.00",
+      koalaFee: "75.00",
+      workerPayout: "1000.00",
+      succeededPaymentCount: 1,
+      completedPayoutAmount: "1000.00",
+      completedPayoutCount: 1,
+      awaitingPayoutAmount: "400.00",
+      awaitingPayoutCount: 1,
+      ...data,
+    },
   };
 }
 
@@ -160,31 +193,28 @@ function watchQueues() {
         data: emptyPage(6),
       });
     }),
+    http.get(apiUrl("/admin/payments"), ({ request }) => {
+      const status = new URL(request.url).searchParams.get("status");
+      seen.push(`payments:${status}`);
+      return HttpResponse.json(
+        pageEnvelope(
+          "/admin/payments",
+          status === "VERIFY_PENDING"
+            ? [
+                adminPaymentFixture({ status: "VERIFY_PENDING", nextVerificationAt: null }),
+                adminPaymentFixture({
+                  id: "b2000000-0000-4000-8000-000000000099",
+                  status: "VERIFY_PENDING",
+                  nextVerificationAt: "2026-09-11T13:00:00Z",
+                }),
+              ]
+            : [],
+        ),
+      );
+    }),
     http.get(apiUrl("/admin/finance/summary"), () => {
       seen.push("finance");
-      return HttpResponse.json({
-        success: true,
-        message: "ok",
-        httpStatus: "200 OK",
-        path: "/admin/finance/summary",
-        requestId: "rid-fin",
-        timeStamp: "2026-09-11T12:00:00.000000000Z",
-        data: {
-          from: "2026-02-28T21:00:00Z",
-          to: "2026-03-31T21:00:00Z",
-          currency: "TRY",
-          employerVolume: "1075.00",
-          koalaFee: "75.00",
-          workerPayout: "1000.00",
-          succeededPaymentCount: 1,
-          completedPayoutAmount: "1000.00",
-          completedPayoutCount: 1,
-          awaitingPayoutAmount: "400.00",
-          awaitingPayoutCount: 1,
-          stuckPaymentCount: 2,
-          overduePayoutCount: 3,
-        },
-      });
+      return HttpResponse.json(financeBody({ stuckPaymentCount: 2, overduePayoutCount: 3 }));
     }),
     http.get(apiUrl("/admin/audit-log"), () => {
       seen.push("audit");
@@ -524,31 +554,6 @@ function pageOf(content: readonly unknown[], totalElements = content.length) {
   };
 }
 
-function financeBody(data: Record<string, unknown>) {
-  return {
-    success: true,
-    message: "ok",
-    httpStatus: "200 OK",
-    path: "/admin/finance/summary",
-    requestId: "rid-fin",
-    timeStamp: "2026-09-11T12:00:00.000000000Z",
-    data: {
-      from: "2026-02-28T21:00:00Z",
-      to: "2026-03-31T21:00:00Z",
-      currency: "TRY",
-      employerVolume: "1075.00",
-      koalaFee: "75.00",
-      workerPayout: "1000.00",
-      succeededPaymentCount: 1,
-      completedPayoutAmount: "1000.00",
-      completedPayoutCount: 1,
-      awaitingPayoutAmount: "400.00",
-      awaitingPayoutCount: 1,
-      ...data,
-    },
-  };
-}
-
 describe("the SLA threshold on queue tiles", () => {
   it("asks the oldest 50 rows, counts the ones past 48 hours in red and links the aged list", async () => {
     stubMe(["payout.reconcile"]);
@@ -634,7 +639,7 @@ describe("the SLA threshold on queue tiles", () => {
     expect(html).toContain('href="/companies?sirala=createdAt%2Casc"');
   });
 
-  it("counts disputes exactly from the newest-first page the backend returns", async () => {
+  it("samples disputes oldest-first like every other queue now that createdAt is sortable", async () => {
     stubMe(["dispute.resolve"]);
     let seenUrl: URL | null = null;
     server.use(
@@ -648,7 +653,7 @@ describe("the SLA threshold on queue tiles", () => {
           requestId: "rid-d",
           timeStamp: "2026-09-11T12:00:00.000000000Z",
           data: pageOf(
-            [hoursAgo(1), hoursAgo(60)].map((createdAt, index) => ({
+            [hoursAgo(60), hoursAgo(1)].map((createdAt, index) => ({
               id: `d100000${index}-0000-4000-8000-000000000001`,
               jobAssignmentId: "8c000000-0000-4000-8000-000000000034",
               openedBy: null,
@@ -667,13 +672,54 @@ describe("the SLA threshold on queue tiles", () => {
 
     const html = await render();
 
-    // Uç panelden sıralanmaz: sort gönderilmez, örneklem yeniden eskiyedir.
-    expect(seenUrl!.searchParams.has("sort")).toBe(false);
+    expect(seenUrl!.searchParams.get("sort")).toBe("createdAt,asc");
     expect(seenUrl!.searchParams.get("size")).toBe("50");
-    // 1 örneklemde + 3 örneklem dışında (hepsi daha eski) = 4, artı yok.
-    expect(html).toContain(">4 kayıt 48 saati aştı<");
-    // Kuyruk örneklemden büyük: "en eski" bilinmez, uydurulmaz.
-    expect(html).toContain("Kuyruğu aç");
+    // Örneklemde aşmayan bir satır görüldü: sayı kesin, kuyruk büyük olsa da artı yok.
+    expect(html).toContain(">1 kayıt 48 saati aştı<");
+    expect(html).toContain('href="/disputes?sirala=createdAt%2Casc"');
+    expect(html).toContain(`En eski ${formatDate(hoursAgo(60))}`);
+  });
+
+  it("measures IBAN verification age from startedAt, not from the account's createdAt", async () => {
+    stubMe(["bank.account.verify"]);
+    const pendingRow = (accountId: string, createdAt: string, startedAt: string) => ({
+      accountId,
+      user: { id: "b2000000-0000-4000-8000-000000000002", firstName: "Ayşe", lastName: "Y." },
+      maskedIban: "TR18***2315",
+      reference: `KOALA-${accountId.slice(0, 4)}`,
+      amount: "0.17",
+      startedAt,
+      expiresAt: null,
+      attemptsLeft: 2,
+      createdAt,
+    });
+    let seenUrl: URL | null = null;
+    server.use(
+      http.get(apiUrl("/admin/bank-account-verifications"), ({ request }) => {
+        seenUrl = new URL(request.url);
+        return HttpResponse.json({
+          success: true,
+          message: "ok",
+          httpStatus: "200 OK",
+          path: "/admin/bank-account-verifications",
+          requestId: "rid-iban",
+          timeStamp: "2026-09-11T12:00:00.000000000Z",
+          data: pageOf([
+            // Yeni hesap, eski doğrulama: aşmış sayılmalı.
+            pendingRow("7c000000-0000-4000-8000-000000000001", hoursAgo(1), hoursAgo(72)),
+            // Eski hesap, yeni doğrulama: aşmamış sayılmalı.
+            pendingRow("7c000000-0000-4000-8000-000000000002", hoursAgo(500), hoursAgo(2)),
+          ]),
+        });
+      }),
+    );
+
+    const html = await render();
+
+    expect(seenUrl!.searchParams.get("sort")).toBe("verificationStartedAt,asc");
+    expect(html).toContain(">1 kayıt 48 saati aştı<");
+    expect(html).toContain('href="/iban-verifications?sirala=verificationStartedAt%2Casc"');
+    expect(html).toContain(`En eski ${formatDate(hoursAgo(72))}`);
   });
 
   it("sums the two report queues and never writes the threshold line on a failed tile", async () => {
@@ -702,7 +748,9 @@ describe("the SLA threshold on queue tiles", () => {
 
     const html = await render();
     expect(html).toContain(">2 kayıt 48 saati aştı<");
-    expect(html).toContain('href="/reports?sirala=createdAt%2Casc"');
+    // Liste tek durum alır: bağlantı açık kuyruğa gider, karo bunu söyler.
+    expect(html).toContain("Açık + incelemede; bağlantı açık kuyruğu açar.");
+    expect(html).toContain('href="/reports?durum=OPEN&amp;sirala=createdAt%2Casc"');
 
     server.use(http.get(apiUrl("/admin/reports"), () => HttpResponse.error()));
     const failed = await render();
@@ -754,7 +802,7 @@ describe("stuck payments and overdue payouts", () => {
     expect(legacy).not.toContain("Vadesi geçmiş hakediş");
   });
 
-  it("shows a load error on both alarm tiles when the summary fails, and none without finance.read", async () => {
+  it("shows a load error on both summary tiles when the summary fails, and none without finance.read", async () => {
     stubMe(["finance.read"]);
     server.use(http.get(apiUrl("/admin/finance/summary"), () => HttpResponse.error()));
     const failed = await render();
@@ -762,11 +810,94 @@ describe("stuck payments and overdue payouts", () => {
     expect(failed).toContain("Vadesi geçmiş hakediş yüklenemedi.");
     expect(failed).not.toContain("Tahsilat");
 
-    stubMe(["payment.read"]);
+    stubMe(["payout.reconcile"]);
     const seen = watchQueues();
     const none = await render();
     expect(seen).not.toContain("finance");
     expect(none).not.toContain("Takılı ödemeler");
+    expect(none).not.toContain("Vadesi geçmiş hakediş");
+  });
+
+  it("counts FAILED payments from the list for payment.read and links the FAILED queue", async () => {
+    stubMe(["finance.read", "payment.read"]);
+    const seen = watchQueues();
+    let failedUrl: URL | null = null;
+    server.use(
+      http.get(apiUrl("/admin/payments"), ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("status") !== "FAILED") return undefined;
+        failedUrl = url;
+        return HttpResponse.json(pageOfEnvelope("/admin/payments", [], 9));
+      }),
+    );
+
+    const html = await render();
+
+    expect(failedUrl!.searchParams.get("size")).toBe("1");
+    expect(html).toContain('data-testid="alert-tile-failed-payments"');
+    expect(html).toContain("Başarısız ödemeler");
+    expect(html).toMatch(/text-danger">9</);
+    expect(html).toContain('href="/payments?durum=FAILED"');
+    // Takılı sayısı özetten geldi; VERIFY_PENDING listesi istenmedi.
+    expect(seen).not.toContain("payments:VERIFY_PENDING");
+    expect(html).toMatch(/text-danger">2</);
+  });
+
+  it("falls back to the VERIFY_PENDING list for the stuck count when finance.read is missing", async () => {
+    stubMe(["payment.read"]);
+    const seen = watchQueues();
+
+    const html = await render();
+
+    expect(seen).toEqual(expect.arrayContaining(["payments:VERIFY_PENDING", "payments:FAILED"]));
+    expect(seen).not.toContain("finance");
+    // İki VERIFY_PENDING satırından biri nextVerificationAt=null: 1, artı yok (kuyruk örnekleme sığdı).
+    expect(html).toContain('data-testid="alert-tile-stuck-payments"');
+    expect(html).toMatch(/text-danger">1</);
+    expect(html).toContain('href="/payments?durum=VERIFY_PENDING"');
+    expect(html).not.toContain("Vadesi geçmiş hakediş");
+  });
+
+  it("writes the stuck fallback as a floor when the VERIFY_PENDING queue is larger than the sample", async () => {
+    stubMe(["payment.read"]);
+    server.use(
+      http.get(apiUrl("/admin/payments"), ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("status") !== "VERIFY_PENDING") {
+          return HttpResponse.json(pageOfEnvelope("/admin/payments", [], 0));
+        }
+        expect(url.searchParams.get("size")).toBe("50");
+        expect(url.searchParams.get("sort")).toBe("createdAt,asc");
+        return HttpResponse.json(
+          pageOfEnvelope(
+            "/admin/payments",
+            Array.from({ length: 50 }, (_, index) =>
+              adminPaymentFixture({
+                id: `b2${String(index).padStart(6, "0")}-0000-4000-8000-000000000001`,
+                status: "VERIFY_PENDING",
+                nextVerificationAt: index < 12 ? null : "2026-09-11T13:00:00Z",
+              }),
+            ),
+            80,
+          ),
+        );
+      }),
+    );
+
+    const html = await render();
+
+    expect(html).toMatch(/text-danger">12\+</);
+  });
+
+  it("shows a load error on the payment tiles when the list fails", async () => {
+    stubMe(["payment.read"]);
+    server.use(http.get(apiUrl("/admin/payments"), () => HttpResponse.error()));
+
+    const html = await render();
+
+    expect(html).toContain("Takılı ödemeler yüklenemedi.");
+    expect(html).toContain("Başarısız ödemeler yüklenemedi.");
+    expect(html).not.toContain("text-danger");
   });
 });
 

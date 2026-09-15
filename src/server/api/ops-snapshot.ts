@@ -10,10 +10,11 @@ import type { Permission } from "@/server/authz/permissions";
 import { DELETION_PAGING, getAccountDeletions } from "./account-deletions";
 import { getAuditLog } from "./audit";
 import { getCompanies, COMPANY_PAGING } from "./companies";
-import { getDisputes } from "./disputes";
+import { DISPUTE_PAGING, getDisputes } from "./disputes";
 import { getFinanceSummary, type FinanceSummary } from "./finance";
 import { getPendingIbanVerifications, IBAN_PENDING_PAGING } from "./iban-verification";
 import { getIdentityReviews, IDENTITY_REVIEW_PAGING } from "./identity-reviews";
+import { getPayments, PAYMENT_PAGING } from "./payments";
 import { getPayouts, PAYOUT_PAGING } from "./payout-reconciliation";
 import { getReports, REPORT_PAGING } from "./reports";
 import { sortParam, type Paging, type PagingContract, type SortSpec } from "./paging";
@@ -30,6 +31,8 @@ export type OpsQueueHref =
 export interface OpsQueueTile {
   readonly href: OpsQueueHref;
   readonly label: string;
+  /** Sayının neyi kapsadığı, yalnız kuyruk adından anlaşılmıyorsa. */
+  readonly description: string | null;
   readonly count: number | null;
   readonly oldestAt: string | null;
   /**
@@ -42,15 +45,20 @@ export interface OpsQueueTile {
 }
 
 /**
- * Finans özetinden türeyen alarm karoları (koala-admin#111): sayı kuyruk
- * değil `FinanceSummaryDto` sayacıdır, o yüzden `finance.read` ister; liste
- * bağlantısı listenin kendi iznine bakar ve izin yoksa `null` kalır — sayı
- * yine görünür, tıklanınca 403'e götürülmez.
+ * Ödeme alarmları (koala-admin#111). "Takılı ödemeler" `FinanceSummaryDto`
+ * sayacıdır (`finance.read`); o izin yoksa `payment.read` ile VERIFY_PENDING
+ * listesinin ilk {@link SLA_SAMPLE_SIZE} satırından `nextVerificationAt`
+ * boş olanlar sayılır — kuyruk örneklemden büyükse sayı alt sınırdır
+ * (`capped`). "Başarısız ödemeler" FAILED listesinin `totalElements`i.
+ * Liste bağlantısı listenin kendi iznine bakar ve izin yoksa `null` kalır —
+ * sayı yine görünür, tıklanınca 403'e götürülmez.
  */
 export interface OpsAlertTile {
-  readonly key: "stuck-payments" | "overdue-payouts";
+  readonly key: "stuck-payments" | "failed-payments" | "overdue-payouts";
   readonly label: string;
   readonly count: number | null;
+  /** Doğruysa sayı "en az bu kadar"dır; karo `+` ile yazar. */
+  readonly capped: boolean;
   readonly href: Route | null;
   readonly description: string;
   readonly loadError: string | null;
@@ -64,8 +72,8 @@ export interface OpsHome {
 }
 
 /** Yaşa göre sıralı liste: `sirala` panelin URL sözlüğü, alan ucun kendi sıralanabiliri. */
-function agedHref(href: OpsQueueHref, sort: SortSpec, state: Record<string, string> = {}): Route {
-  return listHref(href, { ...state, sirala: sortParam(sort) });
+function agedHref(href: OpsQueueHref, sort: SortSpec): Route {
+  return listHref(href, { sirala: sortParam(sort) });
 }
 
 const CREATED_ASC: SortSpec = { field: "createdAt", direction: "asc" };
@@ -74,15 +82,15 @@ const CREATED_ASC: SortSpec = { field: "createdAt", direction: "asc" };
  * Bugünün işi. İzni olmayan kuyruk hiç istenmez; bir uç düşerse karo durur,
  * sayı uydurulmaz. Finans ve denetim ayrı izinlerdir. Her kuyruk tek istek:
  * ilk {@link SLA_SAMPLE_SIZE} satır eskiden yeniye, hem "en eski" hem eşiği
- * aşan sayı ondan okunur. Uyuşmazlık ucu panelden sıralanmaz; yeniden
- * eskiye gelir ve sayı yine kesindir (`overdueSummary` `desc`), "en eski"
- * yalnız kuyruk örnekleme sığdığında bilinir.
+ * aşan sayı ondan okunur. Yaş hangi alandan ölçülüyorsa örneklem de o alana
+ * göre sıralanır: IBAN doğrulamada hesabın `createdAt`i değil doğrulamanın
+ * `startedAt`i (backend `verificationStartedAt`), hesap silmede `requestedAt`.
  */
 export async function loadOpsHome(
   accessToken: string,
   permissions: readonly Permission[],
-  now: Date = new Date(),
 ): Promise<OpsHome> {
+  const now = new Date();
   const held = new Set<Permission>(permissions);
   const jobs: Array<Promise<OpsQueueTile>> = [];
 
@@ -96,7 +104,7 @@ export async function loadOpsHome(
             status: "PENDING",
             paging: samplePaging(IDENTITY_REVIEW_PAGING, CREATED_ASC),
           }),
-        { order: "asc", overdueHref: agedHref("/identity-reviews", CREATED_ASC), now },
+        { timestamp: "createdAt", overdueHref: agedHref("/identity-reviews", CREATED_ASC), now },
       ),
     );
   }
@@ -104,7 +112,8 @@ export async function loadOpsHome(
     // Tek status alanı var; UNDER_REVIEW'i istemezsek incelemedeki şikayet
     // evde yok sayılır. İkisini de isteyip toplamak fail-closed: biri düşerse
     // karo hata verir, kısmi toplam "iş yok" gibi durmaz. Eşik sayısı da iki
-    // örneklemin toplamı; bağlantı OPEN kuyruğunu açar (liste tek durum alır).
+    // örneklemin toplamı. Liste tek durum aldığından bağlantı OPEN kuyruğunu
+    // açar; karo bunu açıklamasında söyler.
     jobs.push(
       countTile(
         "/reports",
@@ -123,7 +132,12 @@ export async function loadOpsHome(
             ),
           };
         },
-        { order: "asc", overdueHref: agedHref("/reports", CREATED_ASC), now },
+        {
+          timestamp: "createdAt",
+          overdueHref: listHref("/reports", { durum: "OPEN", sirala: sortParam(CREATED_ASC) }),
+          now,
+          description: "Açık + incelemede; bağlantı açık kuyruğu açar.",
+        },
       ),
     );
   }
@@ -138,7 +152,7 @@ export async function loadOpsHome(
             query: null,
             paging: samplePaging(COMPANY_PAGING, CREATED_ASC),
           }),
-        { order: "asc", overdueHref: agedHref("/companies", CREATED_ASC), now },
+        { timestamp: "createdAt", overdueHref: agedHref("/companies", CREATED_ASC), now },
       ),
     );
   }
@@ -147,21 +161,22 @@ export async function loadOpsHome(
       countTile(
         "/disputes",
         "Uyuşmazlıklar",
-        async () => getDisputes(accessToken, { page: 0, size: SLA_SAMPLE_SIZE }),
-        { order: "desc", overdueHref: agedHref("/disputes", CREATED_ASC), now },
+        () => getDisputes(accessToken, samplePaging(DISPUTE_PAGING, CREATED_ASC)),
+        { timestamp: "createdAt", overdueHref: agedHref("/disputes", CREATED_ASC), now },
       ),
     );
   }
   if (held.has("bank.account.verify")) {
+    const startedAsc: SortSpec = { field: "verificationStartedAt", direction: "asc" };
     jobs.push(
       countTile(
         "/iban-verifications",
         "IBAN doğrulama",
         () =>
           getPendingIbanVerifications(accessToken, {
-            paging: samplePaging(IBAN_PENDING_PAGING, CREATED_ASC),
+            paging: samplePaging(IBAN_PENDING_PAGING, startedAsc),
           }),
-        { order: "asc", overdueHref: agedHref("/iban-verifications", CREATED_ASC), now },
+        { timestamp: "startedAt", overdueHref: agedHref("/iban-verifications", startedAsc), now },
       ),
     );
   }
@@ -177,7 +192,11 @@ export async function loadOpsHome(
             status: "PROCESSING",
             paging: samplePaging(PAYOUT_PAGING, CREATED_ASC),
           }),
-        { order: "asc", overdueHref: agedHref("/payout-reconciliation", CREATED_ASC), now },
+        {
+          timestamp: "createdAt",
+          overdueHref: agedHref("/payout-reconciliation", CREATED_ASC),
+          now,
+        },
       ),
     );
   }
@@ -192,20 +211,27 @@ export async function loadOpsHome(
             status: "REQUESTED",
             paging: samplePaging(DELETION_PAGING, requestedAsc),
           }),
-        { order: "asc", overdueHref: agedHref("/account-deletions", requestedAsc), now },
+        {
+          timestamp: "requestedAt",
+          overdueHref: agedHref("/account-deletions", requestedAsc),
+          now,
+        },
       ),
     );
   }
 
-  const [queues, financeResult, recentAudit] = await Promise.all([
+  const [queues, financeResult, recentAudit, payments] = await Promise.all([
     Promise.all(jobs),
     held.has("finance.read") ? readFinance(accessToken) : Promise.resolve(null),
     held.has("audit.read") ? readRecentAudit(accessToken) : Promise.resolve([]),
+    held.has("payment.read")
+      ? readPaymentAlerts(accessToken, { stuckFromList: !held.has("finance.read") })
+      : Promise.resolve(null),
   ]);
 
   return {
     queues,
-    alerts: financeResult === null ? [] : alertTiles(financeResult, held),
+    alerts: alertTiles(financeResult, payments, held),
     finance: financeResult?.ok === true ? financeResult.summary : null,
     recentAudit,
   };
@@ -224,10 +250,14 @@ function samplePaging(contract: PagingContract, sort: SortSpec): Paging {
   return { page: 0, size: SLA_SAMPLE_SIZE, sort: usable };
 }
 
+/** Satırın yaşının okunduğu alan; örneklem de aynı alana göre sıralıdır. */
+type TimestampField = "createdAt" | "requestedAt" | "startedAt";
+
 interface TileOptions {
-  readonly order: "asc" | "desc";
+  readonly timestamp: TimestampField;
   readonly overdueHref: Route;
   readonly now: Date;
+  readonly description?: string;
 }
 
 async function countTile(
@@ -236,22 +266,18 @@ async function countTile(
   load: () => Promise<{ totalElements: number; content: readonly unknown[] }>,
   options: TileOptions,
 ): Promise<OpsQueueTile> {
+  const description = options.description ?? null;
   try {
     const page = await load();
-    const timestamps = page.content.map(rowTimestamp);
-    const oldestAt =
-      options.order === "asc"
-        ? (timestamps[0] ?? null)
-        : page.totalElements <= timestamps.length
-          ? (timestamps.at(-1) ?? null)
-          : null;
+    const timestamps = page.content.map((row) => rowTimestamp(row, options.timestamp));
     return {
       href,
       label,
+      description,
       count: page.totalElements,
-      oldestAt,
+      oldestAt: timestamps[0] ?? null,
       overdue: {
-        ...overdueSummary(timestamps, page.totalElements, options.order, options.now),
+        ...overdueSummary(timestamps, page.totalElements, options.now),
         href: options.overdueHref,
       },
       loadError: null,
@@ -261,6 +287,7 @@ async function countTile(
     return {
       href,
       label,
+      description,
       count: null,
       oldestAt: null,
       overdue: null,
@@ -269,29 +296,28 @@ async function countTile(
   }
 }
 
-function rowTimestamp(row: unknown): string | null {
+function rowTimestamp(row: unknown, field: TimestampField): string | null {
   if (row === null || typeof row !== "object") {
     return null;
   }
-  const record = row as { createdAt?: unknown; requestedAt?: unknown; startedAt?: unknown };
-  const value = record.createdAt ?? record.requestedAt ?? record.startedAt;
+  const value = (row as Record<TimestampField, unknown>)[field];
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 /**
- * İki eskiden-yeniye örneklemi tek eskiden-yeniye örnekleme birleştirir.
- * Her ikisi de kendi kuyruğunu tüketmişse (toplam ≤ örneklem) birleşim
- * tamdır; biri örneklemden büyükse birleşimin kuyruğu o kuyruğun görünmeyen
- * satırlarından daha yeni olabilir — o yüzden birleşik örneklem, büyük
- * kuyruğun örnekleminden uzun tutulmaz ki `overdueSummary`'nin "örneklem
- * tükendi" kuralı bozulmasın.
+ * İki eskiden-yeniye `createdAt` örneklemini tek eskiden-yeniye örnekleme
+ * birleştirir. Her ikisi de kendi kuyruğunu tüketmişse (toplam ≤ örneklem)
+ * birleşim tamdır; biri örneklemden büyükse birleşimin kuyruğu o kuyruğun
+ * görünmeyen satırlarından daha yeni olabilir — o yüzden birleşik örneklem,
+ * büyük kuyruğun örnekleminden uzun tutulmaz ki `overdueSummary`'nin
+ * "örneklem tükendi" kuralı bozulmasın.
  */
 function mergeAscending(
   ...samples: ReadonlyArray<readonly [rows: readonly unknown[], totalElements: number]>
 ): readonly unknown[] {
   const merged = samples
     .flatMap(([rows]) => rows)
-    .map((row) => ({ row, ts: rowTimestamp(row) }))
+    .map((row) => ({ row, ts: rowTimestamp(row, "createdAt") }))
     .sort((a, b) => (a.ts ?? "").localeCompare(b.ts ?? ""));
   const shortest = Math.min(
     ...samples.map(([rows, total]) => (total > rows.length ? rows.length : Infinity)),
@@ -309,43 +335,126 @@ async function readFinance(accessToken: string): Promise<FinanceResult> {
   }
 }
 
+type CountResult = { ok: true; count: number; capped: boolean } | { ok: false };
+
+interface PaymentAlerts {
+  readonly failed: CountResult;
+  /** Yalnız `finance.read` yokken istenir; varsa özet sayacı kullanılır. */
+  readonly stuck: CountResult | null;
+}
+
 /**
- * Takılı ödeme ve vadesi geçmiş hakediş (koala-backend#301). Eski sunucu
- * sayaçları göndermez: karo çizilmez. Özet düşmüşse iki karo da "yüklenemedi"
- * der; finans kartları zaten gizlenir.
+ * `GET /admin/payments?status=` (koala-backend#301). Başarısız sayısı bir
+ * satırlık sayfanın `totalElements`i. Takılı yedek yolu VERIFY_PENDING'in
+ * en eski {@link SLA_SAMPLE_SIZE} satırında `nextVerificationAt` boş
+ * olanları sayar; kuyruk örneklemden büyükse görünmeyen satırlar arasında da
+ * takılı olabilir, sayı alt sınır (`capped`) olur.
  */
-function alertTiles(finance: FinanceResult, held: ReadonlySet<Permission>): OpsAlertTile[] {
+async function readPaymentAlerts(
+  accessToken: string,
+  options: { stuckFromList: boolean },
+): Promise<PaymentAlerts> {
+  const [failed, stuck] = await Promise.all([
+    countResult(async () => {
+      const page = await getPayments(accessToken, {
+        status: "FAILED",
+        paging: { page: 0, size: 1, sort: PAYMENT_PAGING.defaultSort },
+      });
+      return { count: page.totalElements, capped: false };
+    }),
+    options.stuckFromList
+      ? countResult(async () => {
+          const page = await getPayments(accessToken, {
+            status: "VERIFY_PENDING",
+            paging: samplePaging(PAYMENT_PAGING, CREATED_ASC),
+          });
+          const stuckRows = page.content.filter((row) => row.nextVerificationAt === null);
+          return { count: stuckRows.length, capped: page.totalElements > page.content.length };
+        })
+      : Promise.resolve(null),
+  ]);
+  return { failed, stuck };
+}
+
+async function countResult(
+  load: () => Promise<{ count: number; capped: boolean }>,
+): Promise<CountResult> {
+  try {
+    return { ok: true, ...(await load()) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
+ * Takılı ödeme, başarısız ödeme ve vadesi geçmiş hakediş (koala-backend#301).
+ * Eski sunucu özet sayaçlarını göndermez: o karo çizilmez. Özet düşmüşse
+ * ondan gelen karolar "yüklenemedi" der; finans kartları zaten gizlenir.
+ * `finance.read` olmayan `payment.read` sahibi takılı sayısını listeden alır.
+ */
+function alertTiles(
+  finance: FinanceResult | null,
+  payments: PaymentAlerts | null,
+  held: ReadonlySet<Permission>,
+): OpsAlertTile[] {
   const stuckHref = held.has("payment.read") ? paymentsHref({ durum: "VERIFY_PENDING" }) : null;
-  const overdueHref = held.has("payout.reconcile")
-    ? payoutsHref({ durum: "PROCESSING", sirala: sortParam(CREATED_ASC) })
-    : null;
-  const stuck: Omit<OpsAlertTile, "count" | "loadError"> = {
+  const stuck: AlertShape = {
     key: "stuck-payments",
     label: "Takılı ödemeler",
     href: stuckHref,
     description: "Doğrulama bekleyen ve zamanlayıcıdan düşmüş tahsilatlar.",
   };
-  const overdue: Omit<OpsAlertTile, "count" | "loadError"> = {
+  const failed: AlertShape = {
+    key: "failed-payments",
+    label: "Başarısız ödemeler",
+    href: paymentsHref({ durum: "FAILED" }),
+    description: "Sağlayıcıda başarısız olan tahsilat denemeleri.",
+  };
+  const overdue: AlertShape = {
     key: "overdue-payouts",
     label: "Vadesi geçmiş hakediş",
-    href: overdueHref,
+    href: held.has("payout.reconcile")
+      ? payoutsHref({ durum: "PROCESSING", sirala: sortParam(CREATED_ASC) })
+      : null,
     description: "Banka mutabakatı eşikten uzun süredir bekleyen hakedişler.",
   };
 
-  if (!finance.ok) {
-    return [
-      { ...stuck, count: null, loadError: `${stuck.label} yüklenemedi.` },
-      { ...overdue, count: null, loadError: `${overdue.label} yüklenemedi.` },
-    ];
+  const tiles: Array<OpsAlertTile | null> = [];
+  if (finance !== null) {
+    tiles.push(summaryTile(stuck, finance, (summary) => summary.stuckPaymentCount));
+  } else if (payments?.stuck) {
+    tiles.push(countedTile(stuck, payments.stuck));
   }
-  const tiles: OpsAlertTile[] = [];
-  if (finance.summary.stuckPaymentCount !== null) {
-    tiles.push({ ...stuck, count: finance.summary.stuckPaymentCount, loadError: null });
+  if (payments !== null) {
+    tiles.push(countedTile(failed, payments.failed));
   }
-  if (finance.summary.overduePayoutCount !== null) {
-    tiles.push({ ...overdue, count: finance.summary.overduePayoutCount, loadError: null });
+  if (finance !== null) {
+    tiles.push(summaryTile(overdue, finance, (summary) => summary.overduePayoutCount));
   }
-  return tiles;
+  return tiles.filter((tile) => tile !== null);
+}
+
+type AlertShape = Omit<OpsAlertTile, "count" | "capped" | "loadError">;
+
+/** Özet düştüyse hata karosu; sayaç yoksa (eski sunucu) karo yok. */
+function summaryTile(
+  tile: AlertShape,
+  finance: FinanceResult,
+  read: (summary: FinanceSummary) => number | null,
+): OpsAlertTile | null {
+  if (!finance.ok) return failedTile(tile);
+  const count = read(finance.summary);
+  return count === null ? null : { ...tile, count, capped: false, loadError: null };
+}
+
+function failedTile(tile: AlertShape): OpsAlertTile {
+  return { ...tile, count: null, capped: false, loadError: `${tile.label} yüklenemedi.` };
+}
+
+function countedTile(tile: AlertShape, result: CountResult): OpsAlertTile {
+  return result.ok
+    ? { ...tile, count: result.count, capped: result.capped, loadError: null }
+    : failedTile(tile);
 }
 
 async function readRecentAudit(accessToken: string): Promise<readonly AuditEntry[]> {

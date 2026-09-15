@@ -184,6 +184,12 @@ describe("the marketplace user object GET", () => {
 
     expect(url).toContain("%2F");
   });
+
+  it("labels the device platform and leaves an unknown code as is", () => {
+    expect(devicePlatformLabel("IOS")).toBe("iOS");
+    expect(devicePlatformLabel("WEB_BROWSER")).toBe("Web tarayıcı");
+    expect(devicePlatformLabel("VISION")).toBe("VISION");
+  });
 });
 
 /** `GET /admin/users/{id}/bank-accounts` (koala-backend#301), `user.read_pii`. */
@@ -257,11 +263,5 @@ describe("the user's bank accounts", () => {
     expect(account?.accountHolderNameVerified).toBeNull();
     expect(account?.verifiedAt).toBeNull();
     expect(account?.createdAt).toBeNull();
-  });
-
-  it("labels the device platform and leaves an unknown code as is", () => {
-    expect(devicePlatformLabel("IOS")).toBe("iOS");
-    expect(devicePlatformLabel("WEB_BROWSER")).toBe("Web tarayıcı");
-    expect(devicePlatformLabel("VISION")).toBe("VISION");
   });
 });
