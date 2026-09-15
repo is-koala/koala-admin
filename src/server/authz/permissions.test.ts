@@ -20,8 +20,11 @@ const EXPECTED = [
   "content.moderate",
   "dispute.resolve",
   "finance.read",
+  "flag.manage",
   "identity.review",
   "job.read",
+  "note.read",
+  "note.write",
   "payment.read",
   "payment.refund",
   "payout.reconcile",
@@ -37,7 +40,7 @@ const EXPECTED = [
 ];
 
 describe("the permission catalogue", () => {
-  it("names the twenty-two permissions koala-backend defines, and no others", () => {
+  it("names the twenty-five permissions koala-backend defines, and no others", () => {
     expect([...PERMISSIONS].sort()).toEqual(EXPECTED);
   });
 
@@ -97,6 +100,21 @@ describe("the permission catalogue", () => {
     expect(byName.get("bank.account.verify")).toMatchObject({
       mutating: true,
       sensitivity: "FINANCIAL",
+    });
+    expect(byName.get("note.read")).toMatchObject({
+      mutating: false,
+      sensitivity: "PERSONAL_DATA",
+      label: "Personel notlarını görüntüle",
+    });
+    expect(byName.get("note.write")).toMatchObject({
+      mutating: true,
+      sensitivity: "PERSONAL_DATA",
+      label: "Personel notlarını yaz",
+    });
+    expect(byName.get("flag.manage")).toMatchObject({
+      mutating: true,
+      sensitivity: "NORMAL",
+      label: "İşaretleri yönet",
     });
 
     // `content.moderate` exists precisely so image removal is *not* reachable

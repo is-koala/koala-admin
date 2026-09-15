@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata, Route } from "next";
 
+import { StaffNotesSection } from "@/components/panel/staff-notes";
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { ObjectTimeline } from "@/components/panel/object-timeline";
 import { PageHeader } from "@/components/panel/page-header";
@@ -118,6 +119,7 @@ async function CompanyObject({
         canOpenJobs={canOpenJobs}
         staffRefs={staffRefs}
       />
+      <StaffNotesSection resourceType="COMPANY" resourceId={company.id} />
       <ObjectTimeline
         resourceId={company.id}
         subject="Bu şirket"

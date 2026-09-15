@@ -20,6 +20,9 @@ import {
   type Report,
 } from "@/server/api/reports";
 
+import { StaffFlagBadges } from "@/components/panel/staff-flag-badges";
+import type { StaffFlag } from "@/server/api/staff-notes";
+
 import { REPORT_STATUS_TONES } from "./report-decision";
 
 /**
@@ -31,11 +34,13 @@ export function ReportTable({
   reports,
   caption = "Şikayet kuyruğu",
   objectQuery = {},
+  flagsById,
 }: {
   reports: readonly Report[];
   caption?: string;
   /** Satır bağlantısına eklenen liste görünümü; nesne sayfasının kırıntısı geri okur. */
   objectQuery?: Readonly<Record<string, string>>;
+  flagsById?: ReadonlyMap<string, readonly StaffFlag[]>;
 }) {
   return (
     <Table caption={caption}>
@@ -102,12 +107,15 @@ export function ReportTable({
                 </span>
               </TableCell>
               <TableCell>
-                <Link
-                  href={reportHref(report.id, objectQuery)}
-                  className="text-brand hover:underline"
-                >
-                  İncele
-                </Link>
+                <span className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={reportHref(report.id, objectQuery)}
+                    className="text-brand hover:underline"
+                  >
+                    İncele
+                  </Link>
+                  <StaffFlagBadges flags={flagsById?.get(report.id) ?? []} />
+                </span>
               </TableCell>
             </TableRow>
           );

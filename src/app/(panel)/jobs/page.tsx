@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { StaffFlagBadges } from "@/components/panel/staff-flag-badges";
 import { PageHeader } from "@/components/panel/page-header";
 import {
   FilterId,
@@ -51,7 +52,9 @@ import {
 import { staffPartyName } from "@/server/api/shared/staff-party";
 import { getKoalaAccessToken } from "@/server/auth/session";
 import { RequirePermission } from "@/server/authz/require-permission";
+import { loadListFlags } from "@/server/notes/load-flags";
 import { classifyQueueFailure } from "@/server/queue/decisions";
+import type { StaffFlag } from "@/server/api/staff-notes";
 
 import { JOB_STATUS_TONES } from "./labels";
 
@@ -180,9 +183,11 @@ async function JobQueue({ params }: { params: SearchParams }) {
     />
   );
 
+  const accessToken = await getKoalaAccessToken();
+
   let page;
   try {
-    page = await getAdminJobs(await getKoalaAccessToken(), { status, paging, query, companyId });
+    page = await getAdminJobs(accessToken, { status, paging, query, companyId });
   } catch (error) {
     if (isSearchQueryTooLong(error)) {
       return (
@@ -204,6 +209,12 @@ async function JobQueue({ params }: { params: SearchParams }) {
       </div>
     );
   }
+
+  const flagsByJob = await loadListFlags(
+    accessToken,
+    "JOB",
+    page.content.map((job) => job.id),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -239,7 +250,12 @@ async function JobQueue({ params }: { params: SearchParams }) {
           </TableHead>
           <TableBody>
             {page.content.map((job) => (
-              <JobRow key={job.id} job={job} objectQuery={objectQuery} />
+              <JobRow
+                key={job.id}
+                job={job}
+                objectQuery={objectQuery}
+                flags={flagsByJob.get(job.id) ?? []}
+              />
             ))}
           </TableBody>
         </Table>
@@ -252,7 +268,15 @@ async function JobQueue({ params }: { params: SearchParams }) {
   );
 }
 
-function JobRow({ job, objectQuery }: { job: AdminJob; objectQuery: Record<string, string> }) {
+function JobRow({
+  job,
+  objectQuery,
+  flags,
+}: {
+  job: AdminJob;
+  objectQuery: Record<string, string>;
+  flags: readonly StaffFlag[];
+}) {
   const employerHref = job.employer === null ? null : userHrefOrNull(job.employer.id);
   const location = [job.districtName, job.cityName]
     .filter((part): part is string => part !== null && part.length > 0)
@@ -261,12 +285,15 @@ function JobRow({ job, objectQuery }: { job: AdminJob; objectQuery: Record<strin
   return (
     <TableRow>
       <TableCell>
-        <Link
-          href={jobHref(job.id, objectQuery)}
-          className="font-medium text-brand hover:underline"
-        >
-          {job.title ?? job.id}
-        </Link>
+        <span className="flex flex-wrap items-center gap-2">
+          <Link
+            href={jobHref(job.id, objectQuery)}
+            className="font-medium text-brand hover:underline"
+          >
+            {job.title ?? job.id}
+          </Link>
+          <StaffFlagBadges flags={flags} />
+        </span>
       </TableCell>
       <TableCell>
         <Badge tone={JOB_STATUS_TONES[job.status]}>{JOB_STATUS_LABELS[job.status]}</Badge>

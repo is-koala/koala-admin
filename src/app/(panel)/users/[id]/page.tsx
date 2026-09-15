@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { StaffNotesSection } from "@/components/panel/staff-notes";
 import { PageHeader } from "@/components/panel/page-header";
 import { ProfilePicture } from "@/components/panel/profile-picture";
 import { QueueLoadFailure } from "@/components/panel/queue";
@@ -189,6 +190,8 @@ async function UserObject({ id, tab }: { id: string; tab: UserTab }) {
       ) : (
         <AuditTab accessToken={accessToken} user={user} canManage={canManage} />
       )}
+
+      <StaffNotesSection resourceType="USER" resourceId={user.id} />
     </div>
   );
 }

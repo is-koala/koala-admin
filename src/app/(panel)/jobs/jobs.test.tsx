@@ -450,3 +450,79 @@ describe("the company filter — koala-admin#100", () => {
     expect(html).not.toContain('data-testid="job-company-filter"');
   });
 });
+
+describe("staff notes and flags on jobs", () => {
+  const FLAGS = apiUrl("/admin/flags");
+  const NOTES = apiUrl("/admin/notes");
+
+  it("does not ask GET /admin/flags without note.read", async () => {
+    stubMe(AGENT);
+    watchList();
+    const flags = { calls: 0 };
+    server.use(
+      http.get(FLAGS, () => {
+        flags.calls += 1;
+        return HttpResponse.json(envelope("/admin/flags", []));
+      }),
+    );
+
+    await renderList();
+    expect(flags.calls).toBe(0);
+  });
+
+  it("paints a VIP badge on the list when note.read holds", async () => {
+    stubMe(["job.read", "note.read"]);
+    watchList();
+    server.use(
+      http.get(FLAGS, () =>
+        HttpResponse.json(
+          envelope("/admin/flags", [
+            {
+              id: "f-1",
+              resourceType: "JOB",
+              resourceId: JOB_ID,
+              kind: "VIP",
+              label: null,
+              setByStaffId: "s-1",
+              setByDisplayName: "Trust",
+              setAt: "2026-09-15T11:00:00Z",
+              clearedAt: null,
+            },
+          ]),
+        ),
+      ),
+    );
+
+    const html = await renderList();
+    expect(html).toContain("VIP");
+    expect(html).toContain('data-testid="staff-flag-badges"');
+  });
+
+  it("shows the notes section on the object page for note.read", async () => {
+    stubMe(["job.read", "note.read"]);
+    watchDetail();
+    server.use(
+      http.get(NOTES, () =>
+        HttpResponse.json(
+          pageEnvelope("/admin/notes", [
+            {
+              id: "11111111-1111-4111-8111-111111111111",
+              resourceType: "JOB",
+              resourceId: JOB_ID,
+              authorStaffId: "s-1",
+              authorDisplayName: "Destek",
+              body: "İşverenle konuştuk.",
+              createdAt: "2026-09-15T10:00:00Z",
+              editedAt: null,
+            },
+          ]),
+        ),
+      ),
+      http.get(FLAGS, () => HttpResponse.json(envelope("/admin/flags", []))),
+    );
+
+    const html = await renderDetail();
+    expect(html).toContain("İşverenle konuştuk.");
+    expect(html).toContain('data-testid="staff-notes"');
+  });
+});

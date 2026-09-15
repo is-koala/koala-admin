@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { StaffNotesSection } from "@/components/panel/staff-notes";
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
@@ -296,6 +297,8 @@ async function JobObject({ id }: { id: string }) {
       </section>
 
       <Gallery job={job} />
+
+      <StaffNotesSection resourceType="JOB" resourceId={job.id} />
 
       <ObjectAuditPointer resourceId={job.id} linkLabel="Bu ilanın denetim kayıtlarını aç">
         Panel ilana yazmaz; backend bu ilan kimliğiyle yapılan her personel okumasını ve işlemini

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
+import { StaffNotesSection } from "@/components/panel/staff-notes";
 import { ObjectAuditPointer } from "@/components/panel/authz/object-audit-pointer";
 import { PageHeader } from "@/components/panel/page-header";
 import { QueueLoadFailure } from "@/components/panel/queue";
@@ -82,6 +83,7 @@ async function AssignmentObject({ id }: { id: string }) {
         payments={payments}
         permissions={context.staff?.permissions ?? []}
       />
+      <StaffNotesSection resourceType="JOB_ASSIGNMENT" resourceId={assignment.id} />
       <ObjectAuditPointer resourceId={assignment.id} linkLabel="Bu atamanın denetim kayıtlarını aç">
         Serbest bırakma ve iade backend tarafından bu atama kimliğiyle denetim kaydına yazılır;
         personelin bu kaydı açması da kayda düşer.
