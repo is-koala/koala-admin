@@ -105,11 +105,11 @@ describe("the identity reveals GET", () => {
   });
 
   /**
-   * Görüntüleyen hesabını sildiyse satır kalır, `viewerId` durur,
-   * `viewerFullName` `null` döner (AdminController açıklaması). IP sütunu da
-   * nullable.
+   * `viewerFullName` iki durumda `null` döner (`DisplayNames.of`): görüntüleyen
+   * hesabını silmiş (satır ve `viewerId` kalır) ya da canlı hesabın iki adı da
+   * boş. IP sütunu da nullable.
    */
-  it("reads a deleted viewer's row with a null name and keeps its id", async () => {
+  it("reads a row whose viewer has no name and keeps its id", async () => {
     server.use(
       http.get(apiUrl(userIdentityRevealsPath(USER_ID)), () =>
         pageEnvelope([{ ...REVEAL, viewerFullName: null, ipAddress: null, jobTitle: null }]),
@@ -124,6 +124,23 @@ describe("the identity reveals GET", () => {
       ipAddress: null,
       jobTitle: null,
     });
+  });
+
+  /**
+   * `revealedAt` backend'de `Instant`, `nullable = false`: kayıt "ne zaman"sız
+   * olamaz. Gelmeyen bir an boş hücre olarak sessizce geçmesin, sözleşme
+   * kayması olarak yüklenemedi ekranına düşsün.
+   */
+  it("refuses a row without the instant it records", async () => {
+    server.use(
+      http.get(apiUrl(userIdentityRevealsPath(USER_ID)), () =>
+        pageEnvelope([{ ...REVEAL, revealedAt: undefined }]),
+      ),
+    );
+
+    await expect(
+      getIdentityReveals("ACCESS-TOKEN", USER_ID, readIdentityRevealPaging({})),
+    ).rejects.toBeDefined();
   });
 
   it("surfaces a refusal as a KoalaApiError with the request id, not as an empty page", async () => {

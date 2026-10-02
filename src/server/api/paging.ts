@@ -144,6 +144,18 @@ export function parseSort(raw: string | null, contract: PagingContract): SortSpe
 }
 
 /**
+ * Adresteki sayfa dizini, sıfırdan başlayan ve negatif olmayan bir tamsayı
+ * olarak; geçersiz değer `0`. Anahtar parametre: bir nesne sayfasının sekmesi
+ * `sayfa`yı kullanamaz (kırıntı onu liste görünümü olarak geri okur) ve kendi
+ * anahtarıyla sayfalar — ama kıskaç kuralı tek yerde kalır, `readPaging` de
+ * bunu kullanır. `PageRequest.of` negatif sayfada 400 verir.
+ */
+export function readPageIndex(params: SearchParams, key: string): number {
+  const requested = Number(readParam(params, key) ?? 0);
+  return Number.isFinite(requested) ? Math.max(0, Math.trunc(requested)) : 0;
+}
+
+/**
  * Turn a URL into a request the backend will accept.
  *
  * Every value is clamped here rather than trusted, because every one of them is
@@ -153,12 +165,11 @@ export function parseSort(raw: string | null, contract: PagingContract): SortSpe
  * field is a rejected request.
  */
 export function readPaging(params: SearchParams, contract: PagingContract): Paging {
-  const requestedPage = Number(readParam(params, "sayfa") ?? 0);
+  const page = readPageIndex(params, "sayfa");
   const requestedSize = Number(
     readParam(params, "boyut") ?? contract.defaultSize ?? DEFAULT_PAGE_SIZE,
   );
 
-  const page = Number.isFinite(requestedPage) ? Math.max(0, Math.trunc(requestedPage)) : 0;
   const size = Number.isFinite(requestedSize)
     ? Math.min(MAX_PAGE_SIZE, Math.max(1, Math.trunc(requestedSize)))
     : (contract.defaultSize ?? DEFAULT_PAGE_SIZE);

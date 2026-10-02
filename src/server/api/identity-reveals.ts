@@ -7,7 +7,7 @@ import { marketplaceUserPath } from "./marketplace-users";
 import {
   DEFAULT_PAGE_SIZE,
   pagingQuery,
-  readParam,
+  readPageIndex,
   type Paging,
   type PagingContract,
   type SearchParams,
@@ -31,8 +31,8 @@ import type { PageDto } from "./types";
  * denetim satırı yazar — bu yüzden panel onu yalnız `kimlik` sekmesi seçiliyken
  * ister.
  *
- * `viewerFullName`, görüntüleyen hesabını sildiyse `null` döner; satır ve
- * `viewerId` kalır. Sıralama yalnız `revealedAt`
+ * `viewerFullName` `null` dönebilir (hesap silinmiş ya da iki ad da boş);
+ * satır ve `viewerId` kalır. Sıralama yalnız `revealedAt`
  * (`IdentityRevealManager.SORTABLE`); bilinmeyen alan 400, o yüzden panel
  * sıralamayı adresten hiç okumaz.
  */
@@ -58,8 +58,12 @@ const nullableString = z
   .transform((value) => value ?? null);
 
 /**
- * `core/dtos/identity/response/AdminIdentityRevealDto.java`. Kimlikler zorunlu
- * (satır DB'de hepsi `nullable = false`); ad, ilan başlığı ve IP boş gelebilir.
+ * `core/dtos/identity/response/AdminIdentityRevealDto.java`. Kimlikler ve an
+ * zorunlu (`revealedAt` bir `Instant`, sütun `nullable = false`): eksiği
+ * sessizce boş hücre olmaz, sözleşme kayması olarak şemada patlar. Ad, ilan
+ * başlığı ve IP boş gelebilir; `viewerFullName` `null` ise görüntüleyen hesabını
+ * silmiş ya da canlı hesabın iki adı da boş (`DisplayNames.of`) — ikisi satırdan
+ * ayırt edilemez.
  */
 export const identityRevealSchema = z.object({
   id: z.string(),
@@ -68,24 +72,20 @@ export const identityRevealSchema = z.object({
   jobAssignmentId: z.string(),
   jobId: z.string(),
   jobTitle: nullableString,
-  revealedAt: nullableString,
+  revealedAt: z.string(),
   ipAddress: nullableString,
 });
 
 export type IdentityReveal = z.infer<typeof identityRevealSchema>;
 
 /**
- * Adresten sayfa: negatif, sayı olmayan ya da kesirli değer backend'e gitmez
- * (`PageRequest.of` 400 verir). Boyut sabit — sekmede boyut seçici yok —
- * ve sıralama tek alan, varsayılan.
+ * Adresten sayfa; boyut ve sıralama sözleşmeden: sekmede boyut seçici yok ve
+ * backend yalnız `revealedAt` sıralar.
  */
 export function readIdentityRevealPaging(params: SearchParams): Paging {
-  const requested = Number(readParam(params, IDENTITY_REVEAL_PAGE_PARAM) ?? 0);
-  const page = Number.isFinite(requested) ? Math.max(0, Math.trunc(requested)) : 0;
-
   return {
-    page,
-    size: DEFAULT_PAGE_SIZE,
+    page: readPageIndex(params, IDENTITY_REVEAL_PAGE_PARAM),
+    size: IDENTITY_REVEAL_PAGING.defaultSize ?? DEFAULT_PAGE_SIZE,
     sort: IDENTITY_REVEAL_PAGING.defaultSort,
   };
 }

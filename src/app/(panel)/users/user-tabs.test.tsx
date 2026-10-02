@@ -772,7 +772,13 @@ describe("the kimlik tab", () => {
     expect(html).toContain(`href="/users/${VIEWER_ID}"`);
   });
 
-  it("keeps a deleted viewer's row, names it as deleted and does not link a page that would 404", async () => {
+  /**
+   * Ad `null` iki durumda gelir: hesap silinmiş ya da canlı hesabın iki adı da
+   * boş (`DisplayNames.of`). Hangisi olduğu satırdan anlaşılmaz; bu yüzden
+   * ikisini de söyleyen cümle yazılır ve kimlik, kullanıcı sayfasına bağlı
+   * kalır — silinmişse o sayfa zaten 404 ekranını gösterir.
+   */
+  it("keeps a row whose viewer has no name, says why that can be, and still links the id", async () => {
     stubMe(ALL);
     stubUser();
     watch(REVEALS, () =>
@@ -781,9 +787,9 @@ describe("the kimlik tab", () => {
 
     const html = await render({ sekme: "kimlik" });
 
-    expect(html).toContain("Silinmiş hesap");
-    expect(html).toContain(VIEWER_ID);
-    expect(html).not.toContain(`href="/users/${VIEWER_ID}"`);
+    expect(html).toContain("Adı yok ya da hesap silinmiş");
+    expect(html).not.toContain("Silinmiş hesap");
+    expect(html).toMatch(new RegExp(`<a[^>]*href="/users/${VIEWER_ID}"[^>]*>${VIEWER_ID}</a>`));
     expect(html).toContain("Cumartesi garson");
   });
 
@@ -822,7 +828,8 @@ describe("the kimlik tab", () => {
     expect(html).toContain("Kimlik görüntüleme kayıtları yüklenemedi.");
     expect(html).toContain("rid-reveals-500");
     expect(html).not.toContain("henüz kimse görüntülememiş");
-    expect(html).not.toContain('data-testid="user-identity-reveals-table"');
+    expect(html).not.toContain("<table");
+    expect(html).not.toContain("Görüntüleme zamanı");
   });
 
   it("names the permission when the backend refuses what the panel's gate let through", async () => {
@@ -848,6 +855,9 @@ describe("the kimlik tab", () => {
 
     expect(html).toContain("Backend bu işlem için yetki vermedi.");
     expect(html).toContain("rid-reveals-403");
+    // İzin adı ekranda: operatör neyi isteyeceğini bilsin.
+    expect(html).toContain("Kullanıcı kimlik bilgilerini görüntüle");
+    expect(html).not.toContain("<table");
   });
 
   it("is disabled without user.read_pii, with the permission named, and asks for nothing", async () => {
@@ -948,7 +958,7 @@ describe("the kimlik tab", () => {
       expect(reveals.urls[0]?.searchParams.get("page")).toBe("0");
     });
 
-    it("keeps the pager when the page is past the end, so the way back is on screen", async () => {
+    it("offers a direct link to the first page when the page is past the end, next to the pager", async () => {
       stubMe(ALL);
       stubUser();
       watch(REVEALS, () =>
@@ -968,8 +978,28 @@ describe("the kimlik tab", () => {
 
       expect(html).toContain("Bu sayfada kayıt yok.");
       expect(html).not.toContain("henüz kimse görüntülememiş");
+      // "Önceki" yalnız bir sayfa geri gider (8) ve o da boş: ilk sayfaya doğrudan bağlantı.
+      expect(html).toMatch(
+        new RegExp(
+          `<a[^>]*data-testid="user-identity-reveals-first-page"[^>]*href="/users/${USER_ID}\\?sekme=kimlik"`,
+        ),
+      );
       expect(html).toContain("toplam 41 kayıt");
       expect(html).toMatch(/<button value="8"[^>]*name="kimlik-sayfa"/);
+    });
+
+    it("does not offer that link on a page that has rows, or when there are no rows at all", async () => {
+      stubMe(ALL);
+      stubUser();
+      watch(REVEALS, () => envelope(REVEALS, revealPage([REVEAL])));
+      const withRows = await render({ sekme: "kimlik" });
+
+      stubUser();
+      watch(REVEALS, () => envelope(REVEALS, revealPage([])));
+      const empty = await render({ sekme: "kimlik" });
+
+      expect(withRows).not.toContain("user-identity-reveals-first-page");
+      expect(empty).not.toContain("user-identity-reveals-first-page");
     });
   });
 });

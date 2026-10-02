@@ -10,6 +10,7 @@ import {
   readBooleanParam,
   readEnumListParam,
   readEnumParam,
+  readPageIndex,
   readPaging,
   readParam,
   readUuidParam,
@@ -177,5 +178,27 @@ describe("readEnumListParam — koala-admin#110", () => {
     expect(readEnumListParam({ durum: "banana,B" }, "durum", allowed)).toEqual(["B"]);
     expect(readEnumListParam({}, "durum", allowed)).toEqual([]);
     expect(readEnumListParam({ durum: "" }, "durum", allowed)).toEqual([]);
+  });
+});
+
+describe("readPageIndex", () => {
+  it("reads the page from the key it is given and nothing else", () => {
+    expect(readPageIndex({ "kimlik-sayfa": "3", sayfa: "9" }, "kimlik-sayfa")).toBe(3);
+    expect(readPageIndex({ sayfa: "9" }, "kimlik-sayfa")).toBe(0);
+  });
+
+  it("clamps what an address bar can hold to an index the backend accepts", () => {
+    expect(readPageIndex({ sayfa: "-4" }, "sayfa")).toBe(0);
+    expect(readPageIndex({ sayfa: "banana" }, "sayfa")).toBe(0);
+    expect(readPageIndex({ sayfa: "2.9" }, "sayfa")).toBe(2);
+    expect(readPageIndex({}, "sayfa")).toBe(0);
+  });
+
+  it("is the same rule readPaging applies to sayfa", () => {
+    for (const value of ["7", "-1", "x", "1.5"]) {
+      expect(readPageIndex({ sayfa: value }, "sayfa")).toBe(
+        readPaging({ sayfa: value }, REPORTS).page,
+      );
+    }
   });
 });

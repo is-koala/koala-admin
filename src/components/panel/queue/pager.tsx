@@ -26,10 +26,11 @@ export interface QueuePagerProps {
   /** Singular noun for the counted thing, e.g. `"şikayet"`. */
   unit: string;
   /**
-   * The query key the buttons write, `sayfa` unless the page already uses that
-   * one for something else. An object page's tab cannot: there `sayfa` is the
-   * list view the breadcrumb returns to (koala-admin#128), so the tab pages
-   * under its own key and the pager drops only that one from `state`.
+   * Düğmelerin yazdığı sorgu anahtarı; varsayılan `sayfa`. `sayfa`nın başka bir
+   * şey için ayrıldığı sayfada değiştirilir: nesne sayfasında o, kırıntının
+   * "liste kaçıncı sayfadaydı" diye geri okuduğu anahtardır (koala-admin#128);
+   * sekmenin sayfalayıcısı ona yazsaydı "Kullanıcılar" bağlantısı yanlış sayfaya
+   * dönerdi. Sayfalayıcı yalnız kendi anahtarını `state`ten düşürür.
    */
   pageParam?: string;
 }

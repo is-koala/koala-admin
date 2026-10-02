@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui";
 import { EMPTY_VALUE, formatDateTimeSeconds } from "@/lib/format";
-import { assignmentHref, jobHref, userHrefOrNull } from "@/lib/panel-href";
+import { assignmentHref, jobHref, userHref, userTabHref } from "@/lib/panel-href";
 import { shortId } from "@/lib/short-id";
 import { USER_TAB_PARAM, USER_TAB_SPECS } from "@/lib/user-tabs";
 import {
@@ -32,9 +32,10 @@ import { classifyQueueFailure } from "@/server/queue/decisions";
  *
  * Sayfalama sunucuda ve sekmenin kendi anahtarıyla (`kimlik-sayfa`, bkz.
  * `IDENTITY_REVEAL_PAGE_PARAM`): bu ucun "Tümünü aç" diyeceği ayrı bir liste
- * sayfası yok, satırların hepsi burada sayfalanır. Yükleniyor durumu rota
- * düzeyindeki `users/loading.tsx` — sekmeler de `Link` ile gezindiği için
- * ayrı bir askı sınırı eklenmedi.
+ * sayfası yok, satırların hepsi burada sayfalanır. Yükleniyor göstergesi bu
+ * sekmeye özgü değil: rota düzeyindeki `users/loading.tsx` kullanıcı sayfası
+ * ilk açılırken çalışır; aynı sayfada yalnız `?sekme=`/`kimlik-sayfa` değişen
+ * gezintide görünmesi beklenmez, diğer sekmelerle aynı davranış.
  *
  * Bağlantılar kendi izinleriyle verilir: ilan `job.read`, atama
  * `payment.read`; görüntüleyenin kullanıcı sayfası `user.read` ister ve bu
@@ -101,14 +102,24 @@ export async function IdentityRevealsTab({
         <>
           {result.page.content.length === 0 ? (
             // Boş sayfa iki şey olabilir: hiç kayıt yok ya da sayfa sondan sonra.
-            // İkincisinde sayfalayıcı kalır, geri dönüş yolu ekranda olsun.
-            <EmptyState
-              title={
-                result.page.totalElements === 0
-                  ? "Bu kullanıcının kimliğini henüz kimse görüntülememiş."
-                  : "Bu sayfada kayıt yok."
-              }
-            />
+            // İkincisinde "Önceki" yalnız bir sayfa geri gider ve o da boş kalabilir:
+            // ilk sayfaya doğrudan bağlantı ve sayfalayıcı birlikte durur.
+            result.page.totalElements === 0 ? (
+              <EmptyState title="Bu kullanıcının kimliğini henüz kimse görüntülememiş." />
+            ) : (
+              <EmptyState
+                title="Bu sayfada kayıt yok."
+                action={
+                  <Link
+                    href={userTabHref(userId, "kimlik")}
+                    className="text-sm font-medium text-brand hover:underline"
+                    data-testid="user-identity-reveals-first-page"
+                  >
+                    İlk sayfaya dön
+                  </Link>
+                }
+              />
+            )
           ) : (
             <IdentityRevealTable
               rows={result.page.content}
@@ -193,25 +204,27 @@ function IdentityRevealTable({
 }
 
 /**
- * Görüntüleyen işveren. Hesabını silmişse backend adı `null` döner ve satırı
- * korur: ad yerine "Silinmiş hesap" ve tam kimlik yazılır (kayda geri
- * dönmenin tek tutamağı o) ve bağlantı verilmez — silinmiş kullanıcının
- * sayfası 404 olurdu.
+ * Görüntüleyen işveren. Backend adı iki durumda `null` döner: hesap silinmiş ya
+ * da canlı hesabın iki adı da boş (`DisplayNames.of`); satırdan hangisi olduğu
+ * anlaşılmaz. O yüzden ikisini de söyleyen bir cümle yazılır ve tam kimlik —
+ * kayda geri dönmenin tek tutamağı — kullanıcı sayfasına bağlı kalır: hesap
+ * silinmişse o sayfa zaten 404 ekranını gösterir, bağlantıyı panel eleyemez.
  */
 function Viewer({ row }: { row: IdentityReveal }) {
+  const href = userHref(row.viewerId);
+
   if (row.viewerFullName === null) {
     return (
       <span className="flex flex-col gap-0.5">
-        <span className="text-ink-muted">Silinmiş hesap</span>
-        <span className="font-mono text-xs break-all">{row.viewerId}</span>
+        <span className="text-ink-muted">Adı yok ya da hesap silinmiş</span>
+        <Link href={href} className="font-mono text-xs break-all text-brand hover:underline">
+          {row.viewerId}
+        </Link>
       </span>
     );
   }
 
-  const href = userHrefOrNull(row.viewerId);
-  return href === null ? (
-    <>{row.viewerFullName}</>
-  ) : (
+  return (
     <Link href={href} className="text-brand hover:underline">
       {row.viewerFullName}
     </Link>
