@@ -156,6 +156,31 @@ describe("the pager asks the server for another page", () => {
 
     expect(formPairs(theForm())).toEqual([["durum", "OPEN"]]);
   });
+
+  /**
+   * Bir nesne sayfasının sekmesi `sayfa`yı kullanamaz: o, kırıntının geri
+   * okuduğu liste görünümü anahtarı (koala-admin#128). Sayfalayıcı kendi
+   * anahtarını yazar ve yalnız onu atar; `sayfa` artık sıradan bir değerdir.
+   */
+  it("writes its buttons under another key when a page owns `sayfa` for something else", () => {
+    render(
+      <QueuePager
+        window={window}
+        state={{ sekme: "kimlik", "kimlik-sayfa": "9", sayfa: "4" }}
+        unit="kayıt"
+        pageParam="kimlik-sayfa"
+      />,
+    );
+
+    expect(formPairs(theForm())).toEqual([
+      ["sekme", "kimlik"],
+      ["sayfa", "4"],
+    ]);
+    expect(screen.getByRole("button", { name: "Önceki" })).toHaveAttribute("name", "kimlik-sayfa");
+    expect(screen.getByRole("button", { name: "Önceki" })).toHaveValue("0");
+    expect(screen.getByRole("button", { name: "Sonraki" })).toHaveAttribute("name", "kimlik-sayfa");
+    expect(screen.getByRole("button", { name: "Sonraki" })).toHaveValue("2");
+  });
 });
 
 describe("a queue the backend would not hand over", () => {

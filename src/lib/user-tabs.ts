@@ -34,6 +34,13 @@ export const USER_TAB_SPECS = {
    * ister ve sekmenin içinde ayrıca kapanır. DTO banka sayacı taşımaz.
    */
   banka: { label: "Banka", permission: "user.read_pii", count: null },
+  /**
+   * koala-admin#128: `GET /admin/users/{id}/identity-reveals` — işverenlerin
+   * bu işçinin kimlik bilgilerini (TCKN) ne zaman gördüğü. `user.read_pii`
+   * (PERSONAL_DATA) ve her okuma denetim satırı yazar; ayrı sekme çünkü liste
+   * yalnız bilinçle açılınca istenmeli. DTO sayaç taşımaz.
+   */
+  kimlik: { label: "Kimlik görüntüleme", permission: "user.read_pii", count: null },
   uyusmazliklar: {
     label: "Uyuşmazlıklar",
     permission: "dispute.resolve",
