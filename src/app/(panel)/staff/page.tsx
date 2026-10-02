@@ -33,6 +33,7 @@ import {
   type SeparationVerdict,
 } from "@/lib/role-graph";
 import type { RoleCode } from "@/lib/role-identity";
+import { STAFF_SELF_RESET_RECOVERY } from "@/lib/staff-password-reset";
 import {
   pageWindow,
   readPaging,
@@ -490,8 +491,8 @@ function StaffDetail({
               ? `Süresi dolmuş (${formatDateTime(member.lockedUntil)}); hesap giriş yapabilir.`
               : null}
             <span className="mt-1 block text-xs text-ink-muted">
-              Kaba kuvvet kilidi. Ayrı bir kilit açma ucu yok. Parola atamak kilidi de açar: kilitli
-              bir hesabın kurtarma yolu budur (backend 0.9.29); yoksa süresinin dolması beklenir.
+              Kaba kuvvet kilidi. Parola atamak kilidi de açar: kilitli bir hesabın kurtarma yolu
+              budur, ayrı bir kilit açma ucu yok; yoksa süresinin dolması beklenir.
             </span>
           </dd>
         </dl>
@@ -605,8 +606,10 @@ function StaffDetail({
               <h3 className="text-sm font-semibold text-ink">Parola ata</h3>
               {lock === "ACTIVE" && !isSelf ? (
                 <p className="max-w-prose rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-ink">
-                  Bu hesap kilitli: parola atamak kilidi de açar. Kişi yeni parolayla hemen giriş
-                  yapabilir ve ilk girişte onu değiştirmek zorunda kalır.
+                  Bu hesap kilitli: parola atamak kilidi de açar.{" "}
+                  {member.active
+                    ? "Kişi yeni parolayla hemen giriş yapabilir ve ilk girişte onu değiştirmek zorunda kalır."
+                    : "Hesap devre dışı: parola atamak onu yeniden etkinleştirmez, giriş yine reddedilir; önce yeniden etkinleştirin."}
                 </p>
               ) : null}
               <AuthorizationForm
@@ -623,7 +626,7 @@ function StaffDetail({
                 // eski bir sayfadan gelen gönderim de `STAFF_MEMBER_PASSWORD_RESET_SELF`
                 // açıklamasıyla döner (`administration.ts`).
                 disabled={isSelf}
-                disabledReason="Kendi hesabınıza parola atayamazsınız: görev ayrılığı gereği backend bunu 409 ile reddeder (STAFF_MEMBER_PASSWORD_RESET_SELF) ve hiçbir şeyi değiştirmez. Parolanızı unuttuysanız ya da hesabınız kilitlendiyse başka bir yönetici (staff.manage) size parola atar; bu kilidi de açar."
+                disabledReason={`Kendi hesabınıza parola atayamazsınız: görev ayrılığı gereği backend bunu 409 ile reddeder (STAFF_MEMBER_PASSWORD_RESET_SELF) ve hiçbir şeyi değiştirmez. ${STAFF_SELF_RESET_RECOVERY}`}
                 consequence="Yeni parola hemen geçerli olur, hesap 'ilk girişte değiştir' bayrağını alır, varsa kilit açılır ve açık oturumları sonlandırılır. Parolayı kişiye panel dışından iletmeniz gerekir: backend e-posta göndermez ve panel onu bir daha göstermez."
                 fields={[
                   {

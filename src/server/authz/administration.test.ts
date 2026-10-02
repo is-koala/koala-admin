@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { adminMeSuccessBody } from "../../../test/fixtures/envelopes";
 import { asRoleCode, asRoleId } from "@/lib/role-identity";
+import { STAFF_SELF_RESET_RECOVERY } from "@/lib/staff-password-reset";
 
 import { apiUrl, server } from "../../../test/msw";
 
@@ -590,7 +591,11 @@ describe("backend reddi bir hata kodu değil bir cümle olarak dönüyor", () =>
     // Backend'in cümlesi önce, panelin eki sonra.
     expect(outcome.message).toMatch(/^Kendi parolanızı bu uçtan sıfırlayamazsınız/);
     expect(outcome.message).toContain("Görev ayrılığı");
-    expect(outcome.message).toContain("başka bir yönetici");
+    // Çıkış yolu tek sabitten gelir: personel sayfasındaki kendi satırıyla aynı cümle.
+    expect(outcome.message).toContain(STAFF_SELF_RESET_RECOVERY);
+    // Backend "oturum içinden değiştirin" diyor; panelin bu yolu yok ve söylüyor.
+    expect(outcome.message).toContain("Panelde oturum içinden parola değiştirme ekranı yok");
+    expect(outcome.message).toContain("geçici bir parola");
     expect(outcome.message).toContain("staff-recovery.md");
     expect(outcome.message).toContain("Hiçbir şey değişmedi");
   });

@@ -7,6 +7,7 @@ import {
   type AuthorizationChangeStatus,
 } from "@/lib/authorization-change";
 import type { RoleCode, RoleId } from "@/lib/role-identity";
+import { STAFF_SELF_RESET_RECOVERY } from "@/lib/staff-password-reset";
 import {
   grantMarketplaceUserRole,
   isMarketplaceRole,
@@ -500,8 +501,7 @@ const EXPLANATION_FOR: Record<string, string> = {
     "Kendi son yönetim üyeliğinizi bırakıyordunuz. Yönetim izni sayılan ikili staff.manage + role.manage; yazımdan sonra ikisini birden taşımıyor olsaydınız panele bir daha giremezdiniz.",
   STAFF_LAST_ADMINISTRATOR:
     "Bu yazımdan sonra sistemde staff.manage ya da role.manage taşıyan etkin hiçbir personel kalmıyordu. Üyelik artık Koala'da tutulduğu için bu sayım ilk kez yapılabiliyor (ADR-0014).",
-  STAFF_MEMBER_PASSWORD_RESET_SELF:
-    "Görev ayrılığı: bir yönetici kendi hesabına yönetici parolası atayamaz. Kilitli ya da parolasını unutmuş bir yöneticiye başka bir yönetici (staff.manage) parola atar ve bu kilidi de açar; tek OWNER kaldıysa yol koala-backend'in docs/runbooks/staff-recovery.md yordamı. Hiçbir şey değişmedi: parola, kilit ve açık oturumlar olduğu gibi.",
+  STAFF_MEMBER_PASSWORD_RESET_SELF: `Görev ayrılığı: bir yönetici kendi hesabına yönetici parolası atayamaz. ${STAFF_SELF_RESET_RECOVERY} Hiçbir şey değişmedi: parola, kilit ve açık oturumlar olduğu gibi.`,
   STAFF_EMAIL_ALREADY_REGISTERED:
     "Bu e-posta ile bir personel kaydı zaten var. Kayıt silinmiyor, devre dışı bırakılıyor — listede pasif olarak duruyor olabilir.",
   STAFF_ROLE_NOT_FOUND:

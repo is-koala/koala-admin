@@ -1,6 +1,8 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { STAFF_SELF_RESET_RECOVERY } from "@/lib/staff-password-reset";
+
 import { adminMeSuccessBody } from "../../../../test/fixtures/envelopes";
 import { apiUrl, server } from "../../../../test/msw";
 import { renderServerComponent } from "../../../../test/render-server";
@@ -501,8 +503,12 @@ describe("parola atama kilidi de açar ve kendi hesabına uygulanamaz", () => {
 
     const html = await render();
 
-    expect(html).toContain("Parola atamak kilidi de açar");
+    // Cümle kilit sözünün kendisiyle başlar; "uç yok" bir eksik gibi okunur.
+    expect(html).toContain("Kaba kuvvet kilidi. Parola atamak kilidi de açar");
     expect(html).not.toContain("Kilidi elle açan bir uç yok");
+    expect(html).not.toContain("Ayrı bir kilit açma ucu yok");
+    // Personel metninde backend sürüm numarası geçmez.
+    expect(html).not.toContain("0.9.29");
   });
 
   it("kilitli bir hesabın formunda kilidin açılacağını önceden yazıyor", async () => {
@@ -514,6 +520,33 @@ describe("parola atama kilidi de açar ve kendi hesabına uygulanamaz", () => {
     expect(html).toContain("Kilitli —");
     expect(html).toContain(`id="parola-${LOCKED_ID}-password"`);
     expect(html).toContain("Bu hesap kilitli: parola atamak kilidi de açar");
+    expect(html).toContain("yeni parolayla hemen giriş yapabilir");
+  });
+
+  /**
+   * Parola atama kilidi açar ama pasif hesabı yeniden etkinleştirmez; giriş
+   * `!active` iken reddedilir. "Hemen giriş yapabilir" demek yanlış olurdu.
+   */
+  it("devre dışı ve kilitli hesapta hemen giriş yapabileceğini söylemiyor", async () => {
+    stubMe(MANAGER);
+    stubMembers([MEMBERS[0], { ...lockedMember, active: false }]);
+
+    const html = await render();
+
+    expect(html).toContain("Bu hesap kilitli: parola atamak kilidi de açar");
+    expect(html).toContain("yeniden etkinleştirmez");
+    expect(html).not.toContain("yeni parolayla hemen giriş yapabilir");
+  });
+
+  it("kendi satırı kilitliyse kilit ipucunu çizmiyor, çünkü orada form yok", async () => {
+    stubMe(MANAGER);
+    stubMembers([{ ...MEMBERS[0], lockedUntil: "2099-01-01T00:00:00Z" }, MEMBERS[1]]);
+
+    const html = await render();
+
+    expect(html).toContain("Kilitli —");
+    expect(html).not.toContain("Bu hesap kilitli: parola atamak kilidi de açar");
+    expect(html).not.toContain(`id="parola-${SELF_ID}-password"`);
   });
 
   it("kilitli olmayan hesapta kilit ipucunu göstermiyor", async () => {
@@ -534,7 +567,10 @@ describe("parola atama kilidi de açar ve kendi hesabına uygulanamaz", () => {
     expect(html).not.toContain(`id="parola-${SELF_ID}-password"`);
     expect(html).toContain("Kendi hesabınıza parola atayamazsınız");
     expect(html).toContain("STAFF_MEMBER_PASSWORD_RESET_SELF");
-    expect(html).toContain("başka bir yönetici");
+    // Reddin açıklamasıyla aynı sabit cümle: iki kopya ayrışmasın.
+    expect(html).toContain(STAFF_SELF_RESET_RECOVERY);
+    expect(html).toContain("Panelde oturum içinden parola değiştirme ekranı yok");
+    expect(html).toContain("staff-recovery.md");
   });
 
   it("başkasının satırında formu aynen çiziyor", async () => {
