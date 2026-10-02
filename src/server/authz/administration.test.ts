@@ -593,9 +593,15 @@ describe("backend reddi bir hata kodu değil bir cümle olarak dönüyor", () =>
     expect(outcome.message).toContain("Görev ayrılığı");
     // Çıkış yolu tek sabitten gelir: personel sayfasındaki kendi satırıyla aynı cümle.
     expect(outcome.message).toContain(STAFF_SELF_RESET_RECOVERY);
-    // Backend "oturum içinden değiştirin" diyor; panelin bu yolu yok ve söylüyor.
-    expect(outcome.message).toContain("Panelde oturum içinden parola değiştirme ekranı yok");
-    expect(outcome.message).toContain("geçici bir parola");
+    expect(outcome.message).toContain(
+      "Panelde kendi parolanızı değiştirebileceğiniz bir ekran yok",
+    );
+    // Backend cümlesindeki "oturum içinden" ve "OWNER" ile uzlaştırma yalnız bu
+    // ret açıklamasında; ortak sabit, ekranda backend cümlesi olmayan yerde de okunur.
+    expect(outcome.message).toContain("oturum içinden değiştirme yolu bu panelde sunulmuyor");
+    expect(outcome.message).toContain("OWNER, staff.manage yetkisini taşıyan roldür");
+    expect(STAFF_SELF_RESET_RECOVERY).not.toContain("oturum içinden");
+    expect(outcome.message).toContain("geçici parola");
     expect(outcome.message).toContain("staff-recovery.md");
     expect(outcome.message).toContain("Hiçbir şey değişmedi");
   });

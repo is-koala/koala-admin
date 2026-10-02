@@ -569,7 +569,10 @@ describe("parola atama kilidi de açar ve kendi hesabına uygulanamaz", () => {
     expect(html).toContain("STAFF_MEMBER_PASSWORD_RESET_SELF");
     // Reddin açıklamasıyla aynı sabit cümle: iki kopya ayrışmasın.
     expect(html).toContain(STAFF_SELF_RESET_RECOVERY);
-    expect(html).toContain("Panelde oturum içinden parola değiştirme ekranı yok");
+    expect(html).toContain("Panelde kendi parolanızı değiştirebileceğiniz bir ekran yok");
+    // Bu satırda ekranda backend cümlesi yok; personel "backend" diye düşünmez.
+    expect(html).not.toContain("backend cümlesindeki");
+    expect(STAFF_SELF_RESET_RECOVERY).not.toContain("backend cümlesi");
     expect(html).toContain("staff-recovery.md");
   });
 
