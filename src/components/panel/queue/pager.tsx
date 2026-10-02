@@ -25,9 +25,16 @@ export interface QueuePagerProps {
   state: Readonly<Record<string, string>>;
   /** Singular noun for the counted thing, e.g. `"şikayet"`. */
   unit: string;
+  /**
+   * The query key the buttons write, `sayfa` unless the page already uses that
+   * one for something else. An object page's tab cannot: there `sayfa` is the
+   * list view the breadcrumb returns to (koala-admin#128), so the tab pages
+   * under its own key and the pager drops only that one from `state`.
+   */
+  pageParam?: string;
 }
 
-export function QueuePager({ window, state, unit }: QueuePagerProps) {
+export function QueuePager({ window, state, unit, pageParam = "sayfa" }: QueuePagerProps) {
   const { page, totalPages, totalElements, first, last } = window;
   // `totalPages` is 0 for an empty result; a person reading "sayfa 1 / 0" would
   // reasonably think something is broken.
@@ -36,7 +43,7 @@ export function QueuePager({ window, state, unit }: QueuePagerProps) {
   return (
     <form method="get" className="flex flex-wrap items-center justify-between gap-3">
       {Object.entries(state)
-        .filter(([name]) => name !== "sayfa")
+        .filter(([name]) => name !== pageParam)
         .map(([name, value]) => (
           <input key={name} type="hidden" name={name} value={value} />
         ))}
@@ -50,13 +57,13 @@ export function QueuePager({ window, state, unit }: QueuePagerProps) {
         <Button
           variant="secondary"
           type="submit"
-          name="sayfa"
+          name={pageParam}
           value={Math.max(0, page - 1)}
           disabled={first}
         >
           Önceki
         </Button>
-        <Button variant="secondary" type="submit" name="sayfa" value={page + 1} disabled={last}>
+        <Button variant="secondary" type="submit" name={pageParam} value={page + 1} disabled={last}>
           Sonraki
         </Button>
       </div>

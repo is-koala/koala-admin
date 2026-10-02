@@ -226,6 +226,7 @@ describe("the tab strip and the URL parameter", () => {
       ["atamalar", "payment.read"],
       ["hakedisler", "payout.reconcile"],
       ["banka", "user.read_pii"],
+      ["kimlik", "user.read_pii"],
       ["uyusmazliklar", "dispute.resolve"],
       ["sikayetler", "content.moderate"],
     ]) {
@@ -691,6 +692,285 @@ describe("the banka tab", () => {
     expect(html).toContain("Banka hesapları yüklenemedi.");
     expect(html).toContain("rid-bank-404");
     expect(html).toContain("KOALA-9F3A2C");
+  });
+});
+
+/**
+ * koala-admin#128: `GET /admin/users/{id}/identity-reveals` (`user.read_pii`).
+ * Sekmenin kendi kapısı o izin; bağlantılar ayrıca kendi izinleriyle verilir
+ * (ilan `job.read`, atama `payment.read`), görüntüleyen kullanıcı sayfasına
+ * `user.read` ile (sayfanın kapısı) bağlanır.
+ */
+describe("the kimlik tab", () => {
+  const VIEWER_ID = "bbbbbbbb-2222-4222-8222-222222222222";
+  const JOB_ID = "9a1c0f10-0002-4c00-8000-0000000000bb";
+  const REVEALS = `/admin/users/${USER_ID}/identity-reveals`;
+  const REVEAL = {
+    id: "7e000000-0000-4000-8000-000000000001",
+    viewerId: VIEWER_ID,
+    viewerFullName: "Mert Demir",
+    jobAssignmentId: ASSIGNMENT_ID,
+    jobId: JOB_ID,
+    jobTitle: "Cumartesi garson",
+    revealedAt: "2026-09-16T08:30:00Z",
+    ipAddress: "203.0.113.***",
+  };
+  const ALL = [...READER, "user.read_pii", "job.read", "payment.read"];
+
+  function revealPage(
+    content: readonly unknown[],
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      content,
+      page: 0,
+      size: 20,
+      totalElements: content.length,
+      totalPages: content.length === 0 ? 0 : 1,
+      first: true,
+      last: true,
+      ...overrides,
+    };
+  }
+
+  it("lists who looked, when, through which job and assignment, and links each", async () => {
+    stubMe(ALL);
+    stubUser();
+    const reveals = watch(REVEALS, () => envelope(REVEALS, revealPage([REVEAL])));
+
+    const html = await render({ sekme: "kimlik" });
+
+    expect(reveals.urls).toHaveLength(1);
+    expect(reveals.urls[0]?.searchParams.get("page")).toBe("0");
+    expect(reveals.urls[0]?.searchParams.get("size")).toBe("20");
+    expect(reveals.urls[0]?.searchParams.get("sort")).toBe("revealedAt,desc");
+    expect(html).toMatch(/<a aria-current="page" data-testid="user-tab-kimlik"/);
+    expect(html).toContain('data-testid="user-identity-reveals"');
+    expect(html).toContain("Mert Demir");
+    expect(html).toContain(`href="/users/${VIEWER_ID}"`);
+    expect(html).toContain("Cumartesi garson");
+    expect(html).toContain(`href="/jobs/${JOB_ID}"`);
+    expect(html).toContain(`href="/assignments/${ASSIGNMENT_ID}"`);
+    // Kanıt satırı: saniye de yazılır, aynı dakikadaki iki bakış tek satıra çökmesin.
+    expect(html).toContain("16.09.2026 11:30:00");
+    expect(html).toContain("203.0.113.***");
+    // TCKN'nin kendisi bu uçta yok ve panelde de yok.
+    expect(html).toContain("TC kimlik numarasının kendisi");
+  });
+
+  it("gives a link only where the viewer's own permission allows it", async () => {
+    stubMe([...READER, "user.read_pii"]);
+    stubUser();
+    watch(REVEALS, () => envelope(REVEALS, revealPage([REVEAL])));
+
+    const html = await render({ sekme: "kimlik" });
+
+    expect(html).toContain("Cumartesi garson");
+    expect(html).not.toContain(`href="/jobs/${JOB_ID}"`);
+    expect(html).not.toContain(`href="/assignments/${ASSIGNMENT_ID}"`);
+    // Görüntüleyenin sayfası user.read ister; bu sayfanın kapısı da o.
+    expect(html).toContain(`href="/users/${VIEWER_ID}"`);
+  });
+
+  it("keeps a deleted viewer's row, names it as deleted and does not link a page that would 404", async () => {
+    stubMe(ALL);
+    stubUser();
+    watch(REVEALS, () =>
+      envelope(REVEALS, revealPage([{ ...REVEAL, viewerFullName: null, ipAddress: null }])),
+    );
+
+    const html = await render({ sekme: "kimlik" });
+
+    expect(html).toContain("Silinmiş hesap");
+    expect(html).toContain(VIEWER_ID);
+    expect(html).not.toContain(`href="/users/${VIEWER_ID}"`);
+    expect(html).toContain("Cumartesi garson");
+  });
+
+  it("says nobody has looked yet, which is a finding and not an error", async () => {
+    stubMe(ALL);
+    stubUser();
+    watch(REVEALS, () => envelope(REVEALS, revealPage([])));
+
+    const html = await render({ sekme: "kimlik" });
+
+    expect(html).toContain("Bu kullanıcının kimliğini henüz kimse görüntülememiş.");
+    expect(html).not.toContain("yüklenemedi");
+  });
+
+  it("shows the backend's answer, never an empty table, when the read fails", async () => {
+    stubMe(ALL);
+    stubUser();
+    watch(REVEALS, () =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Beklenmeyen bir hata oluştu.",
+          httpStatus: "500 INTERNAL_SERVER_ERROR",
+          errorCode: "UNEXPECTED_ERROR",
+          errorCategory: "UNEXPECTED",
+          requestId: "rid-reveals-500",
+          path: REVEALS,
+          timeStamp: "2026-09-16T09:00:00.000000000Z",
+        },
+        { status: 500 },
+      ),
+    );
+
+    const html = await render({ sekme: "kimlik" });
+
+    expect(html).toContain("Kimlik görüntüleme kayıtları yüklenemedi.");
+    expect(html).toContain("rid-reveals-500");
+    expect(html).not.toContain("henüz kimse görüntülememiş");
+    expect(html).not.toContain('data-testid="user-identity-reveals-table"');
+  });
+
+  it("names the permission when the backend refuses what the panel's gate let through", async () => {
+    stubMe(ALL);
+    stubUser();
+    watch(REVEALS, () =>
+      HttpResponse.json(
+        {
+          success: false,
+          message: "Bu işlem için yetki yok.",
+          httpStatus: "403 FORBIDDEN",
+          errorCode: "ACCESS_DENIED",
+          errorCategory: "ACCESS_DENIED",
+          requestId: "rid-reveals-403",
+          path: REVEALS,
+          timeStamp: "2026-09-16T09:00:00.000000000Z",
+        },
+        { status: 403 },
+      ),
+    );
+
+    const html = await render({ sekme: "kimlik" });
+
+    expect(html).toContain("Backend bu işlem için yetki vermedi.");
+    expect(html).toContain("rid-reveals-403");
+  });
+
+  it("is disabled without user.read_pii, with the permission named, and asks for nothing", async () => {
+    stubMe([...READER, "job.read", "payment.read"]);
+    stubUser();
+    const reveals = watch(REVEALS, () => envelope(REVEALS, revealPage([REVEAL])));
+
+    const html = await render({ sekme: "kimlik" });
+
+    expect(reveals.urls).toHaveLength(0);
+    expect(html).toContain('data-testid="user-tab-disabled-notice"');
+    expect(html).toContain("user.read_pii");
+    expect(html).toContain("liste isteği gönderilmedi");
+    expect(html).not.toContain("Mert Demir");
+    expect(html).not.toContain(`href="/users/${USER_ID}?sekme=kimlik"`);
+  });
+
+  /**
+   * Backend her okumada PERSONAL_DATA denetim satırı yazar: kimlik görüntüleme
+   * dökümü yalnız sekme bilinçle açılınca istenmeli, başka bir sekmeye
+   * bakmak o satırı yazmamalı.
+   */
+  it("is requested only when the tab is the selected one", async () => {
+    stubMe([...ALL, "payout.reconcile", "audit.read"]);
+    stubUser();
+    const reveals = watch(REVEALS, () => envelope(REVEALS, revealPage([REVEAL])));
+    watch(`/admin/users/${USER_ID}/bank-accounts`, () =>
+      envelope(`/admin/users/${USER_ID}/bank-accounts`, []),
+    );
+    watch("/admin/payouts", () => envelope("/admin/payouts", pageOf([])));
+    watch("/admin/audit-log", () => envelope("/admin/audit-log", pageOf([])));
+    watch("/admin/reports", () => envelope("/admin/reports", pageOf([])));
+
+    await render();
+    await render({ sekme: "banka" });
+    await render({ sekme: "hakedisler" });
+    await render({ sekme: "denetim" });
+
+    expect(reveals.urls).toHaveLength(0);
+  });
+
+  it("carries the tab in the strip for a user.read_pii holder", async () => {
+    stubMe(ALL);
+    stubUser();
+
+    const html = await render();
+
+    expect(html).toContain(`href="/users/${USER_ID}?sekme=kimlik"`);
+  });
+
+  describe("paging", () => {
+    it("asks the backend for the page in the address and draws the pager from the page metadata", async () => {
+      stubMe(ALL);
+      stubUser();
+      const reveals = watch(REVEALS, () =>
+        envelope(
+          REVEALS,
+          revealPage([REVEAL], {
+            page: 1,
+            totalElements: 41,
+            totalPages: 3,
+            first: false,
+            last: false,
+          }),
+        ),
+      );
+
+      const html = await render({ sekme: "kimlik", "kimlik-sayfa": "1" });
+
+      expect(reveals.urls).toHaveLength(1);
+      expect(reveals.urls[0]?.searchParams.get("page")).toBe("1");
+      expect(html).toContain("Sayfa 2 / 3");
+      expect(html).toContain("toplam 41 kayıt");
+      // Sayfalayıcı sekmeyi korur ve kendi anahtarını yazar, `sayfa`yı değil.
+      expect(html).toMatch(/<input type="hidden" name="sekme" value="kimlik"/);
+      expect(html).toMatch(/<button value="0"[^>]*name="kimlik-sayfa"/);
+      expect(html).toMatch(/<button value="2"[^>]*name="kimlik-sayfa"/);
+      expect(html).not.toMatch(/name="sayfa"/);
+    });
+
+    it("falls back to the first page on a bad value instead of sending a request the backend rejects", async () => {
+      stubMe(ALL);
+      stubUser();
+      const reveals = watch(REVEALS, () => envelope(REVEALS, revealPage([REVEAL])));
+
+      await render({ sekme: "kimlik", "kimlik-sayfa": "-4" });
+
+      expect(reveals.urls[0]?.searchParams.get("page")).toBe("0");
+    });
+
+    it("does not read the list view's sayfa as its own", async () => {
+      stubMe(ALL);
+      stubUser();
+      const reveals = watch(REVEALS, () => envelope(REVEALS, revealPage([REVEAL])));
+
+      await render({ sekme: "kimlik", sayfa: "5" });
+
+      expect(reveals.urls[0]?.searchParams.get("page")).toBe("0");
+    });
+
+    it("keeps the pager when the page is past the end, so the way back is on screen", async () => {
+      stubMe(ALL);
+      stubUser();
+      watch(REVEALS, () =>
+        envelope(
+          REVEALS,
+          revealPage([], {
+            page: 9,
+            totalElements: 41,
+            totalPages: 3,
+            first: false,
+            last: true,
+          }),
+        ),
+      );
+
+      const html = await render({ sekme: "kimlik", "kimlik-sayfa": "9" });
+
+      expect(html).toContain("Bu sayfada kayıt yok.");
+      expect(html).not.toContain("henüz kimse görüntülememiş");
+      expect(html).toContain("toplam 41 kayıt");
+      expect(html).toMatch(/<button value="8"[^>]*name="kimlik-sayfa"/);
+    });
   });
 });
 

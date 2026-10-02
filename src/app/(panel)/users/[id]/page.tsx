@@ -34,6 +34,7 @@ import {
   type AdminUserCounts,
   type MarketplaceUserDetail,
 } from "@/server/api/marketplace-users";
+import { readIdentityRevealPaging } from "@/server/api/identity-reveals";
 import { readEnumParam, readPaging, type SearchParams } from "@/server/api/paging";
 import { safeUserName } from "@/server/api/users";
 import { getKoalaAccessToken } from "@/server/auth/session";
@@ -42,6 +43,7 @@ import { RequirePermission } from "@/server/authz/require-permission";
 import { getStaffContext } from "@/server/authz/staff-context";
 import { classifyQueueFailure, notFoundIfMissing } from "@/server/queue/decisions";
 
+import { IdentityRevealsTab } from "./identity-reveals-tab";
 import {
   AssignmentsTab,
   AuditTab,
@@ -69,7 +71,7 @@ export const metadata: Metadata = { title: "Kullanıcı" };
  * varken okunur. Kapı `user.read`: izni olmayan kişide GET hiç çıkmaz.
  *
  * Kimlik kartlarının altı sekmeli (koala-admin#103): `?sekme=` ile
- * `genel | atamalar | hakedisler | banka | uyusmazliklar | sikayetler | denetim`.
+ * `genel | atamalar | hakedisler | banka | kimlik | uyusmazliklar | sikayetler | denetim`.
  * Yalnız seçili sekmenin listesi istenir; sekme tanımları `@/lib/user-tabs`,
  * içerikleri `user-tabs.tsx`.
  *
@@ -78,6 +80,10 @@ export const metadata: Metadata = { title: "Kullanıcı" };
  * varken), `genel` oturum özetini çizer (aktif oturum, son giriş, platform;
  * cihaz kimliği yok), `banka` sekmesi hesapları ve bekleyen IBAN
  * doğrulamalarını listeler.
+ *
+ * koala-admin#128: `kimlik` sekmesi `GET /admin/users/{id}/identity-reveals`
+ * (`user.read_pii`) ile işverenlerin bu işçinin kimliğini ne zaman
+ * görüntülediğini sayfalı listeler; içeriği `identity-reveals-tab.tsx`.
  */
 export default async function UserDetailPage({
   params,
@@ -99,13 +105,13 @@ export default async function UserDetailPage({
       />
 
       <RequirePermission permission="user.read">
-        <UserObject id={id} tab={tab} />
+        <UserObject id={id} tab={tab} query={query} />
       </RequirePermission>
     </div>
   );
 }
 
-async function UserObject({ id, tab }: { id: string; tab: UserTab }) {
+async function UserObject({ id, tab, query }: { id: string; tab: UserTab; query: SearchParams }) {
   // UUID olmayan bir kimlik hiçbir kaydı adresleyemez: backend'e sormadan
   // 404. Backend'in "yok" dediği kayıt da aynı yüzeye gider (koala-admin#85).
   if (!isUuid(id)) notFound();
@@ -178,6 +184,14 @@ async function UserObject({ id, tab }: { id: string; tab: UserTab }) {
           accessToken={accessToken}
           userId={user.id}
           canReadPending={held.has("bank.account.verify")}
+        />
+      ) : tab === "kimlik" ? (
+        <IdentityRevealsTab
+          accessToken={accessToken}
+          userId={user.id}
+          paging={readIdentityRevealPaging(query)}
+          canOpenJob={held.has("job.read")}
+          canOpenAssignment={held.has("payment.read")}
         />
       ) : tab === "uyusmazliklar" ? (
         <DisputesTab
