@@ -40,6 +40,12 @@ import type { PageDto } from "./types";
  *  - **Parola sıfırlama e-postasız.** Yönetici parolayı yazar, hesap "ilk
  *    girişte değiştir" bayrağını alır, token'ları ölür. Ek tablo, şablon ve
  *    süreli bağlantı yok — koala-backend#98 bunu açıkça kapsam dışı bıraktı.
+ *  - **Parola sıfırlama kilidi de açar, kendi hesabına uygulanamaz.**
+ *    koala-backend#323 (0.9.29) bunu ürün sözleşmesi yaptı: başarısız deneme
+ *    sayacı ve `lockedUntil` temizlenir, ayrı bir "kilidi aç" ucu yoktur ve
+ *    olmayacak. Aktör kendi hesabına uygulayamaz: 409
+ *    `STAFF_MEMBER_PASSWORD_RESET_SELF` (`STAFF_` öneki dâhil). Tek OWNER için
+ *    yol backend'in `docs/runbooks/staff-recovery.md` yordamı.
  *  - **MFA yok.** ADR-0014 bunu açık bir gerileme olarak kaydetti;
  *    {@link STAFF_MFA_NOTICE} onu ekranda tutuyor.
  */
@@ -257,10 +263,11 @@ export function revokeStaffRole(
 /**
  * `POST /admin/staff/{staffId}/password` — yönetici parolayı atar.
  *
- * Sonuç: parola özeti değişir, "ilk girişte değiştir" bayrağı kalkar (açılır),
- * kilit temizlenir ve `tokenVersion` artar. Yani hedefin açık oturumları da
- * biter. Kişiye parolayı **panel dışından** iletmek gerekir; backend e-posta
- * göndermez.
+ * Sonuç: parola özeti değişir, "ilk girişte değiştir" bayrağı açılır, kilit
+ * temizlenir (başarısız deneme sayacı da sıfırlanır) ve `tokenVersion` artar.
+ * Yani hedefin açık oturumları da biter. Kişiye parolayı **panel dışından**
+ * iletmek gerekir; backend e-posta göndermez. Aktör kendi `staffId`'sini
+ * verirse 409 `STAFF_MEMBER_PASSWORD_RESET_SELF` döner ve hiçbir şey değişmez.
  */
 export function resetStaffPassword(
   accessToken: string,
@@ -307,12 +314,6 @@ export const STAFF_BACKEND_GAPS = [
     title: "Atanan parolayı kişiye panel iletmiyor",
     detail:
       "E-posta akışı koala-backend#98'de açıkça kapsam dışı bırakıldı. Parolayı yazan kişi onu güvenli bir kanalla iletmek zorunda; panel ne gönderir ne saklar ne de bir daha gösterir.",
-  },
-  {
-    id: "no-unlock",
-    title: "Hesap kilidini elle açma ucu yok",
-    detail:
-      "lockedUntil listede görünüyor ama onu sıfırlayan ayrı bir uç yok. Kilidi düşüren tek yol parola sıfırlamak (resetPassword failedLoginAttempts ve lockedUntil'i temizler) ya da sürenin dolmasını beklemek.",
   },
   {
     id: "roles-are-direct-only",

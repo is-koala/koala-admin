@@ -459,6 +459,105 @@ describe("kendini kilitleme, ekranda", () => {
   });
 });
 
+/**
+ * koala-backend#323 (0.9.29): `POST /admin/staff/{id}/password` kilidi de açar
+ * ve aktör kendi hesabına uygulayamaz (409 `STAFF_MEMBER_PASSWORD_RESET_SELF`).
+ * Ayrı bir "kilidi aç" ucu yok ve olmayacak; parola atama kurtarma yolu.
+ */
+describe("parola atama kilidi de açar ve kendi hesabına uygulanamaz", () => {
+  const LOCKED_ID = "b7f4a2c1-0000-4c00-8000-000000000088";
+  const MANAGER = ["staff.read", "staff.manage", "role.manage"];
+  const lockedMember = {
+    id: LOCKED_ID,
+    email: "kilitli@koala.local",
+    displayName: "Kilitli Destek",
+    active: true,
+    mustChangePassword: false,
+    lockedUntil: "2099-01-01T00:00:00Z",
+    createdAt: "2026-09-09T08:00:00Z",
+    roles: ["SUPPORT_AGENT"],
+  };
+
+  function stubMembers(content: readonly unknown[]) {
+    server.use(
+      http.get(STAFF, () => HttpResponse.json(staffPage(content))),
+      http.get(ROLES, () =>
+        HttpResponse.json({
+          success: true,
+          message: "Personel rolleri listelendi.",
+          httpStatus: "200 OK",
+          path: "/admin/roles",
+          requestId: "rid-roles",
+          timeStamp: "2026-09-08T09:00:00.000000000Z",
+          data: ROLE_ROWS,
+        }),
+      ),
+    );
+  }
+
+  it("kilit satırında parola atamanın kilidi açtığını söylüyor, ayrı uç aramıyor", async () => {
+    stubMe(["staff.read"]);
+    watchStaff();
+
+    const html = await render();
+
+    expect(html).toContain("Parola atamak kilidi de açar");
+    expect(html).not.toContain("Kilidi elle açan bir uç yok");
+  });
+
+  it("kilitli bir hesabın formunda kilidin açılacağını önceden yazıyor", async () => {
+    stubMe(MANAGER);
+    stubMembers([MEMBERS[0], lockedMember]);
+
+    const html = await render();
+
+    expect(html).toContain("Kilitli —");
+    expect(html).toContain(`id="parola-${LOCKED_ID}-password"`);
+    expect(html).toContain("Bu hesap kilitli: parola atamak kilidi de açar");
+  });
+
+  it("kilitli olmayan hesapta kilit ipucunu göstermiyor", async () => {
+    stubMe(MANAGER);
+    stubMembers([MEMBERS[0], MEMBERS[1]]);
+
+    const html = await render();
+
+    expect(html).not.toContain("Bu hesap kilitli: parola atamak kilidi de açar");
+  });
+
+  it("kendi satırında 'Parola ata' formunu çizmiyor, sebebini ve çıkış yolunu yazıyor", async () => {
+    stubMe(MANAGER);
+    watchStaff();
+
+    const html = await render();
+
+    expect(html).not.toContain(`id="parola-${SELF_ID}-password"`);
+    expect(html).toContain("Kendi hesabınıza parola atayamazsınız");
+    expect(html).toContain("STAFF_MEMBER_PASSWORD_RESET_SELF");
+    expect(html).toContain("başka bir yönetici");
+  });
+
+  it("başkasının satırında formu aynen çiziyor", async () => {
+    stubMe(MANAGER);
+    watchStaff();
+
+    const html = await render();
+
+    expect(html).toContain(`id="parola-${OTHER_ID}-password"`);
+    expect(html).toContain("Parolayı ata");
+  });
+
+  it("yazma izni yokken kendi satırı için de ne form ne açıklama çiziyor", async () => {
+    stubMe(["staff.read"]);
+    watchStaff();
+
+    const html = await render();
+
+    expect(html).not.toContain("STAFF_MEMBER_PASSWORD_RESET_SELF");
+    expect(html).not.toContain(`id="parola-${OTHER_ID}-password"`);
+  });
+});
+
 describe("rol listesi okunamadığında", () => {
   it("personel listesini götürmüyor, atama formunu çizmiyor ve sebebini yazıyor", async () => {
     // `staff.manage` taşıyıp `role.manage` taşımayan biri için beklenen durum.

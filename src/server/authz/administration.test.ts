@@ -560,6 +560,41 @@ describe("backend reddi bir hata kodu değil bir cümle olarak dönüyor", () =>
     expect(outcome.message).toContain("etkin hiçbir personel kalmıyordu");
   });
 
+  /**
+   * koala-backend#323: parola atama kendi hesabına uygulanamaz — 409
+   * `STAFF_MEMBER_PASSWORD_RESET_SELF` (önekiyle; `StaffAdministrationIT`).
+   * Backend'in cümlesi zaten Türkçe; panel ona kuralın gerekçesini ve çıkış
+   * yolunu ekler. Ret bir alana ait değil, formun tamamına ait.
+   */
+  it("kendi hesabına parola atamayı görev ayrılığı olarak anlatıyor ve çıkış yolunu gösteriyor", async () => {
+    stubMe(["staff.manage"]);
+    watch("post", STAFF_PASSWORD, () =>
+      refusal(
+        409,
+        "STAFF_MEMBER_PASSWORD_RESET_SELF",
+        "Kendi parolanızı bu uçtan sıfırlayamazsınız; oturum içinden değiştirin ya da başka bir OWNER'dan isteyin.",
+      ),
+    );
+
+    const outcome = await runAuthorizationChange({
+      kind: "STAFF_PASSWORD_RESET",
+      staffId: STAFF_ID,
+      staffLabel: "Ben",
+      password: GOOD_PASSWORD,
+    });
+
+    expect(outcome.status).toBe("REFUSED");
+    expect(outcome.errorCode).toBe("STAFF_MEMBER_PASSWORD_RESET_SELF");
+    expect(outcome.requestId).toBe("rid-STAFF_MEMBER_PASSWORD_RESET_SELF");
+    expect(outcome.field).toBeNull();
+    // Backend'in cümlesi önce, panelin eki sonra.
+    expect(outcome.message).toMatch(/^Kendi parolanızı bu uçtan sıfırlayamazsınız/);
+    expect(outcome.message).toContain("Görev ayrılığı");
+    expect(outcome.message).toContain("başka bir yönetici");
+    expect(outcome.message).toContain("staff-recovery.md");
+    expect(outcome.message).toContain("Hiçbir şey değişmedi");
+  });
+
   it("yinelenen e-postayı e-posta alanına bağlıyor", async () => {
     stubMe(["staff.manage"]);
     watch("post", CREATE_STAFF, () =>
