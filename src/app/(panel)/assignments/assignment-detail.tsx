@@ -103,6 +103,18 @@ interface DetailProps {
 
 export function AssignmentDetail({ assignment, payments, permissions }: DetailProps) {
   const held = new Set(permissions);
+  // Konum `user.read_pii` ister (koala-admin#133); izin `/admin/me`'den bu istekte
+  // çözüldü, burada yalnız aktarılıyor. Süzme çizelge üreticisinde.
+  const timelineEvents = assignmentTimelineEvents(
+    assignment,
+    payments.ok ? payments.payments : [],
+    {
+      canReadLocation: held.has("user.read_pii"),
+    },
+  );
+  const hasBoarding = timelineEvents.some(
+    (event) => event.boarding !== undefined && event.boarding !== null,
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -202,13 +214,12 @@ export function AssignmentDetail({ assignment, payments, permissions }: DetailPr
         </div>
       </section>
 
-      <ObjectTimeline
-        resourceId={assignment.id}
-        subject="Bu atama"
-        events={assignmentTimelineEvents(assignment, payments.ok ? payments.payments : [])}
-      >
+      <ObjectTimeline resourceId={assignment.id} subject="Bu atama" events={timelineEvents}>
         Kaydın kendi anları DTO&apos;dan; serbest bırakma ve iade gibi personel kararları denetim
         izinden, bu atama kimliğiyle.
+        {hasBoarding
+          ? " Servis biniş satırlarında kaynak, saatler ve bayraklar kaydın ne kadar güçlü bir kanıt olduğunu gösterir."
+          : null}
       </ObjectTimeline>
 
       {assignment.application === null && assignment.cancellation === null ? null : (

@@ -1,4 +1,5 @@
 import type { AuditEntry } from "@/lib/audit-log";
+import type { BoardingEvidence } from "@/lib/boarding";
 
 /**
  * Nesne başına birleşik zaman çizelgesinin sözlüğü (koala-admin#107).
@@ -38,11 +39,18 @@ export interface TimelineEvent {
   readonly allowed: boolean;
   /** Satır anahtarı; denetimde satır kimliği, DTO'da etiket+an. */
   readonly key: string;
+  /**
+   * Servis biniş satırının kanıt bloğu (koala-admin#133): kaynak, üç zaman,
+   * uzaklık, bayraklar, izinliyse konum. Yalnız biniş olayında dolu; denetim
+   * ve diğer DTO olaylarında `null`/yok.
+   */
+  readonly boarding?: BoardingEvidence | null;
 }
 
 interface EventOptions {
   readonly detail?: string | null;
   readonly actor?: TimelineActor | null;
+  readonly boarding?: BoardingEvidence | null;
 }
 
 function parsableInstant(at: string | null | undefined): at is string {
@@ -68,6 +76,7 @@ export class TimelineBuilder {
       source: "record",
       allowed: true,
       key: `record:${label}:${at}:${this.events.length}`,
+      boarding: options.boarding ?? null,
     });
     return this;
   }

@@ -6,7 +6,7 @@ import { pageDtoSchema } from "./schemas";
 import { searchQueryParam } from "./search-query";
 import { linkedRecordSchema } from "./shared/linked-record";
 import { pricingBreakdownSchema } from "./shared/pricing";
-import { assignmentTransportSchema } from "./transport";
+import { adminTimelineEventSchema, assignmentTransportSchema } from "./transport";
 import type { KoalaResultMeta, PageDto } from "./types";
 import { safeUserSchema } from "./users";
 
@@ -349,6 +349,15 @@ export const assignmentDetailSchema = escrowSummarySchema.extend({
     .nullish()
     .transform((value) => value ?? null),
   transport: assignmentTransportSchema.nullish().transform((value) => value ?? null),
+  /**
+   * koala-backend#335 (T2): koltuk ve biniş olayları. Canlı sunucu (0.9.31)
+   * göndermez — `null`, "çizelge yok" demek değil "bu sunucu bilmiyor" demektir
+   * ve koltuklar `transport.seats[]`'ten çizilmeye devam eder (koala-admin#133).
+   */
+  timeline: z
+    .array(adminTimelineEventSchema)
+    .nullish()
+    .transform((value) => value ?? null),
   createdAt: nullableString,
   updatedAt: nullableString,
 });

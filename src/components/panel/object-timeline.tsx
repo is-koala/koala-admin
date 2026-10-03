@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { BoardingEvidenceBlock } from "@/components/panel/boarding-evidence";
 import { QueueLoadFailure, type QueueFailure } from "@/components/panel/queue";
 import {
   Badge,
@@ -286,6 +287,9 @@ function TimelineRow({
             {event.source === "audit" ? "Personel" : "Kayıt"}
           </Badge>
         </span>
+        {event.boarding === undefined || event.boarding === null ? null : (
+          <BoardingEvidenceBlock evidence={event.boarding} />
+        )}
       </TableCell>
     </TableRow>
   );

@@ -117,6 +117,58 @@ export const transportPlanSchema = assignmentTransportSchema.extend({
 
 export type TransportPlan = z.infer<typeof transportPlanSchema>;
 
+const nullableDecimal = z
+  .union([z.number(), z.string()])
+  .nullish()
+  .transform((value) => value ?? null);
+
+/** Yalnız yazılır; `Integer` bugün, ama tam sayı olmayan bir değer sayfayı düşürmez. */
+const nullableMetric = z
+  .number()
+  .nullish()
+  .transform((value) => value ?? null);
+
+/**
+ * `AdminTimelineEventDto` (koala-backend#335, T2) — `AdminAssignmentDetailDto
+ * .timeline[]`: koltuk seçimleri (`SEAT`) ve biniş/gelmedi kayıtları
+ * (`BOARDING`). Backend `type`ı enum yazar ama panel hepsini serbest dize
+ * okur: etiket sözlüğü bilinmeyen kodu olduğu gibi yazar ve bilinmeyen
+ * `type` satırı çizelgeye girmez; yeni bir değer yüzünden atama sayfası
+ * düşmemeli. Konum alanları `BigDecimal` — JSON sayı, bazen dize; panel yalnız
+ * yazar. `latitude`/`longitude`/`distanceToStopMeters` hesap silinince
+ * `null`'dır (KVKK), kanıtın kendisi kalır.
+ *
+ * Canlı OpenAPI (0.9.31, 03.10.2026) bu alanı henüz göndermez: `timeline`
+ * `null` kalır ve panel koltukları `transport.seats[]`'ten çizer. Boş liste
+ * ile yok farklı şeyler: biri "bu atamada olay yok", öteki "sunucu çizelge
+ * göndermiyor".
+ */
+export const adminTimelineEventSchema = z.object({
+  type: z.string(),
+  at: nullableString,
+  id: nullableString,
+  kind: nullableString,
+  source: nullableString,
+  flags: z
+    .array(z.string())
+    .nullish()
+    .transform((value) => value ?? []),
+  recordedById: nullableString,
+  recorderRole: nullableString,
+  shuttleId: nullableString,
+  seatAssignmentId: nullableString,
+  stopId: nullableString,
+  stopLabel: nullableString,
+  stopScheduledAt: nullableString,
+  capturedAt: nullableString,
+  receivedAt: nullableString,
+  latitude: nullableDecimal,
+  longitude: nullableDecimal,
+  distanceToStopMeters: nullableMetric,
+});
+
+export type AdminTimelineEvent = z.infer<typeof adminTimelineEventSchema>;
+
 export const TRANSPORT_PLAN_NOT_FOUND = "TRANSPORT_PLAN_NOT_FOUND";
 
 export function transportPlanPath(jobId: string): string {
