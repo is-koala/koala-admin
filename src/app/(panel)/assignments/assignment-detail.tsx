@@ -24,6 +24,7 @@ import {
   formatInteger,
   formatPercent,
 } from "@/lib/format";
+import type { GatedLocation } from "@/lib/location-gate";
 import {
   disputeHref,
   jobHref,
@@ -42,7 +43,6 @@ import {
   type AdminReview,
   type AssignmentDetail as AssignmentRecord,
   type LinkedRecord,
-  type WorkSession,
 } from "@/server/api/escrow";
 import {
   PAYMENT_ATTEMPT_STATUS_LABELS,
@@ -57,6 +57,7 @@ import { escrowMovement, refundAvailability, releaseAvailability } from "@/serve
 
 import { ASSIGNMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONES } from "./labels";
 import { assignmentTimelineEvents } from "./timeline";
+import { gateWorkSessions, type GatedWorkSession } from "./work-sessions";
 
 /**
  * Atama nesne sayfasının gövdesi (koala-admin#95).
@@ -225,7 +226,9 @@ export function AssignmentDetail({ assignment, payments, permissions }: DetailPr
       )}
 
       {assignment.workSessions === null ? null : (
-        <WorkSessions sessions={assignment.workSessions} />
+        <WorkSessions
+          sessions={gateWorkSessions(assignment.workSessions, held.has("user.read_pii"))}
+        />
       )}
 
       <PaymentsTable payments={payments} />
@@ -488,9 +491,11 @@ function CancellationCard({
 /**
  * Mesai oturumları. Plausibility bayrakları backend'in kararıdır
  * (`TimesheetPlausibilityFlag`); panel bayrak üretmez, yalnız yazar.
- * Konum yalnız sayı olarak, harita yok.
+ * Konum yalnız sayı olarak, harita yok; ve yalnız `user.read_pii` varken
+ * (koala-admin#135): oturumlar buraya `gateWorkSessions`'tan geçmiş gelir,
+ * izinsiz okuyucuda koordinat veride hiç yoktur.
  */
-function WorkSessions({ sessions }: { sessions: readonly WorkSession[] }) {
+function WorkSessions({ sessions }: { sessions: readonly GatedWorkSession[] }) {
   return (
     <section className="flex flex-col gap-3" aria-labelledby="assignment-sessions-heading">
       <div className="flex flex-col gap-1">
@@ -534,11 +539,10 @@ function WorkSessions({ sessions }: { sessions: readonly WorkSession[] }) {
                   {session.minutes === null ? EMPTY_VALUE : `${formatInteger(session.minutes)} dk`}
                 </TableCell>
                 <TableCell>
-                  <span className="font-mono text-xs">
-                    {coordinates(session.checkInLatitude, session.checkInLongitude)}
-                    {" → "}
-                    {coordinates(session.checkOutLatitude, session.checkOutLongitude)}
-                  </span>
+                  <SessionLocation
+                    checkIn={session.checkInLocation}
+                    checkOut={session.checkOutLocation}
+                  />
                 </TableCell>
               </TableRow>
             ))}
@@ -562,9 +566,39 @@ function Flags({ flags }: { flags: readonly string[] }) {
   );
 }
 
-function coordinates(latitude: number | string | null, longitude: number | string | null): string {
-  if (latitude === null || longitude === null) return EMPTY_VALUE;
-  return `${latitude}, ${longitude}`;
+/**
+ * Giriş → çıkış konumu. Uçlardan biri `withheld` ise tek not yazılır: konumun
+ * var olduğu söylenir, hangi ucun olduğu ya da değeri söylenmez. İkisi de
+ * `none` ise "—"; "konum var" iddiası ancak gerçekten konum varken çıkar.
+ */
+function SessionLocation({
+  checkIn,
+  checkOut,
+}: {
+  checkIn: GatedLocation;
+  checkOut: GatedLocation;
+}) {
+  if (checkIn.kind === "withheld" || checkOut.kind === "withheld") {
+    return (
+      <span className="text-xs text-ink-muted" data-testid="work-session-location-withheld">
+        Konum var; görmek için <code className="font-mono">user.read_pii</code> gerekir.
+      </span>
+    );
+  }
+  if (checkIn.kind === "none" && checkOut.kind === "none") {
+    return <span className="text-ink-muted">{EMPTY_VALUE}</span>;
+  }
+  return (
+    <span className="font-mono text-xs" data-testid="work-session-location">
+      {coordinates(checkIn)}
+      {" → "}
+      {coordinates(checkOut)}
+    </span>
+  );
+}
+
+function coordinates(location: GatedLocation): string {
+  return location.kind === "shown" ? `${location.latitude}, ${location.longitude}` : EMPTY_VALUE;
 }
 
 /**
