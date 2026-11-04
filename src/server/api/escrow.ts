@@ -269,6 +269,18 @@ export const workSessionSchema = z.object({
   checkOutLatitude: nullableDecimal,
   checkOutLongitude: nullableDecimal,
   minutes: nullableInt,
+  /**
+   * koala-backend#352: koordinat kayıtlı ama okuyanın `user.read_pii` izni
+   * yok diye `null` döndü. Eski sunucuda alan yok → `false`.
+   */
+  checkInLocationWithheld: z
+    .boolean()
+    .nullish()
+    .transform((value) => value ?? false),
+  checkOutLocationWithheld: z
+    .boolean()
+    .nullish()
+    .transform((value) => value ?? false),
 });
 
 export type WorkSession = z.infer<typeof workSessionSchema>;

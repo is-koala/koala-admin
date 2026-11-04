@@ -5,8 +5,9 @@ import { workSessionSchema } from "@/server/api/escrow";
 import { gateWorkSessions } from "./work-sessions";
 
 /**
- * koala-admin#135: konum kapısının sunucu yarısı. Backend bu uçta konumu izne
- * göre maskelemiyor; süzme, bileşene giden veriyi kurarken yapılır. Sayfa testi
+ * koala-admin#135: konum kapısının sunucu yarısı. koala-backend#352 öncesi
+ * backend bu uçta konumu izne göre maskelemiyordu; süzme, bileşene giden veriyi
+ * kurarken yapılır. #352 sonrası maskelenmiş `null` bayrağıyla gelir. Sayfa testi
  * kapıyı HTML'den, bu test veriden sınar.
  */
 
@@ -59,5 +60,24 @@ describe("gateWorkSessions", () => {
     );
     expect(gated[0]?.checkInLocation).toEqual({ kind: "none" });
     expect(gated[0]?.checkOutLocation).toEqual({ kind: "none" });
+  });
+
+  it("calls a null the backend masked withheld, and reads a missing flag as false", () => {
+    const masked = gateWorkSessions(
+      [
+        session({
+          checkInLatitude: null,
+          checkInLongitude: null,
+          checkOutLatitude: null,
+          checkOutLongitude: null,
+          checkInLocationWithheld: true,
+        }),
+      ],
+      false,
+    );
+    expect(masked[0]?.checkInLocation).toEqual({ kind: "withheld" });
+    // Eski sunucu: alan yok → false → "konum yok".
+    expect(masked[0]?.checkOutLocation).toEqual({ kind: "none" });
+    expect(Object.keys(masked[0] ?? {})).not.toContain("checkInLocationWithheld");
   });
 });

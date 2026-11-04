@@ -690,8 +690,61 @@ describe("work session location — koala-admin#135", () => {
     );
 
     const html = await render();
-    expect(html).not.toContain("work-session-location");
+    expect(html).not.toContain("work-session-location-withheld");
+    expect(html).not.toContain('data-testid="work-session-location"');
+    // Konumsuz oturum "—" çizer; satır boş kalmaz, not da çıkmaz.
+    expect(html).toContain('data-testid="work-session-location-none"');
+    expect(html).toMatch(/data-testid="work-session-location-none"[^>]*>—</);
     expect(html).toContain("Mesai oturumları");
+  });
+
+  /**
+   * koala-backend#352 sonrası canlı yanıt: izinsiz personele koordinatlar
+   * `null` gelir, bayrak ne olduğunu söyler. Bayrak okunmazsa bu yanıt
+   * "konum yok" sanılır ve "konum var" notu canlıda hiç çıkmaz.
+   */
+  const maskedByBackend = (withheld: boolean) =>
+    detail({
+      checkInLatitude: null,
+      checkInLongitude: null,
+      checkOutLatitude: null,
+      checkOutLongitude: null,
+      checkInLocationWithheld: withheld,
+      checkOutLocationWithheld: withheld,
+    });
+
+  it("says a location exists when the backend masked the coordinates and flagged it", async () => {
+    stubMe(ANALYST);
+    watch(maskedByBackend(true));
+
+    const html = await render();
+    expect(html).toContain('data-testid="work-session-location-withheld"');
+    expect(html).toContain("Konum var");
+    expect(html).not.toContain("work-session-location-none");
+  });
+
+  it("draws a dash for a null the backend did not flag as withheld", async () => {
+    stubMe(ANALYST);
+    watch(maskedByBackend(false));
+
+    const html = await render();
+    expect(html).not.toContain("work-session-location-withheld");
+    expect(html).toMatch(/data-testid="work-session-location-none"[^>]*>—</);
+  });
+
+  it("notes one masked end even when the other end carried no location", async () => {
+    stubMe(ANALYST);
+    watch(
+      detail({
+        checkInLatitude: null,
+        checkInLongitude: null,
+        checkOutLatitude: null,
+        checkOutLongitude: null,
+        checkOutLocationWithheld: true,
+      }),
+    );
+
+    expect(await render()).toContain('data-testid="work-session-location-withheld"');
   });
 
   it("reads the permission from /admin/me on this request", async () => {

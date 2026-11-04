@@ -569,7 +569,9 @@ function Flags({ flags }: { flags: readonly string[] }) {
 /**
  * Giriş → çıkış konumu. Uçlardan biri `withheld` ise tek not yazılır: konumun
  * var olduğu söylenir, hangi ucun olduğu ya da değeri söylenmez. İkisi de
- * `none` ise "—"; "konum var" iddiası ancak gerçekten konum varken çıkar.
+ * `none` ise "—"; "konum var" iddiası ancak gerçekten konum varken çıkar —
+ * backend'in maskelediği `null` (koala-backend#352) `gateLocation`'da bayrağıyla
+ * `withheld` olur, buraya "konum yok" diye gelmez.
  */
 function SessionLocation({
   checkIn,
@@ -586,7 +588,11 @@ function SessionLocation({
     );
   }
   if (checkIn.kind === "none" && checkOut.kind === "none") {
-    return <span className="text-ink-muted">{EMPTY_VALUE}</span>;
+    return (
+      <span className="text-ink-muted" data-testid="work-session-location-none">
+        {EMPTY_VALUE}
+      </span>
+    );
   }
   return (
     <span className="font-mono text-xs" data-testid="work-session-location">
