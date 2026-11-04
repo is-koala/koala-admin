@@ -94,5 +94,9 @@ function Location({ location }: { location: BoardingEvidence["location"] }) {
       </Fact>
     );
   }
-  return <Fact label="Konum">{EMPTY_VALUE}</Fact>;
+  return (
+    <Fact label="Konum">
+      <span data-testid="boarding-location-none">{EMPTY_VALUE}</span>
+    </Fact>
+  );
 }

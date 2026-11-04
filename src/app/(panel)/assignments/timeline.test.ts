@@ -11,9 +11,10 @@ import { assignmentDetailSchema } from "@/server/api/escrow";
 import { assignmentTimelineEvents } from "./timeline";
 
 /**
- * koala-admin#133: konum kapısının sunucu yarısı. Backend bu uçta konumu
- * izne göre maskelemiyor (yalnız `payment.read`), bu yüzden süzme çizelge
- * üreticisindedir: bileşene giden veride koordinat hiç olmaz. Sayfa testi
+ * koala-admin#133: konum kapısının sunucu yarısı. koala-backend#352 öncesi
+ * backend bu uçta konumu izne göre maskelemiyordu (yalnız `payment.read`), bu
+ * yüzden süzme çizelge üreticisindedir; #352 sonrası maskelenmiş `null`
+ * `locationWithheld` bayrağıyla gelir: bileşene giden veride koordinat hiç olmaz. Sayfa testi
  * aynı kapıyı HTML'den, bu test veriden sınar.
  */
 
@@ -61,6 +62,27 @@ describe("assignmentTimelineEvents — location gate", () => {
     expect(events.find((event) => event.label === "Biniş kaydedildi")?.boarding?.location).toEqual({
       kind: "none",
     });
+  });
+
+  // koala-backend#352: izinsiz okuyucuya koordinat null gelir, bayrak ne olduğunu söyler.
+  it("calls a null the backend masked withheld, and an unflagged null none", () => {
+    const location = (locationWithheld: boolean | undefined, canReadLocation: boolean) =>
+      assignmentTimelineEvents(
+        parse({
+          timeline: [
+            adminBoardingEventFixture({ latitude: null, longitude: null, locationWithheld }),
+          ],
+        }),
+        [],
+        { canReadLocation },
+      ).find((event) => event.label === "Biniş kaydedildi")?.boarding?.location;
+
+    for (const canRead of [true, false]) {
+      expect(location(true, canRead)).toEqual({ kind: "withheld" });
+      expect(location(false, canRead)).toEqual({ kind: "none" });
+      // Eski sunucu: alan yok → false.
+      expect(location(undefined, canRead)).toEqual({ kind: "none" });
+    }
   });
 });
 

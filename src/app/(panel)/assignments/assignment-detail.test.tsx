@@ -779,7 +779,41 @@ describe("boarding events on the timeline — koala-admin#133", () => {
 
     const timeline = timelineOf(await render());
     expect(timeline).not.toContain("boarding-location-withheld");
+    expect(timeline).not.toContain('data-testid="boarding-location"');
+    // Konumsuz kayıt "—" çizer; "konum var" notu çıkmaz.
+    expect(timeline).toMatch(/data-testid="boarding-location-none"[^>]*>—</);
     expect(timeline).toContain("Biniş kaydedildi");
+  });
+
+  /**
+   * koala-backend#352 sonrası canlı yanıt: izinsiz personele koordinatlar
+   * `null` gelir, `locationWithheld` ne olduğunu söyler. Bayrak okunmazsa bu
+   * yanıt "konum yok" sanılır ve "konum var" notu canlıda hiç çıkmaz.
+   */
+  const maskedByBackend = (locationWithheld: boolean) =>
+    withBoarding([
+      adminBoardingEventFixture({ latitude: null, longitude: null, locationWithheld }),
+    ]);
+
+  it("says a location exists when the backend masked the coordinates and flagged it", async () => {
+    stubMe(ANALYST);
+    watch(maskedByBackend(true));
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain('data-testid="boarding-location-withheld"');
+    expect(timeline).toContain("Bu kayıt konum taşıyor");
+    expect(timeline).not.toContain("boarding-location-none");
+    // Uzaklık maskelenmez; kanıt özeti yerinde.
+    expect(timeline).toContain("38 m");
+  });
+
+  it("draws a dash for a null the backend did not flag as withheld", async () => {
+    stubMe(ANALYST);
+    watch(maskedByBackend(false));
+
+    const timeline = timelineOf(await render());
+    expect(timeline).not.toContain("boarding-location-withheld");
+    expect(timeline).toMatch(/data-testid="boarding-location-none"[^>]*>—</);
   });
 
   it("reads the staff permission from /admin/me on this request, not from anything it kept", async () => {
@@ -847,6 +881,37 @@ describe("boarding events on the timeline — koala-admin#133", () => {
     expect(timeline).toContain("Kadıköy İskele");
     expect(timeline).not.toContain("Gidiş ·");
     expect(timeline).not.toContain("Anadolu servisi");
+  });
+
+  it("takes the direction the event itself carries before the seat or the shuttle", async () => {
+    // koala-backend#352: BOARDING satırı kendi yönünü taşır; koltuk/servis
+    // plandan düşmüş olsa da yön bilinir.
+    stubMe(ANALYST);
+    watch(
+      withBoarding(
+        [
+          adminBoardingEventFixture({
+            direction: "RETURN",
+            seatAssignmentId: "5b000000-0000-4000-8000-0000000000ff",
+            shuttleId: "5a000000-0000-4000-8000-0000000000ff",
+            distanceToStopMeters: 1450,
+          }),
+        ],
+        { transport: adminTransportFixture({ seats: [], shuttles: [] }) },
+      ),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Dönüş · Kadıköy İskele");
+    expect(timeline).toContain("Dönüşte durak bırakma noktasıdır");
+  });
+
+  it("falls back to the seat when the event's direction is unknown", async () => {
+    stubMe(ANALYST);
+    watch(withBoarding([adminBoardingEventFixture({ direction: "SIDEWAYS" })]));
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Gidiş · Anadolu servisi · 34 ABC 12 · Kadıköy İskele");
   });
 
   it("takes the direction from the shuttle when only the seat left the plan", async () => {

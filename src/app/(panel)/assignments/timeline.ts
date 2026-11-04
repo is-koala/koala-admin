@@ -18,6 +18,7 @@ import {
 import { PAYMENT_ATTEMPT_STATUS_LABELS, type AdminPayment } from "@/server/api/payments";
 import {
   TRANSPORT_DIRECTION_LABELS,
+  TRANSPORT_DIRECTIONS,
   type AdminTimelineEvent,
   type AssignmentTransport,
 } from "@/server/api/transport";
@@ -166,15 +167,19 @@ function boardingDetail(
 }
 
 /**
- * Biniş olayının yönü. Önce koltuk satırı; plan yeniden yazımında yalnız bir
- * durak düşünce koltuk soft-delete olup `transport.seats[]`'ten çıkar ama
- * servis planda kalır ve yönü sabittir, o yüzden servisten okunur. Yön
- * ancak servis de plandan çıkmışsa bilinmez (olay satırı yine çizilir).
+ * Biniş olayının yönü. Önce olayın kendi `direction`ı (koala-backend#352);
+ * yoksa (eski sunucu) ya da tanınmıyorsa koltuk satırı; plan yeniden
+ * yazımında yalnız bir durak düşünce koltuk soft-delete olup
+ * `transport.seats[]`'ten çıkar ama servis planda kalır ve yönü sabittir, o
+ * yüzden servisten okunur. #352 öncesi sunucuda yön ancak servis de plandan
+ * çıkmışsa bilinmez (olay satırı yine çizilir).
  */
 function directionOf(
   transport: AssignmentTransport | null | undefined,
   event: AdminTimelineEvent,
 ): AssignmentTransport["seats"][number]["direction"] {
+  const own = TRANSPORT_DIRECTIONS.find((candidate) => candidate === event.direction);
+  if (own !== undefined) return own;
   const seat =
     event.seatAssignmentId === null
       ? undefined
@@ -247,9 +252,20 @@ function boardingEvidence(
  * Koordinat yalnız izinli okuyucuda kopyalanır. İzinsizde olayın konum taşıyıp
  * taşımadığı söylenir (koordinatsız), böylece "konum yok" ile "konum var ama
  * göremiyorsun" karışmaz.
+ *
+ * Kural (koala-admin#136 `gateLocation` ile birebir aynı; #136 birleşince bu
+ * işlev silinip o kullanılacak):
+ * 1. Koordinat eksik (null ya da yarım) ve `event.locationWithheld` → `withheld`;
+ *    okuyucunun izninden bağımsız, çünkü elde koordinat yok
+ *    (koala-backend#352 izinsiz okuyucuya `null` gönderir ve bayrakla söyler).
+ * 2. Koordinat eksik, bayrak yok → `none`.
+ * 3. Koordinat tam, okuyucu izinsiz → `withheld` (#352 öncesi sunucu).
+ * 4. Koordinat tam, okuyucu izinli → `shown`.
  */
 function boardingLocation(event: AdminTimelineEvent, canReadLocation: boolean): BoardingLocation {
-  if (event.latitude === null || event.longitude === null) return { kind: "none" };
+  if (event.latitude === null || event.longitude === null) {
+    return event.locationWithheld ? { kind: "withheld" } : { kind: "none" };
+  }
   if (!canReadLocation) return { kind: "withheld" };
   return { kind: "shown", latitude: String(event.latitude), longitude: String(event.longitude) };
 }
