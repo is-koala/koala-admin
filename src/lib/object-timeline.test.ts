@@ -56,7 +56,7 @@ describe("TimelineBuilder", () => {
       .build();
 
     expect(events[0]?.boarding).toEqual(evidence);
-    expect(events[1]?.boarding ?? null).toBeNull();
+    expect(events[1]?.boarding).toBeNull();
   });
 
   it("gives two pushes of the same label and instant distinct keys", () => {

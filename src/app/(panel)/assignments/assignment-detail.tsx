@@ -112,9 +112,7 @@ export function AssignmentDetail({ assignment, payments, permissions }: DetailPr
       canReadLocation: held.has("user.read_pii"),
     },
   );
-  const hasBoarding = timelineEvents.some(
-    (event) => event.boarding !== undefined && event.boarding !== null,
-  );
+  const hasBoarding = timelineEvents.some((event) => event.boarding !== null);
 
   return (
     <div className="flex flex-col gap-6">

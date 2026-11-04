@@ -30,9 +30,7 @@ describe("assignmentTimelineEvents — location gate", () => {
   it("leaves no coordinate in the events unless the caller says the reader may see it", () => {
     const events = assignmentTimelineEvents(parse(), []);
 
-    const boarding = events.find(
-      (event) => event.boarding !== null && event.boarding !== undefined,
-    );
+    const boarding = events.find((event) => event.boarding !== null);
     expect(boarding?.boarding?.location).toEqual({ kind: "withheld" });
     expect(JSON.stringify(events)).not.toContain("40.990412");
     expect(JSON.stringify(events)).not.toContain("29.025631");
@@ -46,9 +44,7 @@ describe("assignmentTimelineEvents — location gate", () => {
   it("hands the coordinates over when the reader holds user.read_pii", () => {
     const events = assignmentTimelineEvents(parse(), [], { canReadLocation: true });
 
-    const boarding = events.find(
-      (event) => event.boarding !== null && event.boarding !== undefined,
-    );
+    const boarding = events.find((event) => event.boarding !== null);
     expect(boarding?.boarding?.location).toEqual({
       kind: "shown",
       latitude: "40.990412",
@@ -80,9 +76,7 @@ describe("assignmentTimelineEvents — which timeline rows become events", () =>
     const events = assignmentTimelineEvents(parse({ timeline: undefined }), []);
 
     expect(events.filter((event) => event.label === "Koltuk seçildi")).toHaveLength(1);
-    expect(events.some((event) => event.boarding !== undefined && event.boarding !== null)).toBe(
-      false,
-    );
+    expect(events.some((event) => event.boarding !== null)).toBe(false);
   });
 
   it("drops a boarding whose instant cannot be read instead of misplacing it", () => {

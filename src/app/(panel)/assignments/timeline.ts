@@ -152,23 +152,54 @@ function seatDetail(
   return parts.length === 0 ? null : parts.join(" · ");
 }
 
-/** Koltuk yönü ve servis, olayın taşıdığı kimliklerden; düşmüş koltuk yönü bilinmez bırakır. */
+/** Koltuk yönü ve servis, olayın taşıdığı kimliklerden. */
 function boardingDetail(
   transport: AssignmentTransport | null | undefined,
   event: AdminTimelineEvent,
 ): string | null {
-  const seat = seatOf(transport, event);
-  const parts = [seatDetail(transport, event.shuttleId, seat?.direction ?? null), event.stopLabel];
+  const parts = [
+    seatDetail(transport, event.shuttleId, directionOf(transport, event)),
+    event.stopLabel,
+  ];
   const present = parts.filter((part): part is string => part !== null && part.length > 0);
   return present.length === 0 ? null : present.join(" · ");
 }
 
-function seatOf(
+/**
+ * Biniş olayının yönü. Önce koltuk satırı; plan yeniden yazımında yalnız bir
+ * durak düşünce koltuk soft-delete olup `transport.seats[]`'ten çıkar ama
+ * servis planda kalır ve yönü sabittir, o yüzden servisten okunur. Yön
+ * ancak servis de plandan çıkmışsa bilinmez (olay satırı yine çizilir).
+ */
+function directionOf(
   transport: AssignmentTransport | null | undefined,
   event: AdminTimelineEvent,
-): AssignmentTransport["seats"][number] | undefined {
-  if (event.seatAssignmentId === null) return undefined;
-  return transport?.seats.find((seat) => seat.id === event.seatAssignmentId);
+): AssignmentTransport["seats"][number]["direction"] {
+  const seat =
+    event.seatAssignmentId === null
+      ? undefined
+      : transport?.seats.find((candidate) => candidate.id === event.seatAssignmentId);
+  if (seat?.direction !== undefined && seat.direction !== null) return seat.direction;
+  const shuttle =
+    event.shuttleId === null
+      ? undefined
+      : transport?.shuttles.find((candidate) => candidate.id === event.shuttleId);
+  return shuttle?.direction ?? null;
+}
+
+/**
+ * Backend `OFF_SCHEDULE` ve `FAR_FROM_STOP`u yalnız gidişteki `BOARDED` için
+ * üretir; dönüşte durak bırakma noktasıdır, gelmedi kaydında okutma yoktur.
+ * Uzaklık o satırlarda da yazılır ve büyük bir sayı bayraksız kalır; not,
+ * bunun şüphe değil kural olduğunu söyler.
+ */
+function distanceNote(
+  direction: AssignmentTransport["seats"][number]["direction"],
+  kind: string | null,
+): string | null {
+  if (kind === "NO_SHOW") return "Gelmedi kaydında uzaklık bayrak üretmez.";
+  if (direction === "RETURN") return "Dönüşte durak bırakma noktasıdır; uzaklık bayrak üretmez.";
+  return null;
 }
 
 /**
@@ -197,7 +228,6 @@ function boardingEvidence(
   event: AdminTimelineEvent,
   canReadLocation: boolean,
 ): BoardingEvidence {
-  const direction = seatOf(transport, event)?.direction ?? null;
   return {
     sourceLabel: event.source === null ? null : boardingSourceLabel(event.source),
     recorderLabel:
@@ -207,8 +237,7 @@ function boardingEvidence(
     capturedAt: event.capturedAt,
     receivedAt: event.receivedAt,
     distanceMeters: event.distanceToStopMeters,
-    distanceNote:
-      direction === "RETURN" ? "Dönüşte durak bırakma noktasıdır; uzaklık bayrak üretmez." : null,
+    distanceNote: distanceNote(directionOf(transport, event), event.kind),
     flags: event.flags.map(boardingFlagInfo),
     location: boardingLocation(event, canReadLocation),
   };

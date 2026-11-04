@@ -287,9 +287,7 @@ function TimelineRow({
             {event.source === "audit" ? "Personel" : "Kayıt"}
           </Badge>
         </span>
-        {event.boarding === undefined || event.boarding === null ? null : (
-          <BoardingEvidenceBlock evidence={event.boarding} />
-        )}
+        {event.boarding === null ? null : <BoardingEvidenceBlock evidence={event.boarding} />}
       </TableCell>
     </TableRow>
   );

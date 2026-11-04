@@ -649,6 +649,9 @@ describe("boarding events on the timeline — koala-admin#133", () => {
     expect(timeline).toContain("Sunucuya ulaşma");
     expect(timeline).toContain("38 m");
     expect(timeline).not.toContain("boarding-flags");
+    // Gidişte uzaklık bayrak üretir; "üretmez" notu yalnız dönüşte ve gelmedi kaydında çıkar.
+    expect(timeline).not.toContain("Dönüşte durak");
+    expect(timeline).not.toContain("bayrak üretmez");
   });
 
   it("names the three sources the way the issue words them", async () => {
@@ -705,6 +708,8 @@ describe("boarding events on the timeline — koala-admin#133", () => {
     const timeline = timelineOf(await render());
     expect(timeline).toContain("Gelmedi olarak işaretlendi");
     expect(timeline).not.toContain("Biniş kaydedildi");
+    // Backend OFF_SCHEDULE/FAR_FROM_STOP'u yalnız gidişteki BOARDED için üretir.
+    expect(timeline).toContain("Gelmedi kaydında uzaklık bayrak üretmez");
   });
 
   it("explains every flag in Turkish next to its name", async () => {
@@ -842,6 +847,39 @@ describe("boarding events on the timeline — koala-admin#133", () => {
     expect(timeline).toContain("Kadıköy İskele");
     expect(timeline).not.toContain("Gidiş ·");
     expect(timeline).not.toContain("Anadolu servisi");
+  });
+
+  it("takes the direction from the shuttle when only the seat left the plan", async () => {
+    // Plan yeniden yazımında yalnız durak düşünce koltuk soft-delete olur ve
+    // `transport.seats[]`'ten çıkar; servis planda kalır, yönü sabittir.
+    stubMe(ANALYST);
+    watch(
+      withBoarding([adminBoardingEventFixture()], {
+        transport: adminTransportFixture({ seats: [] }),
+      }),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Gidiş · Anadolu servisi · 34 ABC 12 · Kadıköy İskele");
+    expect(timeline).not.toContain("Dönüşte durak");
+  });
+
+  it("knows the return leg through the shuttle as well, and says so on the distance", async () => {
+    stubMe(ANALYST);
+    const base = adminTransportFixture();
+    watch(
+      withBoarding([adminBoardingEventFixture({ distanceToStopMeters: 1450 })], {
+        transport: {
+          ...base,
+          seats: [],
+          shuttles: base.shuttles.map((shuttle) => ({ ...shuttle, direction: "RETURN" })),
+        },
+      }),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Dönüş · Anadolu servisi");
+    expect(timeline).toContain("Dönüşte durak bırakma noktasıdır");
   });
 
   it("says a large distance on the return leg is not a flag", async () => {

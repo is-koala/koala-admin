@@ -42,9 +42,9 @@ export interface TimelineEvent {
   /**
    * Servis biniş satırının kanıt bloğu (koala-admin#133): kaynak, üç zaman,
    * uzaklık, bayraklar, izinliyse konum. Yalnız biniş olayında dolu; denetim
-   * ve diğer DTO olaylarında `null`/yok.
+   * ve diğer DTO olaylarında `null`.
    */
-  readonly boarding?: BoardingEvidence | null;
+  readonly boarding: BoardingEvidence | null;
 }
 
 interface EventOptions {
@@ -98,6 +98,7 @@ export function auditTimelineEvents(entries: readonly AuditEntry[]): readonly Ti
       source: "audit",
       allowed: entry.allowed,
       key: `audit:${entry.id}`,
+      boarding: null,
     }));
 }
 
