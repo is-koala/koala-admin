@@ -1,40 +1,50 @@
 name: CI
 
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
+# Aynı PR'a yeni push gelince eski koşu iptal edilir; main'deki koşular
+# birbirini iptal etmez (her commit'in sonucu kalsın).
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 env:
   # The build imports `src/env.ts`, which refuses to start without these two.
   # CI has no backend to reach and never makes a request — every panel route is
   # `force-dynamic`, so nothing is fetched at build time — but both still have
-  # to be valid absolute http(s) URLs.
+  # to be valid absolute http(s) URLs. Values are the `.env.example` ones.
   #
   # Neither is a secret, and since ADR-0014 the panel has none: identity is
   # Koala's own JWT, so there is no client secret and no session-encryption key
   # to place here.
   KOALA_API_BASE_URL: http://localhost:8080
   ADMIN_PUBLIC_ORIGIN: http://localhost:3000
+  NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
   verify:
-    name: lint · typecheck · test · build
-    runs-on: self-hosted
-    timeout-minutes: 15
+    name: lint · format · typecheck · test · build · server-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm sürümü `package.json` `packageManager`'dan okunur.
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-
-      - uses: pnpm/action-setup@v4
-        with:
-          dest: ${{ runner.temp }}/setup-pnpm
+          cache: pnpm
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -42,38 +52,23 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Format
+        run: pnpm format:check
+
       - name: Typecheck
         run: pnpm typecheck
 
+      # Tam takım: yol argümanı yok (birden çok yol verilince Vitest 0 test
+      # koşturabiliyor).
       - name: Test
         run: pnpm test
 
       - name: Build
         run: pnpm build
 
-  server-only-guard:
-    name: server-only boundary holds
-    runs-on: self-hosted
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
-      - uses: pnpm/action-setup@v4
-        with:
-          dest: ${{ runner.temp }}/setup-pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
       # Plants a Client Component that imports the server-only API client and
       # asserts `next build` fails. A green build there would mean the panel
-      # could ship an access token to the browser, so this stays in the
-      # optional dispatch workflow rather than living in a runbook nobody
-      # opens. The Mac quality gate also runs it.
+      # could ship an access token to the browser. It deletes `.next` when it
+      # is done, so it runs last, after the real build has already passed.
       - name: Verify the server-only guard breaks the build
         run: pnpm verify:server-only
