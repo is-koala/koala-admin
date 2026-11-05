@@ -37,6 +37,28 @@ describe("TimelineBuilder", () => {
     });
   });
 
+  it("carries a boarding's evidence to the event and leaves every other event without one", () => {
+    const evidence = {
+      sourceLabel: "İşveren elle işaretledi",
+      recorderLabel: "İşveren tarafı",
+      stopLabel: "Kadıköy İskele",
+      plannedAt: "2026-09-01T05:40:00Z",
+      capturedAt: null,
+      receivedAt: "2026-09-01T05:41:04Z",
+      distanceMeters: 38,
+      distanceNote: null,
+      flags: [],
+      location: { kind: "none" },
+    } as const;
+    const events = new TimelineBuilder()
+      .push("2026-09-01T05:41:00Z", "Biniş kaydedildi", { boarding: evidence })
+      .push("2026-09-01T05:42:00Z", "Atama zamanı")
+      .build();
+
+    expect(events[0]?.boarding).toEqual(evidence);
+    expect(events[1]?.boarding).toBeNull();
+  });
+
   it("gives two pushes of the same label and instant distinct keys", () => {
     const events = new TimelineBuilder()
       .push("2026-09-01T10:00:00Z", "Mesai girişi")

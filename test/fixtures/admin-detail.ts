@@ -77,6 +77,101 @@ export function adminAssignmentDetailFixture(overrides: Record<string, unknown> 
   };
 }
 
+/**
+ * koala-backend#335 (T2) `AdminTimelineEventDto` — kaynak
+ * `core/dtos/jobAssignment/response/AdminTimelineEventDto.java` (backend main
+ * 26721fbf). Canlı OpenAPI 0.9.31 henüz `timeline` göndermez; bu fixture
+ * yalnız yeni sunucunun biçimini taklit eder, eski sunucu fixture'ı
+ * `adminAssignmentDetailFixture()`'dır (alan yok).
+ */
+export const SHUTTLE_ID = "5a000000-0000-4000-8000-000000000001";
+export const SEAT_ID = "5b000000-0000-4000-8000-000000000001";
+export const STOP_ID = "5c000000-0000-4000-8000-000000000001";
+export const BOARDING_EVENT_ID = "5d000000-0000-4000-8000-000000000001";
+
+export function adminBoardingEventFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    type: "BOARDING",
+    at: "2026-09-01T05:41:00Z",
+    id: BOARDING_EVENT_ID,
+    kind: "BOARDED",
+    source: "WORKER_SCANNED_SHUTTLE_QR",
+    flags: [],
+    recordedById: "w-1",
+    recorderRole: "WORKER",
+    shuttleId: SHUTTLE_ID,
+    seatAssignmentId: SEAT_ID,
+    stopId: STOP_ID,
+    stopLabel: "Kadıköy İskele",
+    stopScheduledAt: "2026-09-01T05:40:00Z",
+    capturedAt: "2026-09-01T05:41:00Z",
+    receivedAt: "2026-09-01T05:41:04Z",
+    latitude: 40.990412,
+    longitude: 29.025631,
+    distanceToStopMeters: 38,
+    ...overrides,
+  };
+}
+
+export function adminSeatTimelineEventFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    type: "SEAT",
+    at: "2026-08-30T12:00:00Z",
+    id: SEAT_ID,
+    kind: null,
+    source: null,
+    flags: [],
+    recordedById: null,
+    recorderRole: null,
+    shuttleId: SHUTTLE_ID,
+    seatAssignmentId: SEAT_ID,
+    stopId: STOP_ID,
+    stopLabel: null,
+    stopScheduledAt: null,
+    capturedAt: null,
+    receivedAt: null,
+    latitude: null,
+    longitude: null,
+    distanceToStopMeters: null,
+    ...overrides,
+  };
+}
+
+/** `transport` bloğu: bir gidiş servisi, bir koltuk (`SEAT_ID`). */
+export function adminTransportFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    outboundMethod: "SHUTTLE",
+    returnMethod: "NONE",
+    allowanceAmount: null,
+    allowanceNote: null,
+    notes: null,
+    shuttles: [
+      {
+        id: SHUTTLE_ID,
+        direction: "OUTBOUND",
+        name: "Anadolu servisi",
+        plate: "34 ABC 12",
+        capacity: 12,
+        seatsTaken: 1,
+        driverName: "Ahmet Şoför",
+        driverPhone: "+905551112233",
+        sortOrder: 0,
+        stops: [],
+      },
+    ],
+    seats: [
+      {
+        id: SEAT_ID,
+        direction: "OUTBOUND",
+        shuttleId: SHUTTLE_ID,
+        stopId: STOP_ID,
+        createdAt: "2026-08-30T12:00:00Z",
+      },
+    ],
+    ...overrides,
+  };
+}
+
 export function adminPayoutDetailFixture(overrides: Record<string, unknown> = {}) {
   return {
     id: PAYOUT_ID,

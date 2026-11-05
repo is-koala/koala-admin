@@ -8,8 +8,13 @@ import {
   PAYMENT_ID,
   PAYOUT_ID,
   REPORT_ID,
+  SEAT_ID,
+  SHUTTLE_ID,
   adminAssignmentDetailFixture,
+  adminBoardingEventFixture,
   adminPaymentFixture,
+  adminSeatTimelineEventFixture,
+  adminTransportFixture,
   envelope,
 } from "../../../../test/fixtures/admin-detail";
 import { categoryCreatedEntry } from "../../../../test/fixtures/audit-log";
@@ -600,6 +605,407 @@ describe("the extended timeline and its cards", () => {
     expect(legacy).toMatch(/İşveren türü<\/dt><dd[^>]*>—</);
     expect(legacy).toContain("Atama zamanı");
     expect(legacy).not.toContain("Başvuru yapıldı");
+  });
+});
+
+/**
+ * koala-admin#133 / koala-backend#335 (T2): `timeline[]` biniş olayları.
+ * "İşçi bindim diyor, işveren binmedi diyor" uyuşmazlığında personelin kanıtı
+ * çizelgede tek yerde görmesi. Koltuk satırları #127'deki gibi
+ * `transport.seats[]`'ten gelir; `timeline[]`'dan yalnız BOARDING okunur.
+ */
+describe("boarding events on the timeline — koala-admin#133", () => {
+  const PII = [...ANALYST, "user.read_pii"];
+
+  function withBoarding(events: unknown[], overrides: Record<string, unknown> = {}) {
+    return adminAssignmentDetailFixture({
+      createdAt: "2026-08-30T09:00:00Z",
+      actualCompletionDateTime: "2026-09-01T16:00:00Z",
+      transport: adminTransportFixture(),
+      timeline: [adminSeatTimelineEventFixture(), ...events],
+      ...overrides,
+    });
+  }
+
+  const timelineOf = (html: string) => html.slice(html.indexOf('data-testid="object-timeline"'));
+
+  it("draws who recorded it, how, the three times and the distance to the stop", async () => {
+    stubMe(ANALYST);
+    watch(withBoarding([adminBoardingEventFixture()]));
+
+    const html = await render();
+    const timeline = timelineOf(html);
+
+    expect(timeline).toContain("Biniş kaydedildi");
+    expect(timeline).toContain("Gidiş · Anadolu servisi · 34 ABC 12 · Kadıköy İskele");
+    expect(timeline).toContain("İşçi servis QR&#x27;ını okuttu");
+    expect(timeline).toContain("Ayşe Yılmaz");
+    // 05:40Z / 05:41Z → İstanbul 08:40 / 08:41.
+    expect(timeline).toContain("01.09.2026 08:40");
+    expect(timeline).toContain("01.09.2026 08:41:00");
+    expect(timeline).toContain("01.09.2026 08:41:04");
+    expect(timeline).toContain("Planlanan");
+    expect(timeline).toContain("Cihaz saati");
+    expect(timeline).toContain("Sunucuya ulaşma");
+    expect(timeline).toContain("38 m");
+    expect(timeline).not.toContain("boarding-flags");
+    // Gidişte uzaklık bayrak üretir; "üretmez" notu yalnız dönüşte ve gelmedi kaydında çıkar.
+    expect(timeline).not.toContain("Dönüşte durak");
+    expect(timeline).not.toContain("bayrak üretmez");
+  });
+
+  it("names the three sources the way the issue words them", async () => {
+    stubMe(ANALYST);
+    watch(
+      withBoarding([
+        adminBoardingEventFixture({
+          source: "WORKER_SCANNED_SHUTTLE_QR",
+          at: "2026-09-01T05:41:00Z",
+        }),
+        adminBoardingEventFixture({
+          id: "5d000000-0000-4000-8000-000000000002",
+          source: "EMPLOYER_SCANNED_WORKER_QR",
+          recorderRole: "EMPLOYER",
+          recordedById: "e-1",
+          at: "2026-09-01T05:42:00Z",
+        }),
+        adminBoardingEventFixture({
+          id: "5d000000-0000-4000-8000-000000000003",
+          source: "EMPLOYER_MARKED",
+          recorderRole: "EMPLOYER",
+          recordedById: "e-1",
+          capturedAt: null,
+          at: "2026-09-01T05:43:00Z",
+        }),
+      ]),
+    );
+
+    const timeline = timelineOf(await render());
+
+    expect(timeline).toContain("İşçi servis QR&#x27;ını okuttu");
+    expect(timeline).toContain("İşveren işçi QR&#x27;ını okuttu");
+    expect(timeline).toContain("İşveren elle işaretledi");
+    // Kaydeden: atamanın iki tarafı adıyla, rolü ayrıca.
+    expect(timeline).toContain("Mehmet Demir");
+    expect(timeline).toContain("İşveren tarafı");
+    // Elle işaretlemede cihaz saati yok; "—" yazar, satır düşmez.
+    expect(timeline).toMatch(/Cihaz saati[^<]*<\/dt><dd[^>]*>—</);
+  });
+
+  it("says a no-show was marked, not that the worker did not come", async () => {
+    stubMe(ANALYST);
+    watch(
+      withBoarding([
+        adminBoardingEventFixture({
+          kind: "NO_SHOW",
+          source: "EMPLOYER_MARKED",
+          recorderRole: "EMPLOYER",
+          recordedById: "e-1",
+        }),
+      ]),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Gelmedi olarak işaretlendi");
+    expect(timeline).not.toContain("Biniş kaydedildi");
+    // Backend OFF_SCHEDULE/FAR_FROM_STOP'u yalnız gidişteki BOARDED için üretir.
+    expect(timeline).toContain("Gelmedi kaydında uzaklık bayrak üretmez");
+  });
+
+  it("explains every flag in Turkish next to its name", async () => {
+    stubMe(ANALYST);
+    watch(
+      withBoarding([
+        adminBoardingEventFixture({
+          flags: [
+            "LATE_SYNC",
+            "DEVICE_TIME_IMPLAUSIBLE",
+            "OFF_SCHEDULE",
+            "FAR_FROM_STOP",
+            "STATIC_QR",
+          ],
+        }),
+      ]),
+    );
+
+    const timeline = timelineOf(await render());
+
+    expect(timeline).toContain("Geç gönderim");
+    expect(timeline).toContain("Cihaz saati şüpheli");
+    expect(timeline).toContain("Durak saatinden sapma");
+    expect(timeline).toContain("Duraktan uzak");
+    expect(timeline).toContain("Sabit QR");
+    // Açıklama bayrak adından ayrı bir cümle.
+    expect(timeline).toContain("süresi dolduktan sonra gönderildi");
+    expect(timeline).toContain("kalkış saatinden izin verilen aralığın dışında");
+    expect(timeline).toContain("durak pininden izin verilen uzaklığın ötesinde");
+    expect(timeline).toContain("zaman penceresi yoktur");
+    expect(timeline).toContain("makul değildi");
+    // Bayrak bir engel değil kanıt: okuyan bunu da duyar.
+    expect(timeline).toContain("kaydı engellemez");
+  });
+
+  it("gives the whole location to user.read_pii and only the distance to everyone else", async () => {
+    stubMe(PII);
+    watch(withBoarding([adminBoardingEventFixture()]));
+    const withPii = await render();
+
+    expect(timelineOf(withPii)).toContain('data-testid="boarding-location"');
+    expect(timelineOf(withPii)).toContain("40.990412, 29.025631");
+
+    stubMe(ANALYST);
+    watch(withBoarding([adminBoardingEventFixture()]));
+    const without = await render();
+
+    // İki yarı: koordinat çizilmez (arayüz) ve yanıttan zaten süzülmüştür (sunucu);
+    // hiçbir yerde, öznitelik ya da gizli metin olarak da yok.
+    expect(without).not.toContain("40.990412");
+    expect(without).not.toContain("29.025631");
+    expect(without).not.toContain("40.99");
+    expect(timelineOf(without)).toContain('data-testid="boarding-location-withheld"');
+    expect(timelineOf(without)).toContain("user.read_pii");
+    expect(timelineOf(without)).not.toContain('data-testid="boarding-location"');
+    // Uzaklık konum değil kanıt özeti; izinsiz kişiye de gider.
+    expect(timelineOf(without)).toContain("38 m");
+  });
+
+  it("does not claim a location was withheld when the event carried none", async () => {
+    stubMe(ANALYST);
+    watch(
+      withBoarding([
+        adminBoardingEventFixture({ latitude: null, longitude: null, distanceToStopMeters: null }),
+      ]),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).not.toContain("boarding-location-withheld");
+    expect(timeline).not.toContain('data-testid="boarding-location"');
+    // Konumsuz kayıt "—" çizer; "konum var" notu çıkmaz.
+    expect(timeline).toMatch(/data-testid="boarding-location-none"[^>]*>—</);
+    expect(timeline).toContain("Biniş kaydedildi");
+  });
+
+  /**
+   * koala-backend#352 sonrası canlı yanıt: izinsiz personele koordinatlar
+   * `null` gelir, `locationWithheld` ne olduğunu söyler. Bayrak okunmazsa bu
+   * yanıt "konum yok" sanılır ve "konum var" notu canlıda hiç çıkmaz.
+   */
+  const maskedByBackend = (locationWithheld: boolean) =>
+    withBoarding([
+      adminBoardingEventFixture({ latitude: null, longitude: null, locationWithheld }),
+    ]);
+
+  it("says a location exists when the backend masked the coordinates and flagged it", async () => {
+    stubMe(ANALYST);
+    watch(maskedByBackend(true));
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain('data-testid="boarding-location-withheld"');
+    expect(timeline).toContain("Bu kayıt konum taşıyor");
+    expect(timeline).not.toContain("boarding-location-none");
+    // Uzaklık maskelenmez; kanıt özeti yerinde.
+    expect(timeline).toContain("38 m");
+  });
+
+  it("draws a dash for a null the backend did not flag as withheld", async () => {
+    stubMe(ANALYST);
+    watch(maskedByBackend(false));
+
+    const timeline = timelineOf(await render());
+    expect(timeline).not.toContain("boarding-location-withheld");
+    expect(timeline).toMatch(/data-testid="boarding-location-none"[^>]*>—</);
+  });
+
+  it("reads the staff permission from /admin/me on this request, not from anything it kept", async () => {
+    stubMe(PII);
+    watch(withBoarding([adminBoardingEventFixture()]));
+    expect(await render()).toContain("40.990412");
+
+    // Aynı süreçte izin geri alınır: bir sonraki istek koordinatı çizmez.
+    stubMe(ANALYST);
+    watch(withBoarding([adminBoardingEventFixture()]));
+    expect(await render()).not.toContain("40.990412");
+  });
+
+  it("keeps working against the backend that is deployed today, which sends no timeline", async () => {
+    stubMe(PII);
+    watch(adminAssignmentDetailFixture({ transport: adminTransportFixture() }));
+
+    const html = await render();
+    const timeline = timelineOf(html);
+
+    expect(timeline).toContain("Atama zamanı");
+    // Koltuk satırı #127'deki gibi `transport.seats[]`'ten.
+    expect(timeline).toContain("Koltuk seçildi");
+    expect(timeline).toContain("Gidiş · Anadolu servisi · 34 ABC 12");
+    expect(timeline).not.toContain("Biniş kaydedildi");
+    expect(timeline).not.toContain('data-testid="boarding-evidence"');
+  });
+
+  it("draws a seat selection once even though both transport.seats and timeline carry it", async () => {
+    stubMe(ANALYST);
+    watch(withBoarding([adminBoardingEventFixture()]));
+
+    const timeline = timelineOf(await render());
+    expect(timeline.match(/Koltuk seçildi/g)).toHaveLength(1);
+    expect(timeline.match(/Biniş kaydedildi/g)).toHaveLength(1);
+  });
+
+  it("puts the boarding between the seat selection and the completion by time", async () => {
+    stubMe(ANALYST);
+    watch(withBoarding([adminBoardingEventFixture()]));
+
+    const timeline = timelineOf(await render());
+    const order = ["Koltuk seçildi", "Biniş kaydedildi", "İş tamamlandı"];
+    const positions = order.map((label) => timeline.indexOf(label));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
+  it("still draws a boarding whose seat was dropped from the plan, without inventing a direction", async () => {
+    stubMe(ANALYST);
+    watch(
+      withBoarding(
+        [
+          adminBoardingEventFixture({
+            seatAssignmentId: "5b000000-0000-4000-8000-0000000000ff",
+            shuttleId: "5a000000-0000-4000-8000-0000000000ff",
+          }),
+        ],
+        { transport: adminTransportFixture({ seats: [], shuttles: [] }) },
+      ),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Biniş kaydedildi");
+    expect(timeline).toContain("Kadıköy İskele");
+    expect(timeline).not.toContain("Gidiş ·");
+    expect(timeline).not.toContain("Anadolu servisi");
+  });
+
+  it("takes the direction the event itself carries before the seat or the shuttle", async () => {
+    // koala-backend#352: BOARDING satırı kendi yönünü taşır; koltuk/servis
+    // plandan düşmüş olsa da yön bilinir.
+    stubMe(ANALYST);
+    watch(
+      withBoarding(
+        [
+          adminBoardingEventFixture({
+            direction: "RETURN",
+            seatAssignmentId: "5b000000-0000-4000-8000-0000000000ff",
+            shuttleId: "5a000000-0000-4000-8000-0000000000ff",
+            distanceToStopMeters: 1450,
+          }),
+        ],
+        { transport: adminTransportFixture({ seats: [], shuttles: [] }) },
+      ),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Dönüş · Kadıköy İskele");
+    expect(timeline).toContain("Dönüşte durak bırakma noktasıdır");
+  });
+
+  it("falls back to the seat when the event's direction is unknown", async () => {
+    stubMe(ANALYST);
+    watch(withBoarding([adminBoardingEventFixture({ direction: "SIDEWAYS" })]));
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Gidiş · Anadolu servisi · 34 ABC 12 · Kadıköy İskele");
+  });
+
+  it("takes the direction from the shuttle when only the seat left the plan", async () => {
+    // Plan yeniden yazımında yalnız durak düşünce koltuk soft-delete olur ve
+    // `transport.seats[]`'ten çıkar; servis planda kalır, yönü sabittir.
+    stubMe(ANALYST);
+    watch(
+      withBoarding([adminBoardingEventFixture()], {
+        transport: adminTransportFixture({ seats: [] }),
+      }),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Gidiş · Anadolu servisi · 34 ABC 12 · Kadıköy İskele");
+    expect(timeline).not.toContain("Dönüşte durak");
+  });
+
+  it("knows the return leg through the shuttle as well, and says so on the distance", async () => {
+    stubMe(ANALYST);
+    const base = adminTransportFixture();
+    watch(
+      withBoarding([adminBoardingEventFixture({ distanceToStopMeters: 1450 })], {
+        transport: {
+          ...base,
+          seats: [],
+          shuttles: base.shuttles.map((shuttle) => ({ ...shuttle, direction: "RETURN" })),
+        },
+      }),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Dönüş · Anadolu servisi");
+    expect(timeline).toContain("Dönüşte durak bırakma noktasıdır");
+  });
+
+  it("says a large distance on the return leg is not a flag", async () => {
+    stubMe(ANALYST);
+    watch(
+      withBoarding([adminBoardingEventFixture({ distanceToStopMeters: 1450 })], {
+        transport: adminTransportFixture({
+          seats: [
+            {
+              id: SEAT_ID,
+              direction: "RETURN",
+              shuttleId: SHUTTLE_ID,
+              stopId: "5c000000-0000-4000-8000-000000000001",
+              createdAt: "2026-08-30T12:00:00Z",
+            },
+          ],
+        }),
+      }),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("Dönüş ·");
+    expect(timeline).toContain("1.450 m");
+    expect(timeline).toContain("Dönüşte durak bırakma noktasıdır");
+  });
+
+  it("writes a code the panel has never seen as it is, and skips a row type it does not know", async () => {
+    stubMe(ANALYST);
+    watch(
+      withBoarding([
+        adminBoardingEventFixture({
+          kind: "ALIGHTED",
+          source: "DRIVER_TAPPED",
+          flags: ["SOMETHING_NEW"],
+        }),
+        { ...adminBoardingEventFixture({ at: "2026-09-01T05:50:00Z" }), type: "DEPARTURE" },
+      ]),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("ALIGHTED");
+    expect(timeline).toContain("DRIVER_TAPPED");
+    expect(timeline).toContain("SOMETHING_NEW");
+    // Bilinmeyen tür bir olay uydurmaz; çizelgede yalnız tanıdığı BOARDING satırı var.
+    expect(timeline.match(/data-testid="boarding-evidence"/g)).toHaveLength(1);
+  });
+
+  it("names a recorder who is neither party by role and a short id", async () => {
+    stubMe(ANALYST);
+    watch(
+      withBoarding([
+        adminBoardingEventFixture({
+          source: "EMPLOYER_MARKED",
+          recorderRole: "EMPLOYER",
+          recordedById: "3f2a1b4c-0000-4000-8000-000000000001",
+        }),
+      ]),
+    );
+
+    const timeline = timelineOf(await render());
+    expect(timeline).toContain("İşveren tarafı · 3f2a1b4c");
   });
 });
 
