@@ -10,6 +10,8 @@
  * kullanır.
  */
 
+import type { GatedLocation } from "@/lib/location-gate";
+
 /**
  * Sözlük araması yalnız kendi anahtarlarında: `"constructor"` gibi bir kod
  * `Object.prototype`'tan işlev döndürmesin.
@@ -121,17 +123,6 @@ export function boardingFlagInfo(code: string): BoardingFlagInfo {
 }
 
 /**
- * Konumun çizelgedeki hâli. `shown` yalnız `user.read_pii` varken üretilir;
- * `withheld` olayın konum taşıdığını ama okuyanın göremediğini söyler (koordinat
- * kendisi taşınmaz); `none` olayda konum yok (işaretleme telefonundan konum
- * gelmedi ya da hesap silindi).
- */
-export type BoardingLocation =
-  | { readonly kind: "shown"; readonly latitude: string; readonly longitude: string }
-  | { readonly kind: "withheld" }
-  | { readonly kind: "none" };
-
-/**
  * Bir biniş satırının çizelgede açıklayan bloğu. Düz veri: etiketler Türkçe
  * metin, zamanlar ISO dizesi (bileşen `formatDateTime` ile yazar).
  */
@@ -149,5 +140,6 @@ export interface BoardingEvidence {
   /** Dönüşte uzaklığın neden bayrak üretmediği; gidişte ya da yön bilinmiyorsa `null`. */
   readonly distanceNote: string | null;
   readonly flags: readonly BoardingFlagInfo[];
-  readonly location: BoardingLocation;
+  /** `user.read_pii` kapısından geçmiş konum (`gateLocation`, koala-admin#135 ile ortak). */
+  readonly location: GatedLocation;
 }

@@ -29,7 +29,7 @@ export type GatedLocation =
 type Coordinate = number | string | null;
 
 /**
- * Kural (koala-admin#134 biniş konumuyla birebir aynı):
+ * Kural (mesai oturumları ve koala-admin#133 biniş konumu bu tek işlevi kullanır):
  * 1. Koordinat eksik (null ya da yarım) ve sunucu `withheldByServer` dedi →
  *    `withheld`; okuyucunun izni ne olursa olsun, çünkü elde koordinat yok.
  * 2. Koordinat eksik, bayrak yok → `none`.

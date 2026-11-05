@@ -4,9 +4,9 @@ import {
   boardingRecorderRoleLabel,
   boardingSourceLabel,
   type BoardingEvidence,
-  type BoardingLocation,
 } from "@/lib/boarding";
 import { formatInteger } from "@/lib/format";
+import { gateLocation } from "@/lib/location-gate";
 import { TimelineBuilder, type TimelineActor, type TimelineEvent } from "@/lib/object-timeline";
 import { shortId } from "@/lib/short-id";
 import {
@@ -244,28 +244,14 @@ function boardingEvidence(
     distanceMeters: event.distanceToStopMeters,
     distanceNote: distanceNote(directionOf(transport, event), event.kind),
     flags: event.flags.map(boardingFlagInfo),
-    location: boardingLocation(event, canReadLocation),
+    // Koordinat yalnız izinli okuyucuda kopyalanır; kural `gateLocation`da
+    // (mesai oturumlarıyla ortak, koala-admin#135). `locationWithheld`
+    // koala-backend#352'nin maskelediği `null`u "konum yok"tan ayırır.
+    location: gateLocation(
+      event.latitude,
+      event.longitude,
+      canReadLocation,
+      event.locationWithheld,
+    ),
   };
-}
-
-/**
- * Koordinat yalnız izinli okuyucuda kopyalanır. İzinsizde olayın konum taşıyıp
- * taşımadığı söylenir (koordinatsız), böylece "konum yok" ile "konum var ama
- * göremiyorsun" karışmaz.
- *
- * Kural (koala-admin#136 `gateLocation` ile birebir aynı; #136 birleşince bu
- * işlev silinip o kullanılacak):
- * 1. Koordinat eksik (null ya da yarım) ve `event.locationWithheld` → `withheld`;
- *    okuyucunun izninden bağımsız, çünkü elde koordinat yok
- *    (koala-backend#352 izinsiz okuyucuya `null` gönderir ve bayrakla söyler).
- * 2. Koordinat eksik, bayrak yok → `none`.
- * 3. Koordinat tam, okuyucu izinsiz → `withheld` (#352 öncesi sunucu).
- * 4. Koordinat tam, okuyucu izinli → `shown`.
- */
-function boardingLocation(event: AdminTimelineEvent, canReadLocation: boolean): BoardingLocation {
-  if (event.latitude === null || event.longitude === null) {
-    return event.locationWithheld ? { kind: "withheld" } : { kind: "none" };
-  }
-  if (!canReadLocation) return { kind: "withheld" };
-  return { kind: "shown", latitude: String(event.latitude), longitude: String(event.longitude) };
 }
