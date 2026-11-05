@@ -495,7 +495,6 @@ describe("the extended timeline and its cards", () => {
     // Panelin tanımadığı bayrak kodu olduğu gibi yazılır, satır düşmez.
     expect(html).toContain("FUTURE_FLAG");
     expect(html).toContain("484 dk");
-    expect(html).toContain("40.98, 29.03");
 
     expect(html).toContain('data-testid="assignment-cancellation"');
     expect(html).toContain("Mekân kapandı.");
@@ -601,6 +600,161 @@ describe("the extended timeline and its cards", () => {
     expect(legacy).toMatch(/İşveren türü<\/dt><dd[^>]*>—</);
     expect(legacy).toContain("Atama zamanı");
     expect(legacy).not.toContain("Başvuru yapıldı");
+  });
+});
+
+/**
+ * koala-admin#135: mesai oturumlarının giriş/çıkış koordinatları. Eskiden her
+ * `payment.read` sahibine gidiyordu ve bu dosyadaki bir test onu sabitliyordu.
+ * Kapı iki yarılı (koala-admin#133 ile aynı): sunucu yarısı koordinatı veriye
+ * hiç koymaz, arayüz yarısı "konum var" notunu yazar.
+ */
+describe("work session location — koala-admin#135", () => {
+  const PII = [...ANALYST, "user.read_pii"];
+
+  function session(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "ws000000-0000-4000-8000-000000000001",
+      jobAssignmentId: ASSIGNMENT_ID,
+      checkInAt: "2026-09-01T07:58:00Z",
+      checkOutAt: "2026-09-01T16:02:00Z",
+      checkInCapturedAt: "2026-09-01T07:58:00Z",
+      checkInReceivedAt: "2026-09-01T07:58:10Z",
+      checkInPlausibilityFlags: [],
+      checkOutCapturedAt: "2026-09-01T16:02:00Z",
+      checkOutReceivedAt: "2026-09-01T16:02:05Z",
+      checkOutPlausibilityFlags: [],
+      checkInLatitude: 40.98,
+      checkInLongitude: 29.03,
+      checkOutLatitude: 41.01,
+      checkOutLongitude: 29.11,
+      minutes: 484,
+      ...overrides,
+    };
+  }
+
+  const detail = (overrides: Record<string, unknown> = {}) =>
+    adminAssignmentDetailFixture({ workSessions: [session(overrides)] });
+
+  it("gives both coordinates to user.read_pii", async () => {
+    stubMe(PII);
+    watch(detail());
+
+    const html = await render();
+
+    expect(html).toContain('data-testid="work-session-location"');
+    expect(html).toContain("40.98, 29.03");
+    expect(html).toContain("41.01, 29.11");
+    expect(html).not.toContain("work-session-location-withheld");
+  });
+
+  it("gives payment.read alone no coordinate in any form, only the note that one exists", async () => {
+    stubMe(ANALYST);
+    watch(detail());
+
+    const html = await render();
+
+    // İki yarı: koordinat çizilmez (arayüz) ve çizelge/bileşen verisine hiç girmez (sunucu).
+    for (const value of ["40.98", "29.03", "41.01", "29.11"]) expect(html).not.toContain(value);
+    expect(html).toContain('data-testid="work-session-location-withheld"');
+    expect(html).toContain("Konum var");
+    expect(html).toContain("user.read_pii");
+    expect(html).not.toContain('data-testid="work-session-location"');
+    // Mesai satırının geri kalanı yerinde.
+    expect(html).toContain("484 dk");
+    expect(html).toContain("01.09.2026 10:58");
+  });
+
+  it("says a location exists when only one end of the session carried one", async () => {
+    stubMe(ANALYST);
+    watch(detail({ checkInLatitude: null, checkInLongitude: null }));
+    const html = await render();
+    expect(html).toContain('data-testid="work-session-location-withheld"');
+    expect(html).not.toContain("41.01");
+
+    stubMe(PII);
+    watch(detail({ checkInLatitude: null, checkInLongitude: null }));
+    const withPii = await render();
+    expect(withPii).toContain("41.01, 29.11");
+  });
+
+  it("does not claim a location was withheld when the session carried none", async () => {
+    stubMe(ANALYST);
+    watch(
+      detail({
+        checkInLatitude: null,
+        checkInLongitude: null,
+        checkOutLatitude: null,
+        checkOutLongitude: null,
+      }),
+    );
+
+    const html = await render();
+    expect(html).not.toContain("work-session-location-withheld");
+    expect(html).not.toContain('data-testid="work-session-location"');
+    // Konumsuz oturum "—" çizer; satır boş kalmaz, not da çıkmaz.
+    expect(html).toContain('data-testid="work-session-location-none"');
+    expect(html).toMatch(/data-testid="work-session-location-none"[^>]*>—</);
+    expect(html).toContain("Mesai oturumları");
+  });
+
+  /**
+   * koala-backend#352 sonrası canlı yanıt: izinsiz personele koordinatlar
+   * `null` gelir, bayrak ne olduğunu söyler. Bayrak okunmazsa bu yanıt
+   * "konum yok" sanılır ve "konum var" notu canlıda hiç çıkmaz.
+   */
+  const maskedByBackend = (withheld: boolean) =>
+    detail({
+      checkInLatitude: null,
+      checkInLongitude: null,
+      checkOutLatitude: null,
+      checkOutLongitude: null,
+      checkInLocationWithheld: withheld,
+      checkOutLocationWithheld: withheld,
+    });
+
+  it("says a location exists when the backend masked the coordinates and flagged it", async () => {
+    stubMe(ANALYST);
+    watch(maskedByBackend(true));
+
+    const html = await render();
+    expect(html).toContain('data-testid="work-session-location-withheld"');
+    expect(html).toContain("Konum var");
+    expect(html).not.toContain("work-session-location-none");
+  });
+
+  it("draws a dash for a null the backend did not flag as withheld", async () => {
+    stubMe(ANALYST);
+    watch(maskedByBackend(false));
+
+    const html = await render();
+    expect(html).not.toContain("work-session-location-withheld");
+    expect(html).toMatch(/data-testid="work-session-location-none"[^>]*>—</);
+  });
+
+  it("notes one masked end even when the other end carried no location", async () => {
+    stubMe(ANALYST);
+    watch(
+      detail({
+        checkInLatitude: null,
+        checkInLongitude: null,
+        checkOutLatitude: null,
+        checkOutLongitude: null,
+        checkOutLocationWithheld: true,
+      }),
+    );
+
+    expect(await render()).toContain('data-testid="work-session-location-withheld"');
+  });
+
+  it("reads the permission from /admin/me on this request", async () => {
+    stubMe(PII);
+    watch(detail());
+    expect(await render()).toContain("40.98, 29.03");
+
+    stubMe(ANALYST);
+    watch(detail());
+    expect(await render()).not.toContain("40.98");
   });
 });
 
